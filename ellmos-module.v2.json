@@ -1,8 +1,8 @@
 {
   "schema": "ellmos.module.v2",
-  "id": "TASKPLAN",
-  "display_name": "TASKPLAN",
-  "category": "memory",
+  "id": "task-master",
+  "display_name": "task-master",
+  "category": "control",
   "kind": "library",
   "status": "active",
   "visibility": "public-candidate",
