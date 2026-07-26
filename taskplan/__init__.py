@@ -1,11 +1,16 @@
 # -*- coding: utf-8 -*-
 """
-taskplan -- Eigenstaendiges Task-Modul der .MEMORY-Saeule
-=========================================================
+taskplan -- Eigenstaendiges Task-Modul der .CONTROL-Saeule
+==========================================================
 
-Drittes Modul der Gedaechtnis-Saeule (USMC + GARDENER + TASKPLAN,
-Entscheidung [U 2026-07-11]). Extrahiert aus rinnsal/tasks; Rinnsal
-importiert es seither zurueck (Seam mit gebuendeltem Fallback).
+Als Modul `task-master` gefuehrt (Umzug [U 2026-07-26] aus der
+Gedaechtnis-Saeule nach .CONTROL: .MEMORY haelt Speicher, .CONTROL
+steuert ihn). Das importierbare Paket heisst weiterhin `taskplan`.
+Die inhaltliche Achse USMC + GARDENER + TASKPLAN [U 2026-07-11]
+besteht fort, auch wenn die Ordner auseinanderliegen.
+
+Extrahiert aus rinnsal/tasks; Rinnsal importiert es seither zurueck
+(Seam mit gebuendeltem Fallback).
 
 Abgrenzung: Tasks sind KEINE Tickets. Tickets (z. B. das dateibasierte
 Ticket-System) koennen ueber api.add_from_ticket() zu Tasks fuehren,
