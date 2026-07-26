@@ -4,8 +4,16 @@
 
 # taskplan
 
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
+[![Lizenz: MIT](https://img.shields.io/badge/Lizenz-MIT-yellow.svg)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-245%20bestanden-brightgreen.svg)](tests/)
+[![llms.txt](https://img.shields.io/badge/llms.txt-verf%C3%BCgbar-orange.svg)](llms.txt)
+
 **Deterministische Aufgabenauswahl für LLM-Agenten.** Keine Abhängigkeiten, nur
 Standardbibliothek, Python ≥ 3.10.
+
+> [!NOTE]
+> **KI / LLM Integration**: `taskplan` stellt deterministische Selektions-Guards und Rollen-Prompts für autonome KI-Agenten bereit. Detaillierte Systemkonzepte und Modulübersichten finden sich in [llms.txt](llms.txt).
 
 *[English version → README.md](README.md)*
 

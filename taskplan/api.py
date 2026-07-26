@@ -87,7 +87,7 @@ def add_from_ticket(ticket_id: str, title: str, description: str = "",
 
 
 def list(status: Optional[str] = None, priority: Optional[str] = None,
-         include_done: bool = False, limit: int = 50) -> List[Dict]:
+         include_done: bool = False, limit: Optional[int] = 50) -> List[Dict]:
     """Listet Tasks auf (default: nur offene/aktive)."""
     return get_client().list(status=status, priority=priority,
                              include_done=include_done, limit=limit)

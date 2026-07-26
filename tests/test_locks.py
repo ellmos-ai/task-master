@@ -120,6 +120,16 @@ class TestExpiry(unittest.TestCase):
         view = scan_lockmaster([self.tmp / "root"])
         self.assertTrue(view.allows(self.project, MODIFY))
 
+    def test_expired_lock_blocks_autonomous_selection(self):
+        """Ein stale Lock darf nicht still erneut autonome Arbeit anziehen.
+
+        Nach manueller Pruefung bleibt MODIFY gemaess TTL moeglich, aber der
+        Selektor soll bis zur Klaerung einen anderen sicheren Kandidaten nehmen.
+        """
+        self._age_lock("LOCK.txt", hours=30)
+        view = scan_lockmaster([self.tmp / "root"])
+        self.assertFalse(view.allows_selection(self.project))
+
     def test_expired_user_lock_still_blocks(self):
         """Ein User-Lock verfaellt NIE — auch nach Wochen nicht."""
         self._age_lock("LOCK.user.txt", hours=1000)
@@ -148,6 +158,7 @@ class TestPermissionsJson(unittest.TestCase):
         _touch(self.project / "LOCK.txt")
         view = self._view('{"allow": ["modify"]}')
         self.assertTrue(view.allows(self.project, MODIFY))
+        self.assertTrue(view.allows_selection(self.project))
 
     def test_ask_is_treated_as_deny_when_autonomous(self):
         view = self._view('{"ask": ["modify"]}')
@@ -246,6 +257,16 @@ class TestLazyLockView(unittest.TestCase):
         from taskplan.locks import LazyLockView
         view = LazyLockView([self.root])
         self.assertFalse(view.allows(self.sibling, MODIFY))
+
+    def test_stale_lock_blocks_selection_but_not_manual_modify(self):
+        lock = self.locked / "LOCK.txt"
+        old = time.time() - 30 * 3600
+        os.utime(lock, (old, old))
+        from taskplan.locks import LazyLockView
+        view = LazyLockView([self.root])
+
+        self.assertTrue(view.allows(self.locked, MODIFY))
+        self.assertFalse(view.allows_selection(self.locked))
 
     def test_does_not_look_beyond_the_root(self):
         """Ein Lock OBERHALB der Root geht uns nichts an — sonst wandert die

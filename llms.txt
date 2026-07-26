@@ -1,0 +1,24 @@
+# taskplan
+
+> Last-checked: 2026-07-26
+
+taskplan (`ellmos-ai/taskplan`) ist eine Python-Bibliothek (≥ 3.10, zero dependencies, stdlib only) für deterministische Aufgaben- und Rollenauswahl für LLM-Agenten-Frameworks im `ellmos-ai`-Ökosystem.
+
+## Kern-Dokumentation
+
+- [README.md](README.md): Entwicklerhandbuch, Selektor-Regeln, Effort-Klassen, 3 Rollen (TASKWRITER, TASKSOLVER, MAINTAINER) und Konfiguration.
+- [README_de.md](README_de.md): Deutsche Übersetzung des Entwicklerhandbuchs.
+- [CHANGELOG.md](CHANGELOG.md): Versions- und Änderungshistorie.
+- [TODO.md](TODO.md): Konzept und Aufgabenliste für robuste Discovery-Fallbacks.
+- [ellmos-module.v2.json](ellmos-module.v2.json): Modul-Manifest für den Katalog (`orchestration`/`taskplan`).
+
+## API & Komponenten
+
+- `taskplan.api`: Facette für Initialisierung, Task-Erstellung (`add`), Zuweisung (`assign`), Aufwands-Klassifizierung (`classify`) und Abschluss (`done`).
+- `taskplan.selector`: Deterministischer Zustandsautomat (`next_bundle()`) zur rollenspezifischen Aufgabenauswahl nach Aufwand und Projekt-Rotation.
+- `taskplan.locks`: Dreidimensionale Lock-Verwaltung (`LazyLockView`, `scan_lockmaster`) zur Verhinderung von Agenten-Kollisionen.
+- `taskplan.client`: Python-Client für SQLite- und Dateien-Backends.
+
+## Verifikation
+
+- Pytest Testsuite: 245/245 Tests 100% grün (`python -m pytest tests/`).

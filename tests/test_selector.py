@@ -5,13 +5,15 @@ Er ersetzt die Prompt-Prosa durch einen deterministischen Zustandsautomaten.
 Als Text war die Reihenfolge eine Bitte, die das Modell jedes Mal neu auslegte;
 der Loop lief deshalb leer, statt in die Tiefe zu eskalieren.
 """
+import os
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
 from taskplan.locks import LockView, scan_lockmaster
 from taskplan.selector import (
-    DEEP, SURFACE, Bundle, SelectorConfig, next_bundle,
+    DEEP, SURFACE, SelectorConfig, next_bundle,
 )
 
 
@@ -34,7 +36,7 @@ class FakeStore:
             out = [t for t in out if t["status"] == status]
         if effort is not None:
             out = [t for t in out if t["effort"] == effort]
-        return out[:limit]
+        return out if limit is None else out[:limit]
 
     def get(self, task_id):
         return next((t for t in self.tasks if t["id"] == task_id), None)
@@ -223,6 +225,22 @@ class TestLockAwareness(unittest.TestCase):
         self.assertIsNotNone(bundle, "Der Lock hat die ganze Pipeline gesperrt!")
         self.assertEqual(bundle.tasks[0]["title"], "Im freien")
 
+    def test_stale_locked_project_is_skipped_for_free_sibling(self):
+        old = time.time() - 30 * 3600
+        os.utime(self.locked / "LOCK.txt", (old, old))
+        locks = scan_lockmaster([self.pipeline])
+        store = FakeStore([
+            task("Im stale gesperrten", effort="easy",
+                 project=str(self.locked), root=".RESEARCH"),
+            task("Im freien", effort="easy",
+                 project=str(self.free), root=".RESEARCH"),
+        ])
+
+        bundle = next_bundle(self.config, store, locks)
+
+        self.assertIsNotNone(bundle)
+        self.assertEqual(bundle.tasks[0]["title"], "Im freien")
+
 
 class TestBundling(unittest.TestCase):
     def setUp(self):
@@ -328,6 +346,20 @@ class TestWriterHasItsOwnSelection(unittest.TestCase):
         self.assertIsNone(next_bundle(SelectorConfig(), store, self.locks,
                                       role="taskwriter"))
 
+    def test_writer_remembers_projects_beyond_1000_tasks(self):
+        """Die Projekthistorie darf nicht am alten 1000er-Fenster enden."""
+        from taskplan.traversal import Project
+
+        history = [task(f"Alt {i}", project=f"/p/alt/{i}")
+                   for i in range(1000)]
+        history.append(task("Ziel bereits erfasst", project="/p/ziel"))
+        config = SelectorConfig(projects=[
+            Project(path=Path("/p/ziel"), root_id=".AI"),
+        ])
+
+        self.assertIsNone(next_bundle(config, FakeStore(history), self.locks,
+                                      role="taskwriter"))
+
 
 class TestMaintainerDoesNotCollideWithSolver(unittest.TestCase):
     """Die Kollision, die der MAINTAINER-Loop selbst gemeldet hat (2026-07-14).
@@ -398,6 +430,26 @@ class TestMaintainerDoesNotCollideWithSolver(unittest.TestCase):
                              role="maintainer")
         self.assertIsNotNone(bundle)
         self.assertEqual(len(bundle.tasks), 0)
+
+    def test_maintainer_sees_busy_project_beyond_1000_tasks(self):
+        """Ein alter Verlaufs-Cutoff darf keine aktive Arbeit verstecken."""
+        from taskplan.traversal import Project
+
+        history = [task(f"Alt {i}", project=f"/p/alt/{i}")
+                   for i in range(1000)]
+        busy = task("Noch aktiv", project="/p/beschaeftigt")
+        busy["status"] = "active"
+        history.append(busy)
+        config = SelectorConfig(projects=[
+            Project(path=Path("/p/beschaeftigt"), root_id=".AI"),
+            Project(path=Path("/p/frei"), root_id=".SW"),
+        ])
+
+        bundle = next_bundle(config, FakeStore(history), self.locks,
+                             role="maintainer")
+
+        self.assertIsNotNone(bundle)
+        self.assertEqual(Path(bundle.project_path).as_posix(), "/p/frei")
 
 
 class TestAllThreeRolesGetDifferentWork(unittest.TestCase):

@@ -35,7 +35,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional, Protocol
 
-from .locks import MODIFY, LockView
+from .locks import LockView
 
 SURFACE = "surface"
 DEEP = "deep"
@@ -109,7 +109,7 @@ def _reachable(task: dict, locks: LockView) -> bool:
     project = task.get("project_path") or ""
     if not project:
         return True   # Ohne Projektbezug (Root-Aufgabe) greift kein Projekt-Lock.
-    return locks.allows(Path(project), MODIFY)
+    return locks.allows_selection(Path(project))
 
 
 def _dependency_ids(task: dict) -> Optional[tuple[int, ...]]:
@@ -239,14 +239,17 @@ def _writer_bundle(config: SelectorConfig, store: TaskStore,
         except (TypeError, ValueError):
             return str(raw).lower()
 
+    # Fuer die Projekthistorie darf es kein Fenster geben: Sobald die DB mehr
+    # als 1000 Eintraege hatte, verschwanden aeltere Projekte aus `known` und
+    # wurden dem Writer faelschlich erneut als unberuehrt angeboten.
     known = {_key(t.get("project_path") or "")
-             for t in store.list(limit=1000, include_done=True)
+             for t in store.list(limit=None, include_done=True)
              if t.get("project_path")}
 
     for project in config.projects:
         if _key(project.path) in known:
             continue
-        if not locks.allows(project.path, MODIFY):
+        if not locks.allows_selection(project.path):
             continue   # Gesperrt: der Writer schreibt dort keine Steuerdateien.
         return Bundle(mode=DEEP, effort="", root_id=project.root_id,
                       project_path=str(project.path), tasks=[])
@@ -287,7 +290,9 @@ def _maintainer_bundle(config: SelectorConfig, store: TaskStore,
     busy = set()        # jemand arbeitet dort: aktiv ODER geclaimt
     touched = set()     # hat ueberhaupt schon Aufgaben (egal welchen Status)
 
-    for task in store.list(limit=1000, include_done=True):
+    # Auch aktive/zugewiesene Arbeit jenseits eines festen Verlaufsfensters
+    # muss ein Projekt fuer den Maintainer weiterhin als beschaeftigt markieren.
+    for task in store.list(limit=None, include_done=True):
         project = task.get("project_path")
         if not project:
             continue
@@ -315,7 +320,7 @@ def _maintainer_bundle(config: SelectorConfig, store: TaskStore,
                 continue
             if (key in touched) != prefer_touched:
                 continue
-            if not locks.allows(project.path, MODIFY):
+            if not locks.allows_selection(project.path):
                 continue
             return Bundle(mode=DEEP, effort="", root_id=project.root_id,
                           project_path=str(project.path), tasks=[])

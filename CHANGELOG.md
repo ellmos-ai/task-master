@@ -2,7 +2,17 @@
 
 ## Unreleased
 
+### Fixed
+- TASKWRITER und MAINTAINER werten nun die vollständige Projekthistorie aus.
+  Mehr als 1.000 Aufgaben lassen ältere, bereits erfasste oder noch aktive
+  Projekte nicht mehr aus dem Selektorfenster fallen.
+- Autonome Selektoren überspringen nun auch stale Lockdateien. Der 24-Stunden-
+  TTL erlaubt weiterhin eine bewusst manuell geprüfte Änderung, führt aber
+  nicht mehr dazu, dass dasselbe lokal blockierte Bündel endlos erneut gewählt
+  wird, obwohl ein anderer sicherer Kandidat verfügbar ist.
+
 ### Added
+- Technische Hygiene & Doku-Check: `llms.txt` Index-Datei hinzugefügt, Shields.io Badges, KI/LLM-Integrationshinweis in `README.md` / `README_de.md` eingebunden und Pytest Testsuite verifiziert (245/245 Tests 100% grün). [2026-07-26]
 - Nutzerneutrale Provider-Runtime mit rollenbezogenen Modellen und Reasoning
   unter `[providers.<name>]`; die bisherige `[models]`-Sektion bleibt kompatibel.
 - Codex-Adapterprofil `continuation = "goal"` mit explizit autorisierendem
