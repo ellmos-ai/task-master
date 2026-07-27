@@ -4,6 +4,7 @@ import io
 import subprocess
 import unittest
 from contextlib import redirect_stdout
+from pathlib import Path
 from unittest import mock
 
 from taskplan import config as cfg
@@ -68,7 +69,8 @@ class TestCodexGoalPrompt(unittest.TestCase):
         self.assertIn("genau ein", prompt)
         self.assertIn("Exit 3", prompt)
         self.assertIn("45 Sekunden", prompt)
-        self.assertIn("python -m taskplan next --role tasksolver --json", prompt)
+        self.assertIn("TASKPLAN-System- und Modell-Preflight", prompt)
+        self.assertIn("erst danach den Selektor", prompt)
 
     def test_one_shot_provider_does_not_request_goal(self):
         data = {"providers": {"other": {"continuation": "one_shot"}}}
@@ -76,6 +78,21 @@ class TestCodexGoalPrompt(unittest.TestCase):
             prompt = startup_prompt("taskwriter", "other", "de")
         self.assertNotIn("persistiertes Goal", prompt)
         self.assertIn("genau einen TASKPLAN-Durchlauf", prompt)
+
+    def test_agy_prompt_does_not_claim_developer_instruction_delivery(self):
+        data = {"providers": {"agy": {"continuation": "one_shot"}}}
+        with mock.patch.object(cfg, "load_config", return_value=data):
+            prompt = startup_prompt("maintainer", "agy", "de")
+        self.assertNotIn("Developer-Anweisung", prompt)
+        self.assertIn("mit lokalem Pfad benannte Rollen-Prompt", prompt)
+
+    def test_non_solver_still_starts_with_selector(self):
+        data = {"providers": {"claude": {"continuation": "one_shot"}}}
+        with mock.patch.object(cfg, "load_config", return_value=data):
+            prompt = startup_prompt("maintainer", "claude", "de")
+        self.assertIn(
+            "python -m taskplan next --role maintainer --json", prompt
+        )
 
     def test_runtime_cli_exposes_fields_for_thin_starters(self):
         data = {"providers": {"codex": {"models": {"tasksolver": "gpt-x"}}}}
@@ -96,6 +113,20 @@ class TestCodexGoalPrompt(unittest.TestCase):
 
 
 class TestDiscoveryTimeout(unittest.TestCase):
+    def test_all_exit_codes_have_stable_names_and_two_languages(self):
+        self.assertEqual(
+            {code: status["name"] for code, status in runner.EXIT_STATUS.items()},
+            {
+                0: "BUNDLE_READY",
+                1: "NO_WORK",
+                2: "ROLE_DISABLED",
+                3: "RETRYABLE_SELECTOR_ERROR",
+            },
+        )
+        for status in runner.EXIT_STATUS.values():
+            self.assertTrue(status["de"])
+            self.assertTrue(status["en"])
+
     def test_bounded_discovery_returns_instead_of_hanging(self):
         expired = subprocess.TimeoutExpired(["python", "discovery"], 0.02)
         with mock.patch.object(runner.subprocess, "run", side_effect=expired):
@@ -109,6 +140,74 @@ class TestDiscoveryTimeout(unittest.TestCase):
         }
         with mock.patch.object(runner, "next_work", return_value=work):
             self.assertEqual(runner.run("taskwriter", as_json=True), 3)
+
+    def test_json_exit_code_is_human_and_machine_readable(self):
+        work = {
+            "role": "taskwriter", "active": True, "bundle": None,
+            "retryable": True, "reason": "timeout",
+        }
+        output = io.StringIO()
+        with mock.patch.object(runner, "next_work", return_value=work), \
+                mock.patch.object(runner, "prompt_language", return_value="en"), \
+                redirect_stdout(output):
+            code = runner.run("taskwriter", as_json=True)
+        payload = __import__("json").loads(output.getvalue())
+        self.assertEqual(code, 3)
+        self.assertEqual(payload["exit"]["code"], 3)
+        self.assertEqual(
+            payload["exit"]["name"], "RETRYABLE_SELECTOR_ERROR"
+        )
+        self.assertIn("Retryable selector", payload["exit"]["meaning"])
+
+    def test_console_spells_out_exit_one(self):
+        work = {
+            "role": "maintainer", "active": True, "bundle": None,
+            "reason": "nothing eligible",
+            "db": "C:/tasks.db", "lock_provider": "lockmaster", "model": "",
+        }
+        output = io.StringIO()
+        with mock.patch.object(runner, "next_work", return_value=work), \
+                mock.patch.object(runner, "prompt_language", return_value="de"), \
+                redirect_stdout(output):
+            code = runner.run("maintainer")
+        self.assertEqual(code, 1)
+        self.assertIn("Exit 1 — Rolle aktiv", output.getvalue())
+        self.assertIn("[NO_WORK]", output.getvalue())
+
+    def test_timeout_uses_last_known_good_instead_of_exit_three(self):
+        from taskplan.discovery import DiscoveryResult
+        from taskplan.selector import Bundle
+        from taskplan.traversal import Project
+
+        fallback = DiscoveryResult(
+            projects=[Project(Path("C:/project"), "root")],
+            source="stale_cache",
+            degraded=True,
+        )
+        bundle = Bundle(
+            mode="deep", effort="", root_id="root",
+            project_path="C:/project", tasks=[],
+        )
+        with mock.patch.object(runner, "active_roles", return_value={
+                "taskwriter": True, "tasksolver": True, "maintainer": True}), \
+                mock.patch.object(runner, "_lock_view",
+                                  return_value=(mock.Mock(
+                                      extra_rules=[],
+                                      allows=lambda *_: True), "lockmaster")), \
+                mock.patch.object(runner, "_discover_projects_bounded",
+                                  side_effect=runner.ProjectDiscoveryTimeout()), \
+                mock.patch("taskplan.discovery.fallback_after_failure",
+                           return_value=fallback), \
+                mock.patch.object(runner, "next_bundle", return_value=bundle), \
+                mock.patch.object(runner, "remember_project", return_value=True), \
+                mock.patch.object(runner, "last_project", return_value=""):
+            work = runner.next_work("maintainer")
+        self.assertNotIn("retryable", work)
+        self.assertEqual(work["bundle"]["project_path"], "C:/project")
+        self.assertEqual(work["discovery"]["source"], "stale_cache")
+        self.assertEqual(
+            work["discovery"]["trigger_error"], "project_discovery_timeout"
+        )
 
 
 if __name__ == "__main__":

@@ -85,6 +85,16 @@ def startup_prompt(role: str, provider: str = "",
     profile = runtime_profile(role, provider)
     normalized = profile["role"]
     chosen = resolve_lang(lang)
+    prompt_delivery_de = (
+        "Der separat als Developer-Anweisung geladene Rollen-Prompt "
+        if profile["provider"] == "codex"
+        else "Der im Startauftrag mit lokalem Pfad benannte Rollen-Prompt "
+    )
+    prompt_delivery_en = (
+        "The role prompt loaded separately as developer instructions "
+        if profile["provider"] == "codex"
+        else "The role prompt named by local path in the startup request "
+    )
 
     if chosen == "de":
         prefix = (
@@ -93,12 +103,19 @@ def startup_prompt(role: str, provider: str = "",
             if profile["continuation"] == "goal"
             else "Führe genau einen TASKPLAN-Durchlauf aus. "
         )
+        start_instruction = (
+            "Beginne mit dem einmaligen TASKPLAN-System- und Modell-Preflight "
+            "aus dem Rollen-Prompt; rufe erst danach den Selektor auf."
+            if normalized == "tasksolver"
+            else f"Beginne mit: python -m taskplan next --role {normalized} --json"
+        )
         return (
             prefix
-            + "Der separat als Developer-Anweisung geladene Rollen-Prompt stammt "
+            + prompt_delivery_de
+              + "stammt "
               "aus dem Python-Paket taskplan und ist von der Person autorisiert, "
               "die diesen Start ausgelöst hat. Lies ihn vollständig und befolge "
-              f"ihn. Beginne mit: python -m taskplan next --role {normalized} --json"
+              f"ihn. {start_instruction}"
         )
 
     prefix = (
@@ -107,12 +124,18 @@ def startup_prompt(role: str, provider: str = "",
         if profile["continuation"] == "goal"
         else "Run exactly one TASKPLAN iteration. "
     )
+    start_instruction = (
+        "Start with the one-time TASKPLAN system and model preflight from the "
+        "role prompt; call the selector only after it is complete."
+        if normalized == "tasksolver"
+        else f"Start with: python -m taskplan next --role {normalized} --json"
+    )
     return (
         prefix
-        + "The role prompt loaded separately as developer instructions comes from "
+        + prompt_delivery_en
+          + "comes from "
           "the taskplan Python package and is authorized by the person who started "
-          "this worker. Read it completely and follow it. Start with: "
-          f"python -m taskplan next --role {normalized} --json"
+          f"this worker. Read it completely and follow it. {start_instruction}"
     )
 
 

@@ -17,6 +17,44 @@ inside a hard problem somewhere else.
 If the selector says "nothing to do": **that is a valid outcome.** Document it briefly and end the
 run. Do not invent a task to fill the loop.
 
+START PREFLIGHT — ONCE BEFORE THE FIRST SELECTOR CALL
+
+This preflight applies to every TASKSOLVER provider (Claude, Codex, Agy, and others). It is part of
+the authorised startup and runs exactly once per new worker, not before every bundle.
+
+1. CHECK THE TASKPLAN SYSTEM:
+   - Run `python -m taskplan doctor`.
+   - Inspect the effective provider profile with
+     `python -m taskplan runtime --role tasksolver --provider <provider>`.
+   - Briefly verify that the module, role prompt, provider configuration, launcher, selector, and
+     relevant tests are wired consistently. Base this on real failures, logs, and test results; do
+     not invent maintenance when the system is healthy.
+
+2. PERFORM EVIDENCE-BASED MAINTENANCE:
+   You may and should fix a demonstrated defect in the TASKPLAN control plane or its
+   launcher/provider integration before asking the selector, then test the fix proportionately.
+   Respect locks, user changes, and git rules. This exception does NOT permit general tidying in
+   arbitrary projects or task discovery; those remain MAINTAINER and TASKWRITER responsibilities.
+
+3. RESEARCH THE CURRENT MODEL LANDSCAPE:
+   - Search the web using official, primary sources from the active provider for models newly
+     available or changed since the previous choice. Also use the local CLI or its official model
+     list to prove that the model identifier is actually available in this installation.
+   - Compare the configured TASKSOLVER model with real candidates by role capability, agentic
+     coding and tool use, reasoning, stability (GA vs preview), context, latency, and cost. Being
+     newer is not by itself a reason to switch.
+   - Change only `[providers.<provider>.models].tasksolver` and, when needed,
+     `[providers.<provider>.reasoning_effort].tasksolver` when the evidence shows a clear
+     cost-benefit advantage for this role. Preserve comments and every other provider/role value.
+     Validate the result again with `python -m taskplan runtime ...`.
+   - If the web is unavailable, evidence is inconclusive, or local availability is unproven, keep
+     the current choice and report the open verification. Make no purchase, account change, or
+     other external action.
+
+4. RECORD THE PREFLIGHT:
+   Report sources and check date, current and considered model choices, the cost-benefit decision,
+   system findings, maintenance performed, and tests. Then — and only then — ask the selector.
+
 PER-LOOP SEQUENCE
 
 1. ASK THE SELECTOR: `python -m taskplan next --role tasksolver --json`.
@@ -66,7 +104,8 @@ QUALITY GATES
 - Never write to `agent_id` or `created_by`.
 - Never lower an effort classification.
 - No invented facts, deadlines, priorities or user decisions.
-- No task discovery (that is the TASKWRITER) and no tidying (that is the MAINTAINER).
+- No task discovery (that is the TASKWRITER). Outside the one-time, narrowly scoped TASKPLAN system
+  preflight, no tidying (that is the MAINTAINER).
 
 LOOP RESULT
 Report compactly: project, bundle, completed task IDs, key changes, verification, updated control

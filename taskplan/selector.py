@@ -196,7 +196,8 @@ def _bundle_from(tasks: List[dict], mode: str, effort: str,
 
 
 def _writer_bundle(config: SelectorConfig, store: TaskStore,
-                   locks: LockView) -> Optional[Bundle]:
+                   locks: LockView,
+                   after_project: str = "") -> Optional[Bundle]:
     """Die Auswahl des TASKWRITER — eine ANDERE als die des Solvers.
 
     Aufgedeckt vom TASKWRITER-Loop (2026-07-14): Er bekam dieselbe Auswahl wie
@@ -246,19 +247,32 @@ def _writer_bundle(config: SelectorConfig, store: TaskStore,
              for t in store.list(limit=None, include_done=True)
              if t.get("project_path")}
 
+    candidates = []
     for project in config.projects:
         if _key(project.path) in known:
             continue
         if not locks.allows_selection(project.path):
             continue   # Gesperrt: der Writer schreibt dort keine Steuerdateien.
-        return Bundle(mode=DEEP, effort="", root_id=project.root_id,
-                      project_path=str(project.path), tasks=[])
+        candidates.append(project)
 
-    return None
+    if not candidates:
+        return None
+
+    after_key = _key(after_project) if after_project else ""
+    if after_key:
+        for index, project in enumerate(candidates):
+            if _key(project.path) == after_key:
+                candidates = candidates[index + 1:] + candidates[:index + 1]
+                break
+
+    project = candidates[0]
+    return Bundle(mode=DEEP, effort="", root_id=project.root_id,
+                  project_path=str(project.path), tasks=[])
 
 
 def _maintainer_bundle(config: SelectorConfig, store: TaskStore,
-                       locks: LockView) -> Optional[Bundle]:
+                       locks: LockView,
+                       after_project: str = "") -> Optional[Bundle]:
     """Die Auswahl des MAINTAINER — wieder eine ANDERE.
 
     Aufgedeckt vom MAINTAINER-Loop (2026-07-14): Er fiel in den TASKSOLVER-Zweig
@@ -313,23 +327,42 @@ def _maintainer_bundle(config: SelectorConfig, store: TaskStore,
     # der Writer sucht unberuehrte Projekte, der Maintainer beruehrte. Eine
     # kuenstliche Trennung (etwa: "der Maintainer laeuft die Liste rueckwaerts")
     # waere ein Pflaster gewesen, das bei wenigen Projekten wieder kollidiert.
+    # Touched projects bleiben die bevorzugte Gruppe, unberuehrte Projekte
+    # der Fallback. Innerhalb der Gesamtmenge wird aber nach dem letzten
+    # Cursor weitergelaufen. So wird ein freies Projekt nicht bei jedem neuen
+    # CLI-Prozess erneut als erstes geliefert.
+    candidates = []
+    seen = set()
     for prefer_touched in (True, False):
         for project in config.projects:
             key = _key(project.path)
-            if key in busy:
+            if key in seen or key in busy:
                 continue
             if (key in touched) != prefer_touched:
                 continue
             if not locks.allows_selection(project.path):
                 continue
-            return Bundle(mode=DEEP, effort="", root_id=project.root_id,
-                          project_path=str(project.path), tasks=[])
+            seen.add(key)
+            candidates.append(project)
 
-    return None
+    if not candidates:
+        return None
+
+    after_key = _key(after_project) if after_project else ""
+    if after_key:
+        for index, project in enumerate(candidates):
+            if _key(project.path) == after_key:
+                candidates = candidates[index + 1:] + candidates[:index + 1]
+                break
+
+    project = candidates[0]
+    return Bundle(mode=DEEP, effort="", root_id=project.root_id,
+                  project_path=str(project.path), tasks=[])
 
 
 def next_bundle(config: SelectorConfig, store: TaskStore,
-                locks: LockView, role: str = "tasksolver") -> Optional[Bundle]:
+                locks: LockView, role: str = "tasksolver",
+                after_project: str = "") -> Optional[Bundle]:
     """Was ist als Naechstes dran? None = nichts zu tun.
 
     Gibt der Selektor None zurueck, endet der Durchlauf EHRLICH als Leerlauf —
@@ -340,9 +373,11 @@ def next_bundle(config: SelectorConfig, store: TaskStore,
     hiesse dem Writer systematisch nichts zu geben.
     """
     if role == "taskwriter":
-        return _writer_bundle(config, store, locks)
+        return _writer_bundle(
+            config, store, locks, after_project=after_project
+        )
     if role == "maintainer":
-        return _maintainer_bundle(config, store, locks)
+        return _maintainer_bundle(config, store, locks, after_project=after_project)
 
     efforts = config.allowed_efforts()
 

@@ -41,6 +41,8 @@ path = "~/.taskplan/taskplan.db"
 effort_ceiling = "medium"   # easy | medium
                             # large/special sind NIE autonom, unabhaengig davon
 max_bundle_size = 3         # Aufgaben je Durchlauf — aus EINEM Projekt
+rotation_state_file = "~/.taskplan/rotation-state.json"
+                              # persistenter Cursor fuer projektbasierte Rollen
 
 [loop.deep]
 enabled = true              # false = nur Oberflaeche (das alte Verhalten)
@@ -88,19 +90,44 @@ maintainer = "high"
 
 [providers.claude]
 continuation = "one_shot"
+empty_policy = "stop"
+idle_backoff_seconds = 60
 
 [providers.claude.models]
-default    = "claude-sonnet-5"
-taskwriter = "claude-sonnet-5"
-tasksolver = "claude-opus-4-8"
-maintainer = "claude-sonnet-5"
+default    = ""
+taskwriter = ""
+tasksolver = ""
+maintainer = ""
+
+[providers.claude.reasoning_effort]
+default    = "high"
+taskwriter = "high"
+tasksolver = "high"
+maintainer = "high"
+
+[providers.agy]
+continuation = "one_shot"
+empty_policy = "stop"
+idle_backoff_seconds = 60
+
+[providers.agy.models]
+default    = ""
+taskwriter = ""
+tasksolver = ""
+maintainer = ""
+
+[providers.agy.reasoning_effort]
+default    = "high"
+taskwriter = "high"
+tasksolver = "high"
+maintainer = "high"
 
 # Rueckwaertskompatibilitaet fuer Installationen ohne Provider-Sektionen.
 [models]
-default    = "claude-sonnet-5"
-taskwriter = "claude-sonnet-5"   # Analyse/Formalisierung
-tasksolver = "claude-opus-4-8"   # setzt um, braucht mehr Urteil
-maintainer = "claude-sonnet-5"   # mechanische Pflege
+default    = ""
+taskwriter = ""
+tasksolver = ""
+maintainer = ""
 
 # ---------------------------------------------------------------------------
 # TRAVERSIERUNG — was ist eine Root, was ein Projekt?
@@ -141,7 +168,9 @@ max_depth = 3
 discovery_timeout_seconds = 30
 cache_enabled = true
 cache_file = "~/.taskplan/projects-cache.json"
-cache_ttl_seconds = 900
+# Refresh-Intervall pro Root-Sektor. Nach Ablauf wird pro Selektorlauf nur ein
+# Sektor aktualisiert. Ein Last-known-good-Sektor bleibt bei Timeout erhalten.
+cache_ttl_seconds = 86400  # 24 Stunden; 0 = kein altersbasierter Refresh
 
 # Einfache Variante (eine Liste, ein Treffer genuegt):
 # markers = ["TODO.md", "CLAUDE.md", ".git", "pyproject.toml"]

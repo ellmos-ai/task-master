@@ -27,15 +27,30 @@ def _projects_command(args: list[str]) -> int:
 
     if action == "list":
         from .runner import (ProjectDiscoveryTimeout,
-                             _discover_projects_bounded)
+                             _discover_projects_bounded, _exit_line)
         entries = load_registry(configured)
         try:
-            total = _discover_projects_bounded(discovery_timeout_seconds())
+            total, metadata = _discover_projects_bounded(
+                discovery_timeout_seconds(), with_metadata=True
+            )
         except (ProjectDiscoveryTimeout, RuntimeError) as exc:
-            print(f"Projekt-Discovery nicht verfügbar: {exc}", file=sys.stderr)
-            return 3
+            from .discovery import read_last_known_good
+            fallback = read_last_known_good()
+            if fallback is None:
+                print(_exit_line(3), file=sys.stderr)
+                print(f"Projekt-Discovery nicht verfügbar: {exc}", file=sys.stderr)
+                return 3
+            total = fallback.projects
+            metadata = fallback.payload()
+            print(
+                "Warnung: Live-Refresh fehlgeschlagen; "
+                "Last-known-good-Inventar wird angezeigt.",
+                file=sys.stderr,
+            )
         print(f"Discovery-Modus : {discovery_mode()}")
         print(f"Registry-Datei  : {registry_path(configured)}")
+        print(f"Inventarquelle  : {metadata.get('source', 'unknown')}")
+        print(f"Ausstehende Sektoren: {metadata.get('pending_sectors', 0)}")
         print()
         print(f"Manuell eingetragen : {len(entries)}")
         print(f"Erreichbar gesamt   : {len(total)}  (Auto + Registry, gecacht)")
@@ -49,13 +64,22 @@ def _projects_command(args: list[str]) -> int:
 
     if action == "refresh":
         from .runner import (ProjectDiscoveryTimeout,
-                             _discover_projects_bounded)
+                             _discover_projects_bounded, _exit_line)
         try:
-            total = _discover_projects_bounded(discovery_timeout_seconds(), force=True)
+            total, metadata = _discover_projects_bounded(
+                discovery_timeout_seconds(), force=True, with_metadata=True
+            )
         except (ProjectDiscoveryTimeout, RuntimeError) as exc:
+            print(_exit_line(3), file=sys.stderr)
             print(f"Projekt-Discovery nicht verfügbar: {exc}", file=sys.stderr)
+            print(
+                "Vorhandene Last-known-good-Sektoren bleiben unverändert nutzbar.",
+                file=sys.stderr,
+            )
             return 3
-        print(f"Projekt-Cache erneuert: {len(total)} Projekte")
+        print(f"Projektsektor erneuert: {metadata.get('refreshed_sector') or '(keiner fällig)'}")
+        print(f"Bekanntes Gesamtinventar: {len(total)} Projekte")
+        print(f"Ausstehende Sektoren: {metadata.get('pending_sectors', 0)}")
         return 0
 
     if action == "add":
@@ -222,6 +246,63 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Backoff abgeschlossen: {seconds} Sekunden")
         return 0
 
+    if command == "launch":
+        from .launcher import launch
+        role = _option(rest, "--role", "tasksolver")
+        provider = _option(rest, "--provider", "")
+        if not provider:
+            print("Nutzung: python -m taskplan launch --role R --provider P",
+                  file=sys.stderr)
+            return 2
+        return launch(role, provider)
+
+    if command == "starters":
+        from .starters import get_starter_path, list_starters
+        action = rest[0] if rest else "list"
+        if action == "list":
+            for name in list_starters():
+                print(name)
+            return 0
+        if action == "path":
+            role = _option(rest, "--role", "")
+            provider = _option(rest, "--provider", "")
+            if not role or not provider:
+                print("Nutzung: python -m taskplan starters path "
+                      "--role R --provider P", file=sys.stderr)
+                return 2
+            try:
+                print(get_starter_path(role, provider))
+            except (ValueError, FileNotFoundError) as exc:
+                print(exc, file=sys.stderr)
+                return 2
+            return 0
+        print("Nutzung: python -m taskplan starters list | starters path "
+              "--role R --provider P", file=sys.stderr)
+        return 2
+
+    if command == "skip":
+        from .config import rotation_state_file
+        from .rotation import remember_project
+
+        role = _option(rest, "--role", "maintainer")
+        project = _option(rest, "--project", "")
+        if not project:
+            print("Nutzung: python -m taskplan skip "
+                  "--role <maintainer|taskwriter> "
+                  "--project <pfad>", file=sys.stderr)
+            return 2
+        if role not in ("maintainer", "taskwriter"):
+            print("skip ist nur für projektbasierte Rollen verfügbar: "
+                  "maintainer oder taskwriter.",
+                  file=sys.stderr)
+            return 2
+        if not remember_project(rotation_state_file(), role, project):
+            print("Rotationszustand konnte nicht geschrieben werden.",
+                  file=sys.stderr)
+            return 1
+        print(f"Übersprungen für den nächsten Lauf: {project}")
+        return 0
+
     if command in ("help", "-h", "--help"):
         print("taskplan — Aufgabenverwaltung")
         print()
@@ -230,8 +311,11 @@ def main(argv: list[str] | None = None) -> int:
         print("            Fragt den SELEKTOR: was ist als naechstes dran?")
         print("            Liefert Modus (surface/deep), Aufwand, Root, Projekt,")
         print("            Task-IDs und die Rechte in diesem Projekt.")
-        print("            Exit 0 = Buendel da, 1 = nichts zu tun,")
-        print("            2 = Rolle abgeschaltet, 3 = Discovery wiederholbar.")
+        print("            Exit 0 [BUNDLE_READY] = Bündel erfolgreich geliefert")
+        print("            Exit 1 [NO_WORK] = Rolle aktiv, derzeit kein Bündel")
+        print("            Exit 2 [ROLE_DISABLED] = Rolle deaktiviert")
+        print("            Exit 3 [RETRYABLE_SELECTOR_ERROR] = wiederholbarer")
+        print("                    Selektor-/Discovery-Fehler")
         print()
         print("  doctor    Zeigt, welche Datenbank benutzt wird, und warnt bei")
         print("            widerspruechlichen Fundstellen (leere aktive DB,")
@@ -249,6 +333,16 @@ def main(argv: list[str] | None = None) -> int:
         print()
         print("  backoff --role R [--provider P]")
         print("            Erzwingt die konfigurierte Wartezeit vor einem Retry.")
+        print()
+        print("  launch --role R --provider P")
+        print("            Startet Claude, Codex oder Agy über das Runtime-Profil.")
+        print()
+        print("  starters list | starters path --role R --provider P")
+        print("            Listet bzw. lokalisiert die gebündelten Windows-Starter.")
+        print()
+        print("  skip --role <maintainer|taskwriter> --project PFAD")
+        print("            Setzt den Projekt-Cursor der Rolle hinter ein Projekt,")
+        print("            damit der nächste Lauf den nächsten Kandidaten nimmt.")
         print()
         print("Als Bibliothek:  from taskplan import api as tasks")
         return 0

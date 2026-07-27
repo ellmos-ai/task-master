@@ -17,7 +17,6 @@ import json
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
 
 from .client import TaskClient
 from .config import (
@@ -25,24 +24,36 @@ from .config import (
     discovery_timeout_seconds,
     lock_config,
     model_for,
+    prompt_language,
+    rotation_state_file,
     selector_config,
     traversal_config,
 )
 from .locks import CREATE, MODIFY, READ, build_lock_view
+from .rotation import last_project, remember_project
 from .selector import next_bundle
+
+PROJECT_ROTATION_ROLES = ("taskwriter", "maintainer")
 
 
 class ProjectDiscoveryTimeout(TimeoutError):
     """Projekt-Discovery hat ihre konfigurierte harte Grenze ueberschritten."""
 
 
-def _discover_projects_bounded(timeout: float, force: bool = False):
+def _discover_projects_bounded(
+    timeout: float,
+    force: bool = False,
+    with_metadata: bool = False,
+):
     """Discovery in einem abbrechbaren Unterprozess mit persistentem Cache."""
-    from .discovery import discover_cached
     from .traversal import Project
 
     if timeout <= 0:
-        return discover_cached(force=force)[0]
+        from .discovery import discover_snapshot
+        snapshot = discover_snapshot(force=force)
+        metadata = snapshot.payload()
+        metadata.pop("projects", None)
+        return (snapshot.projects, metadata) if with_metadata else snapshot.projects
     command = [sys.executable, "-m", "taskplan.discovery"]
     if force:
         command.append("--force")
@@ -60,8 +71,17 @@ def _discover_projects_bounded(timeout: float, force: bool = False):
         raise RuntimeError(f"Projekt-Discovery fehlgeschlagen: {detail}")
     try:
         data = json.loads(completed.stdout)
-        return [Project(path=Path(item["path"]), root_id=str(item["root_id"]))
-                for item in data.get("projects", [])]
+        projects = [
+            Project(path=Path(item["path"]), root_id=str(item["root_id"]))
+            for item in data.get("projects", [])
+        ]
+        metadata = {
+            key: data[key] for key in (
+                "cached", "source", "degraded", "cache_age_seconds",
+                "refreshed_sector", "pending_sectors", "warnings",
+            ) if key in data
+        }
+        return (projects, metadata) if with_metadata else projects
     except (ValueError, TypeError, KeyError) as exc:
         raise RuntimeError("Projekt-Discovery lieferte ungueltiges JSON") from exc
 
@@ -97,29 +117,60 @@ def next_work(role: str = "tasksolver") -> dict:
         "lock_provider": provider,
         "db": str(store.db_path),
     }
+    previous_project = ""
+    rotation_path = None
+    if role in PROJECT_ROTATION_ROLES:
+        rotation_path = rotation_state_file()
+        previous_project = last_project(rotation_path, role)
+        if previous_project:
+            result["rotation"] = {"previous_project": previous_project}
     # Der TASKWRITER braucht die Projektliste: Ist alles eingestuft, sucht er
     # das naechste Projekt, das noch GAR KEINE Aufgaben hat. Nur fuer ihn
     # erheben - fuer den Solver waere es verschwendete Zeit.
     if role in ("taskwriter", "maintainer"):
         timeout = discovery_timeout_seconds()
         try:
-            config.projects = _discover_projects_bounded(timeout)
+            discovered = _discover_projects_bounded(
+                timeout, with_metadata=True
+            )
+            if isinstance(discovered, tuple):
+                config.projects, discovery_metadata = discovered
+            else:  # Kompatibilität für externe/mockende Aufrufer
+                config.projects, discovery_metadata = discovered, {}
+            if discovery_metadata:
+                result["discovery"] = discovery_metadata
         except (ProjectDiscoveryTimeout, RuntimeError) as exc:
-            error = ("project_discovery_timeout"
-                     if isinstance(exc, ProjectDiscoveryTimeout)
-                     else "project_discovery_error")
-            result.update({
-                "bundle": None,
-                "retryable": True,
-                "error": error,
-                "reason": (
-                    f"{exc}. Der Lauf endet kontrolliert statt zu haengen. "
-                    "Nach dem konfigurierten Backoff erneut versuchen."
-                ),
-            })
-            return result
+            from .discovery import fallback_after_failure
 
-    bundle = next_bundle(config, store, view, role=role)
+            fallback = fallback_after_failure(store)
+            if fallback is not None:
+                config.projects = fallback.projects
+                metadata = fallback.payload()
+                metadata.pop("projects", None)
+                metadata["trigger_error"] = (
+                    "project_discovery_timeout"
+                    if isinstance(exc, ProjectDiscoveryTimeout)
+                    else "project_discovery_error"
+                )
+                metadata["trigger_reason"] = str(exc)
+                result["discovery"] = metadata
+            else:
+                error = ("project_discovery_timeout"
+                         if isinstance(exc, ProjectDiscoveryTimeout)
+                         else "project_discovery_error")
+                result.update({
+                    "bundle": None,
+                    "retryable": True,
+                    "error": error,
+                    "reason": (
+                        f"{exc}. Der Lauf endet kontrolliert statt zu haengen. "
+                        "Nach dem konfigurierten Backoff erneut versuchen."
+                    ),
+                })
+                return result
+
+    bundle = next_bundle(config, store, view, role=role,
+                        after_project=previous_project)
 
     # Fremde Lock-Regeln gehen als TEXT weiter — nicht ausgewertet, sondern
     # dem LLM zum Lesen gegeben.
@@ -161,6 +212,20 @@ def next_work(role: str = "tasksolver") -> dict:
                    "priority": t["priority"], "effort": t["effort"]}
                   for t in bundle.tasks],
     }
+    if (
+        role in PROJECT_ROTATION_ROLES
+        and rotation_path is not None
+        and not bundle.tasks
+    ):
+        persisted = remember_project(rotation_path, role, bundle.project_path)
+        rotation = result.setdefault("rotation", {})
+        rotation["selected_project"] = bundle.project_path
+        rotation["cursor_persisted"] = persisted
+        if not persisted:
+            rotation["warning"] = (
+                "Rotationszustand konnte nicht geschrieben werden; "
+                "der nächste Lauf beginnt wieder am Listenanfang."
+            )
     if project is not None:
         result["permissions"] = {
             "read": view.allows(project, READ),
@@ -170,26 +235,74 @@ def next_work(role: str = "tasksolver") -> dict:
     return result
 
 
+EXIT_STATUS = {
+    0: {
+        "name": "BUNDLE_READY",
+        "de": "Bündel erfolgreich geliefert",
+        "en": "Bundle delivered successfully",
+    },
+    1: {
+        "name": "NO_WORK",
+        "de": "Rolle aktiv, aber derzeit kein zulässiges Bündel",
+        "en": "Role active, but no eligible bundle is currently available",
+    },
+    2: {
+        "name": "ROLE_DISABLED",
+        "de": "Rolle ist in der Konfiguration deaktiviert",
+        "en": "Role is disabled in configuration",
+    },
+    3: {
+        "name": "RETRYABLE_SELECTOR_ERROR",
+        "de": "Wiederholbarer Selektor-/Discovery-Fehler",
+        "en": "Retryable selector/discovery error",
+    },
+}
+
+
+def _exit_code(work: dict) -> int:
+    if not work.get("active", True):
+        return 2
+    if work.get("retryable"):
+        return 3
+    return 0 if work.get("bundle") else 1
+
+
+def _exit_contract(code: int) -> dict:
+    language = prompt_language()
+    status = EXIT_STATUS[code]
+    return {
+        "code": code,
+        "name": status["name"],
+        "meaning": status["de" if language == "de" else "en"],
+    }
+
+
+def _exit_line(code: int) -> str:
+    contract = _exit_contract(code)
+    return f"Exit {code} — {contract['meaning']} [{contract['name']}]"
+
+
 def run(role: str = "tasksolver", as_json: bool = False) -> int:
     work = next_work(role)
+    code = _exit_code(work)
+    work["exit"] = _exit_contract(code)
 
     if as_json:
         print(json.dumps(work, ensure_ascii=False, indent=2))
-        if not work.get("active", True):
-            return 2
-        if work.get("retryable"):
-            return 3
-        return 0 if work.get("bundle") else 1
+        return code
 
     if not work["active"]:
+        print(_exit_line(code))
         print(f"[{role.upper()}] {work['reason']}")
-        return 2
+        return code
 
     if work.get("retryable"):
+        print(_exit_line(code))
         print(f"[{role.upper()}] Wiederholbarer Selektorfehler")
         print(f"  {work['reason']}")
-        return 3
+        return code
 
+    print(_exit_line(code))
     print(f"[{role.upper()}]")
     print(f"  Datenbank : {work['db']}")
     if work.get("model"):
@@ -202,7 +315,7 @@ def run(role: str = "tasksolver", as_json: bool = False) -> int:
         print("  Nichts zu tun.")
         print()
         print(f"  {work['reason']}")
-        return 1
+        return code
 
     print(f"  Modus     : {bundle['mode']}")
     print(f"  Aufwand   : {bundle['effort']}")
@@ -226,4 +339,4 @@ def run(role: str = "tasksolver", as_json: bool = False) -> int:
         print("  Fremde Lock-Regeln (LIES SIE und wende sie an):")
         for text in work["lock_rules"]:
             print("    " + text.replace("\n", "\n    "))
-    return 0
+    return code

@@ -9,6 +9,15 @@ YOU DO NOT CHOOSE. THE SELECTOR CHOOSES.
 tells you which project is due and what permissions you have there. Exit 2 means: the role is disabled
 in the configuration — then you terminate immediately and cleanly.
 
+The selector keeps a persistent cursor for project-based runs. `tasks: []` is intentional for the
+MAINTAINER: you maintain the project; you do not solve tasks. If the delivered project has no
+evidence of maintenance work, skip it for the next run:
+
+    python -m taskplan skip --role maintainer --project "<path>"
+
+New tasks are delivered by TASKWRITER/TASKSOLVER runs; they are not reinterpreted as a
+MAINTAINER bundle.
+
 GOAL PER LOOP
 Work exactly ONE project. Leave it tidier than you found it — without losing information.
 

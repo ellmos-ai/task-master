@@ -177,6 +177,28 @@ def _has_marker(directory: Path, markers: Iterable[str]) -> bool:
     return any((directory / marker).exists() for marker in markers)
 
 
+def _child_directories(parent: Path) -> List[Path]:
+    """Günstige, fehlerisolierte Verzeichnisauflistung.
+
+    Entspricht FileCommanders erfolgreichem ``readdir(..., withFileTypes)``-
+    Muster: ein Verzeichnis-Handle, Typinformation aus dem Directory Entry und
+    kein separater ``stat``-Lauf über jedes Kind. Cloud-Timeouts begrenzt der
+    Discovery-Unterprozess weiterhin hart.
+    """
+    children: List[Path] = []
+    try:
+        with os.scandir(parent) as entries:
+            for entry in entries:
+                try:
+                    if entry.is_dir(follow_symlinks=False):
+                        children.append(Path(entry.path))
+                except OSError:
+                    continue
+    except OSError:
+        return []
+    return children
+
+
 def _find_projects_auto(config: TraversalConfig,
                         roots: List[Path]) -> List[Project]:
     """Auto-Modus: das OBERSTE markierte Verzeichnis je Pfad, bis `max_depth`.
@@ -198,11 +220,7 @@ def _find_projects_auto(config: TraversalConfig,
         for _ in range(max_depth):
             nxt: List[Path] = []
             for parent in frontier:
-                try:
-                    children = [c for c in parent.iterdir() if c.is_dir()]
-                except OSError:
-                    continue
-                for child in children:
+                for child in _child_directories(parent):
                     if child.name in config.skip_dirs:
                         continue
                     if config.is_project(child):
@@ -282,11 +300,7 @@ def find_projects(config: TraversalConfig,
         for depth in range(1, work_index + 1):
             nxt: List[Path] = []
             for parent in current:
-                try:
-                    children = [c for c in parent.iterdir() if c.is_dir()]
-                except OSError:
-                    continue
-                for child in children:
+                for child in _child_directories(parent):
                     if child.name in config.skip_dirs:
                         continue
                     if depth == work_index:

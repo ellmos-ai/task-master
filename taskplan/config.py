@@ -84,6 +84,18 @@ def selector_config():
     )
 
 
+def rotation_state_file() -> Path:
+    """Pfad fuer den persistenten Projekt-Cursor.
+
+    Der Zustand gehoert weder in ein Projekt noch in die Task-Tabelle. Er ist
+    deshalb benutzerweit konfigurierbar und liegt standardmaessig unter
+    ``~/.taskplan``.
+    """
+    loop = load_config().get("loop", {}) or {}
+    raw = str(loop.get("rotation_state_file", "~/.taskplan/rotation-state.json"))
+    return Path(raw).expanduser()
+
+
 def prompt_language() -> str:
     """Sprache der Rollen-Prompts.
 
@@ -326,13 +338,17 @@ def discovery_timeout_seconds() -> float:
 
 
 def discovery_cache_config() -> Dict[str, Any]:
-    """Portabler Snapshot der teuren Projekt-Discovery."""
+    """Portabler Snapshot der teuren Projekt-Discovery.
+
+    ``ttl_seconds`` ist das Refresh-Intervall, kein Löschdatum: Ein
+    Last-known-good-Sektor bleibt bei einem fehlgeschlagenen Refresh nutzbar.
+    """
     section = load_config().get("traversal", {}) or {}
     raw_path = str(section.get("cache_file", "~/.taskplan/projects-cache.json"))
     try:
-        ttl = max(0, int(section.get("cache_ttl_seconds", 900)))
+        ttl = max(0, int(section.get("cache_ttl_seconds", 86400)))
     except (TypeError, ValueError):
-        ttl = 900
+        ttl = 86400
     return {
         "enabled": bool(section.get("cache_enabled", True)),
         "path": Path(raw_path).expanduser(),

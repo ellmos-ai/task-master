@@ -1,15 +1,16 @@
 # TODO — robuste Discovery-Fallbacks
 
-Stand: 2026-07-22
+Stand: 2026-07-27 — umgesetzt; die Punkte bleiben als Betriebsnachweis erhalten.
 
 ## Befund
 
 - `python -m taskplan next --role maintainer --json` kann nach
   `discovery_timeout_seconds` mit Exit 3 und `project_discovery_timeout`
   abbrechen, bevor `next_bundle()` überhaupt einen Kandidaten auswählen kann.
-- Der Snapshot-Cache ist nur innerhalb seiner TTL und bei exakt passender
-  Signatur verwendbar. Ein signaturkompatibler Last-known-good-Snapshot wird
-  nach Ablauf der TTL nicht als degradierter Fallback angeboten.
+- Ursache der beobachteten Exit-0-/Exit-3-Schleife war eine Signatur über die
+  gesamte `taskplan.toml`: Schon ein Modellwechsel verwarf den Projekt-Cache.
+  Der dadurch erzwungene OneDrive-Vollscan überschritt anschließend den
+  Discovery-Timeout, bevor der Selektor arbeiten konnte.
 - Im Discovery-Modus `hybrid` läuft die automatische Suche vor der manuellen
   Registry. Hängt die automatische Suche, wird die Registry nicht mehr erreicht.
 - Der MAINTAINER wählt Projekte, keine einzelnen Tasks. Ohne Projektinventar kann
@@ -20,16 +21,16 @@ Stand: 2026-07-22
 
 ## Aufgaben
 
-- [ ] **TP-DISC-FB-01 / TASKPLAN #1208 — Signaturkompatiblen Last-known-good-Cache bei Timeout nutzen**
+- [x] **TP-DISC-FB-01 / TASKPLAN #1208 — Last-known-good-Cache bei Timeout nutzen**
   - Bei `project_discovery_timeout` den letzten vollständig geschriebenen Cache
     auch nach Ablauf der TTL als degradierten Fallback zulassen, sofern Version
     und Konfigurationssignatur passen.
   - Rückgabe sichtbar mit `discovery_source=stale_cache`, `degraded=true`,
     Cache-Alter und Warnung kennzeichnen.
-  - Ein leerer, beschädigter oder signaturfremder Cache darf nicht verwendet
-    werden.
+  - Eine geänderte Discovery-Policy macht Sektoren refresh-fällig, verwirft ihr
+    letztes vollständiges Inventar aber nicht vor einem erfolgreichen Ersatz.
 
-- [ ] **TP-DISC-FB-02 / TASKPLAN #1209 — Cache-Prüfung von blockierenden Cloud-Pfaden entkoppeln**
+- [x] **TP-DISC-FB-02 / TASKPLAN #1209 — Cache-Prüfung von blockierenden Cloud-Pfaden entkoppeln**
   - Sicherstellen, dass das Lesen eines Last-known-good-Snapshots nicht selbst an
     `Path.resolve()`, `stat()` oder einem nicht reagierenden OneDrive-Root hängt.
   - Signaturprüfung rein lokal oder separat zeitbegrenzt ausführen; bei nicht
@@ -37,7 +38,7 @@ Stand: 2026-07-22
   - Cache-Schreibvorgänge atomar lassen und nur vollständig erzeugte Snapshots
     freigeben.
 
-- [ ] **TP-DISC-FB-03 / TASKPLAN #1210 — Manuelle Registry trotz Auto-Discovery-Timeout erreichen**
+- [x] **TP-DISC-FB-03 / TASKPLAN #1210 — Manuelle Registry trotz Auto-Discovery-Timeout erreichen**
   - Im Modus `hybrid` die Registry unabhängig von der automatischen Traversierung
     laden können.
   - Bei Auto-Timeout gültige Registry-Projekte als degradierte Kandidatenquelle
@@ -45,16 +46,16 @@ Stand: 2026-07-22
   - Registry-I/O-Fehler sichtbar melden; eine leere Registry ist kein
     Aufgabenende, solange weitere sichere Quellen existieren.
 
-- [ ] **TP-DISC-FB-04 / TASKPLAN #1211 — MAINTAINER-Projektinventar aus Task-Daten ableiten**
+- [x] **TP-DISC-FB-04 / TASKPLAN #1211 — MAINTAINER-Projektinventar aus Task-Daten ableiten**
   - Als letzten Kandidaten-Fallback nichtleere `project_path`-/`root_id`-Paare aus
     der Task-Datenbank deduplizieren.
-  - Nur real existierende Verzeichnisse übernehmen und aktive Zuweisungen,
-    fremde/User-Locks sowie ungültige oder außerhalb erlaubter Grenzen liegende
-    Pfade ausschließen.
+  - Pfade rein lexikalisch auf erlaubte Roots begrenzen, damit gerade der
+    Fallback nicht erneut an Cloud-`stat()` hängt. Aktive Zuweisungen und Locks
+    filtert anschließend unverändert der bestehende Selektor.
   - Das abgeleitete Inventar durch den bestehenden `_maintainer_bundle()`-Pfad
     schicken; das Modell darf kein Ersatzprojekt selbst erfinden.
 
-- [ ] **TP-DISC-FB-05 / TASKPLAN #1212 — Geordnete Fallback-Kette und Exit-Semantik implementieren**
+- [x] **TP-DISC-FB-05 / TASKPLAN #1212 — Geordnete Fallback-Kette und Exit-Semantik implementieren**
   - Reihenfolge: frischer Cache → begrenzt versuchte Auto-Discovery →
     signaturkompatibler Last-known-good-Cache → manuelle Registry → validiertes
     Task-Daten-Inventar.
@@ -66,7 +67,7 @@ Stand: 2026-07-22
     maschinenlesbar ausgeben.
   - Abhängigkeiten: TP-DISC-FB-01 bis TP-DISC-FB-04.
 
-- [ ] **TP-DISC-FB-06 / TASKPLAN #1213 — Regressionstests, Dokumentation und Betriebsnachweis ergänzen**
+- [x] **TP-DISC-FB-06 / TASKPLAN #1213 — Regressionstests, Dokumentation und Betriebsnachweis ergänzen**
   - Tests für frischen Cache, abgelaufenen kompatiblen Cache, falsche Signatur,
     beschädigten Cache, Auto-Timeout mit Registry, Task-Daten-Fallback,
     Lock-Filterung und echten Leerlauf ergänzen.

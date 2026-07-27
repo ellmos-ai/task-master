@@ -118,5 +118,17 @@ class TestTraversalLevels(unittest.TestCase):
         self.assertEqual([r.name for r in traversal.roots], ["eins"])
 
 
+class TestDiscoveryCacheConfig(unittest.TestCase):
+    def test_default_refresh_interval_is_24_hours(self):
+        with mock.patch.object(cfg, "load_config", return_value={}):
+            cache = cfg.discovery_cache_config()
+        self.assertEqual(cache["ttl_seconds"], 24 * 60 * 60)
+
+    def test_refresh_interval_is_configurable(self):
+        with _with_config("[traversal]\ncache_ttl_seconds = 7200\n"):
+            cache = cfg.discovery_cache_config()
+        self.assertEqual(cache["ttl_seconds"], 7200)
+
+
 if __name__ == "__main__":
     unittest.main()
