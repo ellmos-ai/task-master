@@ -43,7 +43,6 @@
   `--effort`-Flag — Kimi-Worker laufen deshalb headless (`kimi --prompt`),
   die Reasoning-Stufe kommt aus `default_effort` des Modells in
   `~/.kimi-code/config.toml` und wird im Starter nur angezeigt. [2026-07-28]
->>>>>>> agent/runtime-discovery-dependencies
 
 ### Security
 - Repository-Hygiene erweitert: lokale Env-/Token-/Credential-/Recovery-/Key-,
