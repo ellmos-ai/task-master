@@ -56,6 +56,12 @@ class TestTaskClient(unittest.TestCase):
         titles_all = [t['title'] for t in self.client.list(include_done=True)]
         self.assertEqual(len(titles_all), 3)
 
+    def test_list_accepts_none_for_an_unbounded_result(self):
+        for i in range(55):
+            self.client.add(f"Task {i}")
+
+        self.assertEqual(len(self.client.list(limit=None)), 55)
+
     def test_status_transitions(self):
         task = self.client.add("Task")
         tid = task['id']

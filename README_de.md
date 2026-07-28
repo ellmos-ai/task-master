@@ -4,8 +4,16 @@
 
 # taskplan
 
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
+[![Lizenz: MIT](https://img.shields.io/badge/Lizenz-MIT-yellow.svg)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-280%20bestanden-brightgreen.svg)](tests/)
+[![llms.txt](https://img.shields.io/badge/llms.txt-verf%C3%BCgbar-orange.svg)](llms.txt)
+
 **Deterministische Aufgabenauswahl für LLM-Agenten.** Keine Abhängigkeiten, nur
 Standardbibliothek, Python ≥ 3.10.
+
+> [!NOTE]
+> **KI / LLM Integration**: `taskplan` stellt deterministische Selektions-Guards und Rollen-Prompts für autonome KI-Agenten bereit. Detaillierte Systemkonzepte und Modulübersichten finden sich in [llms.txt](llms.txt).
 
 *[English version → README.md](README.md)*
 
@@ -83,8 +91,30 @@ python -m taskplan projects list   # was sieht der Loop?
 python -m taskplan projects markers
 ```
 
-Exit-Codes von `next`: `0` = Bündel geliefert · `1` = nichts zu tun · `2` = Rolle
-abgeschaltet.
+`next` schreibt dieselbe verständliche Bezeichnung in die Konsole und mit `--json`
+in `exit.code`, `exit.name` und das lokalisierte Feld `exit.meaning`:
+
+| Code | Stabiler Name | Bedeutung |
+|---:|---|---|
+| `0` | `BUNDLE_READY` | Bündel erfolgreich geliefert |
+| `1` | `NO_WORK` | Rolle aktiv, aber derzeit kein zulässiges Bündel |
+| `2` | `ROLE_DISABLED` | Rolle ist in der Konfiguration deaktiviert |
+| `3` | `RETRYABLE_SELECTOR_ERROR` | Wiederholbarer Selektor-/Discovery-Fehler |
+
+Reine MAINTAINER-Projektbündel und TASKWRITER-Erfassungsläufe enthalten
+absichtlich keine Task-IDs. Der Selektor speichert für jede Rolle einen getrennten
+Cursor atomar unter `~/.taskplan/rotation-state.json` (konfigurierbar über
+`[loop].rotation_state_file`) und liefert beim nächsten Lauf den nächsten
+Kandidaten. Von einem echten, noch unbearbeiteten Task-Bündel rotiert der Cursor
+nicht weg. Ein Projekt ohne nachweisbaren Pflegebefund oder neue Aufgabe kann
+ausdrücklich übersprungen werden:
+
+```bash
+python -m taskplan skip --role maintainer --project "<pfad>"
+python -m taskplan skip --role taskwriter --project "<pfad>"
+```
+
+Neue Aufgaben bleiben der TASKWRITER-/TASKSOLVER-Rollenstrecke vorbehalten.
 
 ### Wer hat es angelegt, wer arbeitet daran
 
@@ -112,6 +142,15 @@ die Herkunft trägt.
 
 Der Writer ist der Upstream: **Eine uneingestufte Aufgabe ist eine unsichtbare
 Aufgabe** — der Solver weigert sich, ihre Größe zu raten.
+
+Vor dem ersten Selektoraufruf führt jeder TASKSOLVER-Provider einmalig einen
+TASKPLAN-Control-Plane-Preflight aus: `doctor`, Prüfung der wirksamen
+Runtime-/Provider-Verdrahtung, belegte Wartung an TASKPLAN selbst und einen
+aktuellen Modellcheck gegen offizielle Providerquellen plus lokale
+CLI-Verfügbarkeit. Ein Modell wird nur gewechselt, wenn Rollenleistung,
+Stabilität, Latenz und Kosten einen klaren Vorteil zeigen. Das erlaubt kein
+allgemeines Projekt-Aufräumen; die normale Projektarbeit beginnt weiterhin beim
+Selektor.
 
 Die Prompts liegen dem Paket bei (`taskplan.TASKSOLVER`, `.TASKWRITER`,
 `.MAINTAINER`) — als Ressourcen, nicht als hartkodierte Strings, und für externe
@@ -208,10 +247,73 @@ die echte Regel liest, als ein Parser, der ihre Bedeutung errät.
 ### Rollen, Modelle, Aufgabenquellen, Tiefe
 
 Alles schaltbar. Eine abgeschaltete Rolle **bricht beim Start sauber ab**, statt still
-leerzulaufen. `combined = true` führt alle aktiven Rollen in einem Worker aus — so
-ergibt `maintainer = false` + `combined = true` einen 2-in-1-Worker, ohne dass es
-dafür einen eigenen Modus bräuchte. Die Modellwahl gehört in die Konfiguration, nicht
-in den Starter.
+leerzulaufen. `combined = true` wird derzeit nur als Konfiguration gelesen und
+ausgegeben; noch kein mitgelieferter Runner oder Starter wertet es aus. Es ist daher
+noch kein funktionsfähiger 3-in-1-/2-in-1-Modus. Die Modellwahl gehört in die
+Konfiguration, nicht in den Starter.
+
+### Nutzerneutrale Provider-Runtime und Codex-Goals
+
+Starter bleiben bewusst dünn. `[execution] provider` wählt den Default-Provider;
+`[providers.<name>.models]` und `[providers.<name>.reasoning_effort]` bestimmen Modell
+und Reasoning je Rolle. Die bisherige Sektion `[models]` bleibt als kompatibler
+Fallback erhalten.
+
+Codex nutzt `continuation = "goal"`. TASKPLAN erzeugt einen ausdrücklichen
+Nutzerauftrag, der ein persistiertes Goal autorisiert, pro Fortsetzung genau ein
+Bündel bearbeitet und danach erneut den Selektor fragt. `empty_policy = "keep_goal"`
+verhindert, dass ein einzelner Leerlauf als dauerhaft leere Queue missverstanden
+wird. Der erzeugte Goal-Vertrag muss `python -m taskplan backoff ...` aufrufen;
+dieser Befehl führt die Wartezeit aus `idle_backoff_seconds` tatsächlich aus, bevor
+erneut gepollt wird. `python -m taskplan runtime ...` liefert das Profil für
+beliebige Starter; `python -m taskplan startup-prompt ...` erzeugt den
+providerspezifischen Nutzerauftrag. Kein Benutzername, Home-Pfad oder Modell wird im
+Starter fest verdrahtet.
+
+Das Wheel enthält neun nutzerneutrale Windows-Starter für
+TASKSOLVER/TASKWRITER/MAINTAINER × Claude/Codex/Agy:
+
+```powershell
+python -m taskplan starters list
+python -m taskplan starters path --role tasksolver --provider codex
+python -m taskplan launch --role tasksolver --provider codex
+```
+
+Modell-Identifier und Reasoning-Level werden in `~/.taskplan/taskplan.toml`
+konfiguriert. `TASKPLAN_WORKDIR` setzt optional das Arbeitsverzeichnis;
+`TASKPLAN_CLAUDE_MCP_CONFIG` optional ein Claude-MCP-Profil. Paket-Starter nutzen
+standardmäßig die normalen Freigabedialoge des Providers. Nur eine vertrauenswürdige
+lokale Automation soll mit `TASKPLAN_TRUSTED_AUTOMATION=1` unbeaufsichtigte
+Schreibrechte anfordern. `TASKPLAN_STARTER_DRY_RUN=1` zeigt den aufgelösten Befehl,
+ohne den Provider zu starten.
+
+Die Projekt-Discovery besitzt zusätzlich `discovery_timeout_seconds` und einen
+portablen, sektorisierten Snapshot-Cache unter `~/.taskplan/`.
+`cache_ttl_seconds` ist standardmäßig `86400` (24 Stunden) und bezeichnet ein
+Refresh-Intervall, kein Verfallsdatum. Pro Selektorprozess wird höchstens ein
+konfigurierter Root-Sektor aktualisiert. Hängt ein Sektor, wird der Versuch
+gespeichert; beim nächsten Lauf kommen zunächst andere fällige Sektoren dran.
+
+Bereits bekannte Projekte bleiben als Last-known-good-Inventar aktiv, bis ihr
+Sektor erfolgreich ersetzt wurde – auch nach Ablauf des Intervalls oder einer
+Änderung der Discovery-Policy. Änderungen an Modell, Provider oder Reasoning
+invalidieren das Projektinventar nicht mehr. Die Traversierung nutzt je Verzeichnis
+ein `scandir` und isoliert Fehler pro Eintrag. Damit übernimmt sie das
+cloud-tolerante FileCommander-Muster, ohne FileCommander als Laufzeitabhängigkeit
+einzubauen.
+
+Bei einem Cloud-Timeout läuft `next` mit der lokalen Kette weiter:
+Sektor-Cache plus manuelle Registry, danach bekannte `project_path`-Werte aus dem
+Task-Store. Exit `3` erscheint nur noch, wenn die Discovery fehlschlägt und keine
+sichere lokale Inventarquelle übrig ist. Andernfalls nennt das JSON-Objekt
+`discovery` die Felder `source`, `degraded`, `cache_age_seconds`,
+`refreshed_sector`, `pending_sectors` und Warnungen.
+
+```toml
+[traversal]
+discovery_timeout_seconds = 30
+cache_ttl_seconds = 86400  # Refresh je Root; LKG bleibt bei Fehlern nutzbar
+```
 
 ---
 

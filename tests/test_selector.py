@@ -5,13 +5,15 @@ Er ersetzt die Prompt-Prosa durch einen deterministischen Zustandsautomaten.
 Als Text war die Reihenfolge eine Bitte, die das Modell jedes Mal neu auslegte;
 der Loop lief deshalb leer, statt in die Tiefe zu eskalieren.
 """
+import os
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
 from taskplan.locks import LockView, scan_lockmaster
 from taskplan.selector import (
-    DEEP, SURFACE, Bundle, SelectorConfig, next_bundle,
+    DEEP, SURFACE, SelectorConfig, next_bundle,
 )
 
 
@@ -34,7 +36,10 @@ class FakeStore:
             out = [t for t in out if t["status"] == status]
         if effort is not None:
             out = [t for t in out if t["effort"] == effort]
-        return out[:limit]
+        return out if limit is None else out[:limit]
+
+    def get(self, task_id):
+        return next((t for t in self.tasks if t["id"] == task_id), None)
 
 
 def task(title, effort="easy", project="", root="", scope="local"):
@@ -137,6 +142,56 @@ class TestGates(unittest.TestCase):
         self.assertIsNone(next_bundle(config, store, self.locks))
 
 
+class TestDependencies(unittest.TestCase):
+    """Offene Vorstufen duerfen den Solver nicht in eine Sackgasse schicken."""
+
+    def setUp(self):
+        self.config = SelectorConfig()
+        self.locks = LockView()
+
+    def test_open_dependency_skips_task_and_selects_next_project(self):
+        prerequisite = task("Rate-Entscheid", effort="special",
+                            project="/p/connes", root=".RESEARCH")
+        prerequisite["id"] = 307
+        blocked = task("Paper finalisieren", effort="medium",
+                       project="/p/connes", root=".RESEARCH")
+        blocked.update(id=308, tags="stable-id=CH-TEX-004;depends-on=307")
+        next_project = task("Naechstes ausfuehrbares Projekt", effort="medium",
+                            project="/p/next", root=".RESEARCH")
+        next_project["id"] = 400
+
+        bundle = next_bundle(
+            self.config,
+            FakeStore([blocked, prerequisite, next_project]),
+            self.locks,
+        )
+
+        self.assertIsNotNone(bundle)
+        self.assertEqual(bundle.project_path, "/p/next")
+        self.assertEqual(bundle.tasks[0]["id"], 400)
+
+    def test_task_becomes_selectable_after_dependency_is_done(self):
+        prerequisite = task("Rate-Entscheid", effort="special",
+                            project="/p/connes", root=".RESEARCH")
+        prerequisite.update(id=307, status="done")
+        dependent = task("Paper finalisieren", effort="medium",
+                         project="/p/connes", root=".RESEARCH")
+        dependent.update(id=308, tags="depends-on=307;stable-id=CH-TEX-004")
+        next_project = task("Naechstes Projekt", effort="medium",
+                            project="/p/next", root=".RESEARCH")
+        next_project["id"] = 400
+
+        bundle = next_bundle(
+            self.config,
+            FakeStore([dependent, prerequisite, next_project]),
+            self.locks,
+        )
+
+        self.assertIsNotNone(bundle)
+        self.assertEqual(bundle.project_path, "/p/connes")
+        self.assertEqual(bundle.tasks[0]["id"], 308)
+
+
 class TestLockAwareness(unittest.TestCase):
     """Ein Lock trifft SEIN Projekt — nicht die Nachbarn, nicht die Pipeline."""
 
@@ -168,6 +223,22 @@ class TestLockAwareness(unittest.TestCase):
         ])
         bundle = next_bundle(self.config, store, self.locks)
         self.assertIsNotNone(bundle, "Der Lock hat die ganze Pipeline gesperrt!")
+        self.assertEqual(bundle.tasks[0]["title"], "Im freien")
+
+    def test_stale_locked_project_is_skipped_for_free_sibling(self):
+        old = time.time() - 30 * 3600
+        os.utime(self.locked / "LOCK.txt", (old, old))
+        locks = scan_lockmaster([self.pipeline])
+        store = FakeStore([
+            task("Im stale gesperrten", effort="easy",
+                 project=str(self.locked), root=".RESEARCH"),
+            task("Im freien", effort="easy",
+                 project=str(self.free), root=".RESEARCH"),
+        ])
+
+        bundle = next_bundle(self.config, store, locks)
+
+        self.assertIsNotNone(bundle)
         self.assertEqual(bundle.tasks[0]["title"], "Im freien")
 
 
@@ -269,10 +340,61 @@ class TestWriterHasItsOwnSelection(unittest.TestCase):
         self.assertIn("unberuehrt", bundle.project_path)
         self.assertEqual(len(bundle.tasks), 0, "Ein leeres Projekt hat keine Tasks")
 
+    def test_writer_rotates_between_untouched_projects(self):
+        """Projekt-Sweeps dürfen nicht bei jedem CLI-Aufruf neu beginnen."""
+        from taskplan.traversal import Project
+
+        config = SelectorConfig(projects=[
+            Project(path=Path("/p/first"), root_id=".AI"),
+            Project(path=Path("/p/second"), root_id=".SW"),
+            Project(path=Path("/p/third"), root_id=".RS"),
+        ])
+        store = FakeStore([])
+
+        first = next_bundle(config, store, self.locks, role="taskwriter")
+        second = next_bundle(
+            config, store, self.locks, role="taskwriter",
+            after_project=first.project_path,
+        )
+        third = next_bundle(
+            config, store, self.locks, role="taskwriter",
+            after_project=second.project_path,
+        )
+
+        self.assertEqual(
+            [Path(bundle.project_path).name for bundle in (first, second, third)],
+            ["first", "second", "third"],
+        )
+
+    def test_writer_does_not_rotate_away_from_unclassified_tasks(self):
+        """Ein geliefertes Task-Bündel bleibt bis zur Bearbeitung dasselbe."""
+        store = FakeStore([
+            task("Uneingestuft", effort="", project="/p/work", root=".AI"),
+        ])
+        bundle = next_bundle(
+            self.config, store, self.locks, role="taskwriter",
+            after_project="/p/other",
+        )
+        self.assertEqual(bundle.tasks[0]["title"], "Uneingestuft")
+
     def test_writer_reports_honest_emptiness(self):
         """Kein Projekt uebrig -> None. Keine erfundene Arbeit."""
         store = FakeStore([task("X", effort="easy", project="/p/a", root=".AI")])
         self.assertIsNone(next_bundle(SelectorConfig(), store, self.locks,
+                                      role="taskwriter"))
+
+    def test_writer_remembers_projects_beyond_1000_tasks(self):
+        """Die Projekthistorie darf nicht am alten 1000er-Fenster enden."""
+        from taskplan.traversal import Project
+
+        history = [task(f"Alt {i}", project=f"/p/alt/{i}")
+                   for i in range(1000)]
+        history.append(task("Ziel bereits erfasst", project="/p/ziel"))
+        config = SelectorConfig(projects=[
+            Project(path=Path("/p/ziel"), root_id=".AI"),
+        ])
+
+        self.assertIsNone(next_bundle(config, FakeStore(history), self.locks,
                                       role="taskwriter"))
 
 
@@ -345,6 +467,47 @@ class TestMaintainerDoesNotCollideWithSolver(unittest.TestCase):
                              role="maintainer")
         self.assertIsNotNone(bundle)
         self.assertEqual(len(bundle.tasks), 0)
+
+    def test_maintainer_sees_busy_project_beyond_1000_tasks(self):
+        """Ein alter Verlaufs-Cutoff darf keine aktive Arbeit verstecken."""
+        from taskplan.traversal import Project
+
+        history = [task(f"Alt {i}", project=f"/p/alt/{i}")
+                   for i in range(1000)]
+        busy = task("Noch aktiv", project="/p/beschaeftigt")
+        busy["status"] = "active"
+        history.append(busy)
+        config = SelectorConfig(projects=[
+            Project(path=Path("/p/beschaeftigt"), root_id=".AI"),
+            Project(path=Path("/p/frei"), root_id=".SW"),
+        ])
+
+        bundle = next_bundle(config, FakeStore(history), self.locks,
+                             role="maintainer")
+
+        self.assertIsNotNone(bundle)
+        self.assertEqual(Path(bundle.project_path).as_posix(), "/p/frei")
+
+    def test_maintainer_rotates_after_previous_project(self):
+        """Ein neuer CLI-Lauf darf nicht wieder am ersten Projekt kleben."""
+        from taskplan.traversal import Project
+
+        first = Project(path=Path("/p/first"), root_id=".AI")
+        second = Project(path=Path("/p/second"), root_id=".SW")
+        config = SelectorConfig(projects=[first, second])
+        store = FakeStore([
+            task("Erste Historie", project="/p/first", root=".AI"),
+            task("Zweite Historie", project="/p/second", root=".SW"),
+        ])
+
+        first_bundle = next_bundle(config, store, self.locks,
+                                   role="maintainer")
+        second_bundle = next_bundle(config, store, self.locks,
+                                    role="maintainer",
+                                    after_project=first_bundle.project_path)
+
+        self.assertEqual(Path(first_bundle.project_path).as_posix(), "/p/first")
+        self.assertEqual(Path(second_bundle.project_path).as_posix(), "/p/second")
 
 
 class TestAllThreeRolesGetDifferentWork(unittest.TestCase):

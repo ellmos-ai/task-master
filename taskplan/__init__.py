@@ -1,17 +1,22 @@
 # -*- coding: utf-8 -*-
 """
-taskplan -- Eigenstaendiges Task-Modul der .MEMORY-Saeule
-=========================================================
+taskplan -- Eigenstaendiges Task-Modul der .CONTROL-Saeule
+==========================================================
 
-Drittes Modul der Gedaechtnis-Saeule (USMC + GARDENER + TASKPLAN,
-Entscheidung [U 2026-07-11]). Extrahiert aus rinnsal/tasks; Rinnsal
-importiert es seither zurueck (Seam mit gebuendeltem Fallback).
+Als Modul `task-master` gefuehrt (Umzug [U 2026-07-26] aus der
+Gedaechtnis-Saeule nach .CONTROL: .MEMORY haelt Speicher, .CONTROL
+steuert ihn). Das importierbare Paket heisst weiterhin `taskplan`.
+Die inhaltliche Achse USMC + GARDENER + TASKPLAN [U 2026-07-11]
+besteht fort, auch wenn die Ordner auseinanderliegen.
+
+Extrahiert aus rinnsal/tasks; Rinnsal importiert es seither zurueck
+(Seam mit gebuendeltem Fallback).
 
 Abgrenzung: Tasks sind KEINE Tickets. Tickets (z. B. das dateibasierte
 Ticket-System) koennen ueber api.add_from_ticket() zu Tasks fuehren,
 muessen es aber nicht -- beide Systeme bleiben getrennt.
 """
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 from .client import (  # noqa: F401
     TaskClient,
@@ -38,6 +43,17 @@ from .workflows import (  # noqa: F401
     get_workflow_prompt,
     get_workflow_prompt_path,
     list_workflows,
+)
+
+from .runtime import (  # noqa: F401
+    goal_objective,
+    runtime_profile,
+    startup_prompt,
+)
+
+from .starters import (  # noqa: F401
+    get_starter_path,
+    list_starters,
 )
 
 from .traversal import (  # noqa: F401

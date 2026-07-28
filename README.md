@@ -4,8 +4,16 @@
 
 # taskplan
 
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-280%20passed-brightgreen.svg)](tests/)
+[![llms.txt](https://img.shields.io/badge/llms.txt-available-orange.svg)](llms.txt)
+
 **Deterministic task selection for LLM agents.** Zero dependencies, stdlib only,
 Python ≥ 3.10.
+
+> [!NOTE]
+> **AI / LLM Integration**: `taskplan` provides deterministic selection guards and role prompts for autonomous AI agents. For detailed system concepts and documentation overview, see [llms.txt](llms.txt).
 
 *[Deutsche Fassung → README_de.md](README_de.md)*
 
@@ -80,7 +88,29 @@ python -m taskplan projects list   # what does the loop see?
 python -m taskplan projects markers
 ```
 
-`next` exit codes: `0` = bundle returned · `1` = nothing to do · `2` = role disabled.
+`next` writes the same human-readable designation to the console and, with
+`--json`, to `exit.code`, `exit.name`, and localized `exit.meaning`:
+
+| Code | Stable name | Meaning |
+|---:|---|---|
+| `0` | `BUNDLE_READY` | Bundle delivered successfully |
+| `1` | `NO_WORK` | Role is active, but no eligible bundle is currently available |
+| `2` | `ROLE_DISABLED` | Role is disabled in configuration |
+| `3` | `RETRYABLE_SELECTOR_ERROR` | Retryable selector/discovery error |
+
+Project-only MAINTAINER bundles and TASKWRITER discovery sweeps intentionally
+contain no task IDs. The selector stores a separate cursor for each role atomically
+at `~/.taskplan/rotation-state.json` (configurable with
+`[loop].rotation_state_file`) and advances to the next candidate on the next run.
+This cursor does not rotate away from a real, still-unprocessed task bundle. A
+project with no evidenced maintenance work or new task can be skipped explicitly:
+
+```bash
+python -m taskplan skip --role maintainer --project "<path>"
+python -m taskplan skip --role taskwriter --project "<path>"
+```
+
+New tasks remain the responsibility of the TASKWRITER/TASKSOLVER flow.
 
 ### Who created it, who works on it
 
@@ -108,6 +138,14 @@ origin.
 
 The writer is upstream: **an unclassified task is an invisible task**, because the
 solver refuses to guess at its size.
+
+Before its first selector call, every TASKSOLVER provider performs a one-time
+TASKPLAN control-plane preflight: `doctor`, effective runtime/profile wiring,
+evidence-based maintenance of TASKPLAN itself, and a current model check against
+official provider sources plus local CLI availability. A model is changed only
+when role capability, stability, latency, and cost show a clear benefit. This does
+not authorize general project tidying; normal project work still begins with the
+selector.
 
 Prompts ship with the package (`taskplan.TASKSOLVER`, `.TASKWRITER`, `.MAINTAINER`) —
 as resources, not hardcoded strings, and resolvable as real files for external
@@ -201,9 +239,67 @@ reads the real rule than a parser that guesses at its meaning.
 ### Roles, models, task sources, depth
 
 All switchable. A disabled role **aborts cleanly on start** instead of silently
-idling. `combined = true` runs all active roles in one worker — so
-`maintainer = false` + `combined = true` gives you a 2-in-1 without needing its own
-mode. Model choice belongs in the config, not in the launcher.
+idling. `combined = true` is currently parsed and exposed as configuration, but no
+bundled runner or launcher consumes it yet; it is therefore not a functional
+3-in-1/2-in-1 mode. Model choice belongs in the config, not in the launcher.
+
+### Provider-neutral runtime and Codex goals
+
+Launchers are intentionally thin. `[execution] provider` selects a default provider;
+`[providers.<name>.models]` and `[providers.<name>.reasoning_effort]` select values
+per role. The legacy `[models]` section remains a compatible fallback.
+
+Codex uses `continuation = "goal"`. TASKPLAN generates an explicit user startup
+prompt that authorizes a persisted goal, processes one bundle per continuation,
+then asks the selector again. `empty_policy = "keep_goal"` prevents a single empty
+result from being mistaken for a permanently empty queue. The generated goal
+contract must call `python -m taskplan backoff ...`; that command performs the real
+`idle_backoff_seconds` wait before polling again. `python -m taskplan runtime ...`
+exposes the profile to any shell; `python -m taskplan startup-prompt ...` emits the
+provider-specific user request. No user name, home path, or model is hardcoded in
+the launcher.
+
+The wheel includes nine user-neutral Windows launchers for
+TASKSOLVER/TASKWRITER/MAINTAINER × Claude/Codex/Agy:
+
+```powershell
+python -m taskplan starters list
+python -m taskplan starters path --role tasksolver --provider codex
+python -m taskplan launch --role tasksolver --provider codex
+```
+
+Configure model identifiers and reasoning levels in `~/.taskplan/taskplan.toml`.
+`TASKPLAN_WORKDIR` optionally selects the worker directory;
+`TASKPLAN_CLAUDE_MCP_CONFIG` optionally supplies a Claude MCP profile. Packaged
+launchers use normal provider permission prompts by default. Only a trusted local
+automation should set `TASKPLAN_TRUSTED_AUTOMATION=1` to request unattended write
+permissions. `TASKPLAN_STARTER_DRY_RUN=1` prints the resolved command without
+starting the provider.
+
+Project discovery has its own `discovery_timeout_seconds` and a portable,
+sectorized snapshot cache under `~/.taskplan/`. `cache_ttl_seconds` defaults to
+`86400` (24 hours) and is a refresh interval, not an expiry date. Each selector
+process refreshes at most one configured root sector. A sector that stalls is
+recorded as attempted and rotates behind other due sectors on the next run.
+
+Previously known projects remain usable as last-known-good data until their sector
+has been replaced by a successful refresh—even after the interval elapsed or the
+discovery policy changed. Model, provider, and reasoning changes no longer
+invalidate the project inventory. The directory walker uses one `scandir` operation
+per directory and isolates per-entry errors, mirroring the cloud-tolerant pattern
+used by FileCommander without depending on it.
+
+On a cloud-filesystem timeout, `next` continues in this order: sector cache plus
+manual registry, then known `project_path` values from the task store. Exit `3` is
+returned only when discovery failed and no safe local inventory remains; otherwise
+the JSON `discovery` object identifies `source`, `degraded`,
+`cache_age_seconds`, `refreshed_sector`, `pending_sectors`, and warnings.
+
+```toml
+[traversal]
+discovery_timeout_seconds = 30
+cache_ttl_seconds = 86400  # per-root refresh interval; LKG survives failures
+```
 
 ---
 

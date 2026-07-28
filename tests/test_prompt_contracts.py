@@ -43,6 +43,20 @@ class TestSolverDefersToSelector(unittest.TestCase):
         """Nach unten stufen wuerde das Gate aushebeln, das den Solver schuetzt."""
         self.assertIn("Nach unten stufst du nie", TASKSOLVER)
 
+    def test_solver_checks_taskplan_before_first_selector_call(self):
+        self.assertIn("START-PREFLIGHT", TASKSOLVER)
+        self.assertIn("python -m taskplan doctor", TASKSOLVER)
+        self.assertIn("vor dem Selektor", TASKSOLVER)
+
+    def test_model_research_has_a_cost_benefit_gate(self):
+        self.assertIn("offiziellen, primären Quellen", TASKSOLVER)
+        self.assertIn("Kosten-Nutzen-Vorteil", TASKSOLVER)
+        self.assertIn("lokal nicht belegt", TASKSOLVER)
+
+    def test_maintenance_exception_is_control_plane_only(self):
+        self.assertIn("TASKPLAN-Control-Plane", TASKSOLVER)
+        self.assertIn("KEIN allgemeines Aufräumen", _flat(TASKSOLVER))
+
 
 class TestWriterClassifies(unittest.TestCase):
     def test_writer_knows_it_is_upstream(self):
@@ -57,6 +71,9 @@ class TestWriterClassifies(unittest.TestCase):
 
     def test_writer_descends_into_projects(self):
         self.assertIn("Steig in die Projekte hinab", TASKWRITER)
+
+    def test_writer_can_advance_project_rotation(self):
+        self.assertIn("skip --role taskwriter", TASKWRITER)
 
     def test_writer_backfills_unclassified_tasks(self):
         """Altbestand ohne effort liegt sonst fuer immer still."""
@@ -120,6 +137,9 @@ class TestRoleSeparation(unittest.TestCase):
 
     def test_solver_does_not_collect_or_tidy(self):
         self.assertIn("Keine Aufgaben-Erfassung", TASKSOLVER)
+        self.assertIn(
+            "eng begrenzten TASKPLAN-Systempreflights", _flat(TASKSOLVER)
+        )
 
 
 if __name__ == "__main__":

@@ -84,6 +84,18 @@ def selector_config():
     )
 
 
+def rotation_state_file() -> Path:
+    """Pfad fuer den persistenten Projekt-Cursor.
+
+    Der Zustand gehoert weder in ein Projekt noch in die Task-Tabelle. Er ist
+    deshalb benutzerweit konfigurierbar und liegt standardmaessig unter
+    ``~/.taskplan``.
+    """
+    loop = load_config().get("loop", {}) or {}
+    raw = str(loop.get("rotation_state_file", "~/.taskplan/rotation-state.json"))
+    return Path(raw).expanduser()
+
+
 def prompt_language() -> str:
     """Sprache der Rollen-Prompts.
 
@@ -245,7 +257,100 @@ def active_roles() -> Dict[str, bool]:
     }
 
 
-def model_for(role: str) -> str:
-    """Das Modell einer Rolle. Gehoert in die Config, nicht in den Starter."""
-    section = load_config().get("models", {}) or {}
-    return str(section.get(role) or section.get("default", ""))
+def provider_name(explicit: str = "") -> str:
+    """Aktiver LLM-Provider, ohne Rechner- oder Benutzernamen im Code.
+
+    Reihenfolge: expliziter Parameter > ENV ``TASKPLAN_PROVIDER`` >
+    ``[execution] provider`` > leer. Ein leerer Provider erhaelt das bisherige
+    Verhalten und liest die alte, providerlose ``[models]``-Sektion.
+    """
+    if explicit:
+        return explicit.strip().lower()
+    env = os.environ.get("TASKPLAN_PROVIDER", "").strip().lower()
+    if env:
+        return env
+    section = load_config().get("execution", {}) or {}
+    return str(section.get("provider", "")).strip().lower()
+
+
+def _provider_section(provider: str = "") -> Dict[str, Any]:
+    configured = load_config().get("providers", {}) or {}
+    if not isinstance(configured, dict):
+        return {}
+    section = configured.get(provider_name(provider), {}) or {}
+    return section if isinstance(section, dict) else {}
+
+
+def _role_value(section: Dict[str, Any], key: str, role: str,
+                default: str = "") -> str:
+    values = section.get(key, {}) or {}
+    if not isinstance(values, dict):
+        return default
+    return str(values.get(role) or values.get("default", default))
+
+
+def model_for(role: str, provider: str = "") -> str:
+    """Modell einer Rolle, bevorzugt aus der Provider-Konfiguration.
+
+    ``[providers.<name>.models]`` ist der nutzerneutrale Weg. Die bisherige
+    ``[models]``-Sektion bleibt als vollstaendig kompatibler Fallback erhalten.
+    Damit koennen Claude, Codex oder weitere Provider eigene Modellnamen tragen,
+    ohne dass ein Starter eine fremde Wahl fest verdrahtet.
+    """
+    resolved = provider_name(provider)
+    if resolved:
+        # Ein expliziter Provider darf NIE ein Modell eines anderen Providers
+        # aus der alten globalen Sektion erben.
+        return _role_value(_provider_section(resolved), "models", role)
+    legacy = load_config().get("models", {}) or {}
+    if not isinstance(legacy, dict):
+        return ""
+    return str(legacy.get(role) or legacy.get("default", ""))
+
+
+def provider_runtime(role: str, provider: str = "") -> Dict[str, Any]:
+    """Provider-spezifische Laufzeitdaten fuer einen duennen Starter."""
+    resolved = provider_name(provider)
+    section = _provider_section(resolved) if resolved else {}
+    default_continuation = "goal" if resolved == "codex" else "one_shot"
+    continuation = str(section.get("continuation", default_continuation)).lower()
+    empty_policy = str(section.get(
+        "empty_policy", "keep_goal" if continuation == "goal" else "stop"
+    )).lower()
+    return {
+        "provider": resolved,
+        "role": role.strip().lower(),
+        "model": model_for(role, resolved),
+        "reasoning_effort": _role_value(section, "reasoning_effort", role),
+        "continuation": continuation,
+        "empty_policy": empty_policy,
+        "idle_backoff_seconds": max(0, int(section.get("idle_backoff_seconds", 60))),
+    }
+
+
+def discovery_timeout_seconds() -> float:
+    """Harte Grenze fuer Projekt-Discovery; 0 schaltet sie bewusst aus."""
+    section = load_config().get("traversal", {}) or {}
+    try:
+        return max(0.0, float(section.get("discovery_timeout_seconds", 30)))
+    except (TypeError, ValueError):
+        return 30.0
+
+
+def discovery_cache_config() -> Dict[str, Any]:
+    """Portabler Snapshot der teuren Projekt-Discovery.
+
+    ``ttl_seconds`` ist das Refresh-Intervall, kein Löschdatum: Ein
+    Last-known-good-Sektor bleibt bei einem fehlgeschlagenen Refresh nutzbar.
+    """
+    section = load_config().get("traversal", {}) or {}
+    raw_path = str(section.get("cache_file", "~/.taskplan/projects-cache.json"))
+    try:
+        ttl = max(0, int(section.get("cache_ttl_seconds", 86400)))
+    except (TypeError, ValueError):
+        ttl = 86400
+    return {
+        "enabled": bool(section.get("cache_enabled", True)),
+        "path": Path(raw_path).expanduser(),
+        "ttl_seconds": ttl,
+    }

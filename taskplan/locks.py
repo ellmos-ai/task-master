@@ -75,17 +75,23 @@ class LockView:
     permissions: Dict[Path, dict] = field(default_factory=dict)
     extra_rules: List[str] = field(default_factory=list)
 
-    def locks_for(self, directory: Path) -> List[Lock]:
-        """Alle aktiven Locks, die dieses Verzeichnis betreffen.
+    def locks_for(self, directory: Path,
+                  include_expired: bool = False) -> List[Lock]:
+        """Locks, die dieses Verzeichnis betreffen.
 
         Ein Lock in `.RESEARCH/.LAB/RH/` sperrt DIESES Projekt — nicht die
         Pipeline `.RESEARCH` und nicht ihre Geschwister. Ein Lock WEITER OBEN
         sperrt aber alles darunter mit.
+
+        Normalerweise werden abgelaufene Locks ausgeblendet. Der autonome
+        Selektor fragt sie ausdruecklich mit ab: Ein stale Lock braucht erst
+        Klaerung und darf nicht immer wieder dasselbe blockierte Buendel
+        anziehen, solange andere sichere Arbeit verfuegbar ist.
         """
         directory = Path(directory).resolve()
         hits = []
         for lock in self.locks:
-            if not lock.active:
+            if not include_expired and not lock.active:
                 continue
             locked = lock.path.resolve()
             if directory == locked or locked in directory.parents:
@@ -115,6 +121,25 @@ class LockView:
             # Eine NEUE Datei kollidiert nicht mit fremder Arbeit an bestehenden.
             return True
         return not active  # MODIFY: nur ohne fremden Lock im Scope.
+
+    def allows_selection(self, directory: Path) -> bool:
+        """Darf ein autonomer Lauf dieses Projekt neu auswaehlen?
+
+        Der TTL-Verfall erlaubt nach bewusster manueller Pruefung weiterhin
+        `MODIFY`. Fuer die automatische Auswahl ist ein vorhandener stale Lock
+        jedoch ein Konfliktsignal: Der Selektor nimmt einen anderen Kandidaten,
+        bis der Lock owner-sicher geklaert oder entfernt wurde.
+        """
+        locks = self.locks_for(directory, include_expired=True)
+        if any(lock.is_user_lock for lock in locks):
+            return False
+
+        decision = self._permission_for(directory, MODIFY)
+        if decision == "deny":
+            return False
+        if decision == "allow":
+            return True
+        return not locks
 
     def _permission_for(self, directory: Path, action: str) -> Optional[str]:
         """Wertet `LOCK.permissions.json` aus. Praezedenz: deny > ask > allow."""
@@ -250,10 +275,14 @@ class LazyLockView(LockView):
         self._cache[directory] = found
         return found
 
-    def locks_for(self, directory: Path) -> List[Lock]:
+    def locks_for(self, directory: Path,
+                  include_expired: bool = False) -> List[Lock]:
         hits: List[Lock] = []
         for step in self._chain(directory):
-            hits.extend(lock for lock in self._locks_in(step) if lock.active)
+            hits.extend(
+                lock for lock in self._locks_in(step)
+                if include_expired or lock.active
+            )
         return hits
 
     def allows(self, directory: Path, action: str) -> bool:

@@ -49,8 +49,7 @@ class TestRoles(unittest.TestCase):
         self.assertFalse(roles["combined"])
 
     def test_two_in_one(self):
-        """maintainer=false + combined=true ergibt den 2-in-1-Worker —
-        ohne dass es dafuer einen eigenen Modus braucht."""
+        """Die reservierte combined-Einstellung bleibt maschinenlesbar."""
         with _with_config("[roles]\nmaintainer = false\ncombined = true\n"):
             roles = cfg.active_roles()
         self.assertFalse(roles["maintainer"])
@@ -78,7 +77,8 @@ class TestLockProvider(unittest.TestCase):
 class TestModels(unittest.TestCase):
     def test_role_model_beats_default(self):
         with _with_config('[models]\ndefault = "sonnet-5"\n'
-                          'tasksolver = "opus-4-8"\n'):
+                          'tasksolver = "opus-4-8"\n'), \
+                mock.patch.dict(cfg.os.environ, {"TASKPLAN_PROVIDER": ""}):
             self.assertEqual(cfg.model_for("tasksolver"), "opus-4-8")
             self.assertEqual(cfg.model_for("taskwriter"), "sonnet-5")
 
@@ -117,6 +117,18 @@ class TestTraversalLevels(unittest.TestCase):
                 '[traversal]\nroots_file = "%s"\n' % roots_file.as_posix()):
             traversal = cfg.traversal_config()
         self.assertEqual([r.name for r in traversal.roots], ["eins"])
+
+
+class TestDiscoveryCacheConfig(unittest.TestCase):
+    def test_default_refresh_interval_is_24_hours(self):
+        with mock.patch.object(cfg, "load_config", return_value={}):
+            cache = cfg.discovery_cache_config()
+        self.assertEqual(cache["ttl_seconds"], 24 * 60 * 60)
+
+    def test_refresh_interval_is_configurable(self):
+        with _with_config("[traversal]\ncache_ttl_seconds = 7200\n"):
+            cache = cfg.discovery_cache_config()
+        self.assertEqual(cache["ttl_seconds"], 7200)
 
 
 if __name__ == "__main__":

@@ -79,16 +79,21 @@ class TestPromiseParityAcrossLanguages(unittest.TestCase):
     PROMISES = {
         "TASKSOLVER": {
             "de": ["DU WÄHLST NICHT AUS", "python -m taskplan next",
-                   "Erfinde keine Aufgabe", "Nach unten stufst du nie"],
+                   "Erfinde keine Aufgabe", "Nach unten stufst du nie",
+                   "START-PREFLIGHT", "offiziellen, primären Quellen",
+                   "Kosten-Nutzen-Vorteil"],
             "en": ["YOU DO NOT CHOOSE", "python -m taskplan next",
-                   "Do not invent a task", "You never lower it"],
+                   "Do not invent a task", "You never lower it",
+                   "START PREFLIGHT", "official, primary sources",
+                   "cost-benefit advantage"],
         },
         "TASKWRITER": {
             "de": ["OHNE DICH IST DER SOLVER BLIND", "Steig in die Projekte hinab",
-                   "Keine Aufgabe ohne `effort` und `scope`", "ALTBESTAND NACHSTUFEN"],
+                   "Keine Aufgabe ohne `effort` und `scope`", "ALTBESTAND NACHSTUFEN",
+                   "skip --role taskwriter"],
             "en": ["WITHOUT YOU THE SOLVER IS BLIND", "Descend into the projects",
                    "No task without `effort` and `scope`",
-                   "BACKFILL THE CLASSIFICATION"],
+                   "BACKFILL THE CLASSIFICATION", "skip --role taskwriter"],
         },
         "MAINTAINER": {
             "de": ["NIE HART LÖSCHEN", "ARCHIVIEREN VOR KÜRZEN",

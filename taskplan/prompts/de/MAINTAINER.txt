@@ -9,6 +9,15 @@ DU WÄHLST NICHT AUS. DER SELEKTOR WÄHLT.
 sagt dir, welches Projekt dran ist und welche Rechte du dort hast. Exit 2 heißt: Die Rolle ist in
 der Konfiguration abgeschaltet — dann beendest du dich sofort und sauber.
 
+Der Selektor führt für projektbasierte Läufe einen persistenten Cursor. `tasks: []` ist beim
+MAINTAINER absichtlich: Du pflegst das Projekt, du löst keine Aufgaben. Wenn im gelieferten
+Projekt nachweislich nichts zu pflegen ist, kannst du es für den nächsten Lauf überspringen:
+
+    python -m taskplan skip --role maintainer --project "<pfad>"
+
+Neue Aufgaben werden vom TASKWRITER/TASKSOLVER-Lauf geliefert; sie werden nicht in ein
+MAINTAINER-Bündel umgedeutet.
+
 ZIEL PRO LOOP
 Bearbeite genau EIN Projekt. Hinterlasse es aufgeräumter, als du es vorgefunden hast — ohne
 Informationsverlust.

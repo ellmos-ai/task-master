@@ -35,7 +35,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional, Protocol
 
-from .locks import MODIFY, LockView
+from .locks import LockView
 
 SURFACE = "surface"
 DEEP = "deep"
@@ -53,6 +53,8 @@ class TaskStore(Protocol):
     """
 
     def list(self, **kwargs) -> list: ...
+
+    def get(self, task_id: int) -> Optional[dict]: ...
 
 
 @dataclass
@@ -107,7 +109,50 @@ def _reachable(task: dict, locks: LockView) -> bool:
     project = task.get("project_path") or ""
     if not project:
         return True   # Ohne Projektbezug (Root-Aufgabe) greift kein Projekt-Lock.
-    return locks.allows(Path(project), MODIFY)
+    return locks.allows_selection(Path(project))
+
+
+def _dependency_ids(task: dict) -> Optional[tuple[int, ...]]:
+    """Liest `depends-on=1,2` aus dem bestehenden Semikolon-Tagformat.
+
+    `()` bedeutet: keine Abhaengigkeit deklariert. `None` bedeutet: Ein
+    `depends-on`-Tag ist vorhanden, aber leer oder ungueltig. Ein kaputter
+    Abhaengigkeitsvertrag darf nicht versehentlich als Freigabe gelten.
+    """
+    dependencies = []
+    declared = False
+    for tag in str(task.get("tags") or "").split(";"):
+        key, separator, value = tag.partition("=")
+        if not separator or key.strip().lower() != "depends-on":
+            continue
+        declared = True
+        raw_ids = [raw_id.strip() for raw_id in value.split(",")]
+        if not raw_ids or any(not raw_id for raw_id in raw_ids):
+            return None
+        for raw_id in raw_ids:
+            try:
+                dependency_id = int(raw_id)
+            except ValueError:
+                return None
+            if dependency_id <= 0:
+                return None
+            if dependency_id not in dependencies:
+                dependencies.append(dependency_id)
+    if not declared:
+        return ()
+    return tuple(dependencies)
+
+
+def _dependencies_satisfied(task: dict, store: TaskStore) -> bool:
+    """Nur vollstaendig erledigte Vorstufen geben einen Solver-Task frei."""
+    dependency_ids = _dependency_ids(task)
+    if dependency_ids is None:
+        return False
+    for dependency_id in dependency_ids:
+        dependency = store.get(dependency_id)
+        if dependency is None or dependency.get("status") != "done":
+            return False
+    return True
 
 
 def _candidates(store: TaskStore, effort: str, locks: LockView,
@@ -126,6 +171,8 @@ def _candidates(store: TaskStore, effort: str, locks: LockView,
         if surface == has_project:
             continue
         if not _reachable(task, locks):
+            continue
+        if not _dependencies_satisfied(task, store):
             continue
         out.append(task)
     return out
@@ -149,7 +196,8 @@ def _bundle_from(tasks: List[dict], mode: str, effort: str,
 
 
 def _writer_bundle(config: SelectorConfig, store: TaskStore,
-                   locks: LockView) -> Optional[Bundle]:
+                   locks: LockView,
+                   after_project: str = "") -> Optional[Bundle]:
     """Die Auswahl des TASKWRITER — eine ANDERE als die des Solvers.
 
     Aufgedeckt vom TASKWRITER-Loop (2026-07-14): Er bekam dieselbe Auswahl wie
@@ -192,23 +240,39 @@ def _writer_bundle(config: SelectorConfig, store: TaskStore,
         except (TypeError, ValueError):
             return str(raw).lower()
 
+    # Fuer die Projekthistorie darf es kein Fenster geben: Sobald die DB mehr
+    # als 1000 Eintraege hatte, verschwanden aeltere Projekte aus `known` und
+    # wurden dem Writer faelschlich erneut als unberuehrt angeboten.
     known = {_key(t.get("project_path") or "")
-             for t in store.list(limit=1000, include_done=True)
+             for t in store.list(limit=None, include_done=True)
              if t.get("project_path")}
 
+    candidates = []
     for project in config.projects:
         if _key(project.path) in known:
             continue
-        if not locks.allows(project.path, MODIFY):
+        if not locks.allows_selection(project.path):
             continue   # Gesperrt: der Writer schreibt dort keine Steuerdateien.
-        return Bundle(mode=DEEP, effort="", root_id=project.root_id,
-                      project_path=str(project.path), tasks=[])
+        candidates.append(project)
 
-    return None
+    if not candidates:
+        return None
+
+    after_key = _key(after_project) if after_project else ""
+    if after_key:
+        for index, project in enumerate(candidates):
+            if _key(project.path) == after_key:
+                candidates = candidates[index + 1:] + candidates[:index + 1]
+                break
+
+    project = candidates[0]
+    return Bundle(mode=DEEP, effort="", root_id=project.root_id,
+                  project_path=str(project.path), tasks=[])
 
 
 def _maintainer_bundle(config: SelectorConfig, store: TaskStore,
-                       locks: LockView) -> Optional[Bundle]:
+                       locks: LockView,
+                       after_project: str = "") -> Optional[Bundle]:
     """Die Auswahl des MAINTAINER — wieder eine ANDERE.
 
     Aufgedeckt vom MAINTAINER-Loop (2026-07-14): Er fiel in den TASKSOLVER-Zweig
@@ -240,7 +304,9 @@ def _maintainer_bundle(config: SelectorConfig, store: TaskStore,
     busy = set()        # jemand arbeitet dort: aktiv ODER geclaimt
     touched = set()     # hat ueberhaupt schon Aufgaben (egal welchen Status)
 
-    for task in store.list(limit=1000, include_done=True):
+    # Auch aktive/zugewiesene Arbeit jenseits eines festen Verlaufsfensters
+    # muss ein Projekt fuer den Maintainer weiterhin als beschaeftigt markieren.
+    for task in store.list(limit=None, include_done=True):
         project = task.get("project_path")
         if not project:
             continue
@@ -261,23 +327,42 @@ def _maintainer_bundle(config: SelectorConfig, store: TaskStore,
     # der Writer sucht unberuehrte Projekte, der Maintainer beruehrte. Eine
     # kuenstliche Trennung (etwa: "der Maintainer laeuft die Liste rueckwaerts")
     # waere ein Pflaster gewesen, das bei wenigen Projekten wieder kollidiert.
+    # Touched projects bleiben die bevorzugte Gruppe, unberuehrte Projekte
+    # der Fallback. Innerhalb der Gesamtmenge wird aber nach dem letzten
+    # Cursor weitergelaufen. So wird ein freies Projekt nicht bei jedem neuen
+    # CLI-Prozess erneut als erstes geliefert.
+    candidates = []
+    seen = set()
     for prefer_touched in (True, False):
         for project in config.projects:
             key = _key(project.path)
-            if key in busy:
+            if key in seen or key in busy:
                 continue
             if (key in touched) != prefer_touched:
                 continue
-            if not locks.allows(project.path, MODIFY):
+            if not locks.allows_selection(project.path):
                 continue
-            return Bundle(mode=DEEP, effort="", root_id=project.root_id,
-                          project_path=str(project.path), tasks=[])
+            seen.add(key)
+            candidates.append(project)
 
-    return None
+    if not candidates:
+        return None
+
+    after_key = _key(after_project) if after_project else ""
+    if after_key:
+        for index, project in enumerate(candidates):
+            if _key(project.path) == after_key:
+                candidates = candidates[index + 1:] + candidates[:index + 1]
+                break
+
+    project = candidates[0]
+    return Bundle(mode=DEEP, effort="", root_id=project.root_id,
+                  project_path=str(project.path), tasks=[])
 
 
 def next_bundle(config: SelectorConfig, store: TaskStore,
-                locks: LockView, role: str = "tasksolver") -> Optional[Bundle]:
+                locks: LockView, role: str = "tasksolver",
+                after_project: str = "") -> Optional[Bundle]:
     """Was ist als Naechstes dran? None = nichts zu tun.
 
     Gibt der Selektor None zurueck, endet der Durchlauf EHRLICH als Leerlauf —
@@ -288,9 +373,11 @@ def next_bundle(config: SelectorConfig, store: TaskStore,
     hiesse dem Writer systematisch nichts zu geben.
     """
     if role == "taskwriter":
-        return _writer_bundle(config, store, locks)
+        return _writer_bundle(
+            config, store, locks, after_project=after_project
+        )
     if role == "maintainer":
-        return _maintainer_bundle(config, store, locks)
+        return _maintainer_bundle(config, store, locks, after_project=after_project)
 
     efforts = config.allowed_efforts()
 

@@ -35,9 +35,13 @@ eine überschätzte wartet nur.
 
 ABLAUF PRO LOOP
 
-1. PROJEKT WÄHLEN: Nimm die auf dem System vorgesehene Rotation. Ein Projekt ist eine Arbeitseinheit
-   UNTERHALB der Wurzel — nicht die Pipeline selbst. Bevorzuge aktive Projekte, dann das am längsten
-   nicht geprüfte.
+1. PROJEKT ÜBERNEHMEN: Nimm ausschließlich das vom Selektor gelieferte Projekt. Ein Projekt ist
+   eine Arbeitseinheit UNTERHALB der Wurzel — nicht die Pipeline selbst. Der Selektor speichert
+   für projektbasierte Writer-Läufe einen Cursor und liefert beim nächsten Aufruf den nächsten
+   unerfassten Kandidaten. Wenn ein Projekt nachweislich keine neue Aufgabe ergibt, erfinde keine;
+   bei Bedarf kannst du den Cursor ausdrücklich weitersetzen:
+
+       python -m taskplan skip --role taskwriter --project "<pfad>"
 
 2. SCHÜTZEN: Lesen und Analysieren ist IMMER erlaubt, auch bei fremdem Lock — ein Lock schützt vor
    Änderung, nicht vor Kenntnisnahme. Für die Schreibphase (Steuerdateien aktualisieren) gilt: nur

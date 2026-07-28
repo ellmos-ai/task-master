@@ -41,6 +41,8 @@ path = "~/.taskplan/taskplan.db"
 effort_ceiling = "medium"   # easy | medium
                             # large/special sind NIE autonom, unabhaengig davon
 max_bundle_size = 3         # Aufgaben je Durchlauf — aus EINEM Projekt
+rotation_state_file = "~/.taskplan/rotation-state.json"
+                              # persistenter Cursor fuer projektbasierte Rollen
 
 [loop.deep]
 enabled = true              # false = nur Oberflaeche (das alte Verhalten)
@@ -59,23 +61,93 @@ tasksolver = true     # arbeitet sie ab
 maintainer = true     # haelt Dateien und Verzeichnisse sauber
                       # false -> der Starter bricht sauber ab (kein Leerlauf)
 
-combined = false      # true = EIN Worker deckt alle aktiven Rollen ab,
-                      # statt drei getrennter Instanzen.
-                      # maintainer=false + combined=true ergibt den 2-in-1-Worker.
-                      #
-                      # ACHTUNG: Die Rollentrennung ist eine QUALITAETSGRENZE —
-                      # der Writer soll nicht ausfuehren, was er selbst gerade
-                      # formuliert hat. Im combined-Modus muss sie als
-                      # Phasenwechsel im Worker erhalten bleiben.
+combined = false      # Reservierte Konfiguration: wird gelesen und ausgegeben,
+                      # aber noch von keinem Runner/Starter ausgefuehrt.
+                      # true startet daher aktuell keinen 3-in-1-/2-in-1-Worker.
 
 # ---------------------------------------------------------------------------
-# MODELLE — gehoeren in die Konfiguration, nicht in den Starter
+# PROVIDER + MODELLE — gehoeren in die Konfiguration, nicht in den Starter
 # ---------------------------------------------------------------------------
+[execution]
+provider = "codex"
+
+[providers.codex]
+continuation = "goal"
+empty_policy = "keep_goal"
+idle_backoff_seconds = 60
+
+[providers.codex.models]
+default    = ""
+taskwriter = ""
+tasksolver = ""
+maintainer = ""
+
+[providers.codex.reasoning_effort]
+default    = "high"
+taskwriter = "high"
+tasksolver = "xhigh"
+maintainer = "high"
+
+[providers.claude]
+continuation = "one_shot"
+empty_policy = "stop"
+idle_backoff_seconds = 60
+
+[providers.claude.models]
+default    = ""
+taskwriter = ""
+tasksolver = ""
+maintainer = ""
+
+[providers.claude.reasoning_effort]
+default    = "high"
+taskwriter = "high"
+tasksolver = "high"
+maintainer = "high"
+
+[providers.agy]
+continuation = "one_shot"
+empty_policy = "stop"
+idle_backoff_seconds = 60
+
+[providers.agy.models]
+default    = ""
+taskwriter = ""
+tasksolver = ""
+maintainer = ""
+
+[providers.agy.reasoning_effort]
+default    = "high"
+taskwriter = "high"
+tasksolver = "high"
+maintainer = "high"
+
+# Kimi Code CLI: kein interaktiver Startprompt und kein --effort-Flag (Stand
+# 0.29.2) — Worker laufen headless (kimi --prompt); die Reasoning-Stufe kommt
+# aus default_effort des Modells in ~/.kimi-code/config.toml.
+[providers.kimi]
+continuation = "one_shot"
+empty_policy = "stop"
+idle_backoff_seconds = 60
+
+[providers.kimi.models]
+default    = ""
+taskwriter = ""
+tasksolver = ""
+maintainer = ""
+
+[providers.kimi.reasoning_effort]
+default    = "max"
+taskwriter = "max"
+tasksolver = "max"
+maintainer = "max"
+
+# Rueckwaertskompatibilitaet fuer Installationen ohne Provider-Sektionen.
 [models]
-default    = "claude-sonnet-5"
-taskwriter = "claude-sonnet-5"   # Analyse/Formalisierung
-tasksolver = "claude-opus-4-8"   # setzt um, braucht mehr Urteil
-maintainer = "claude-sonnet-5"   # mechanische Pflege
+default    = ""
+taskwriter = ""
+tasksolver = ""
+maintainer = ""
 
 # ---------------------------------------------------------------------------
 # TRAVERSIERUNG — was ist eine Root, was ein Projekt?
@@ -113,6 +185,12 @@ registry_file = "~/.taskplan/projects.json"
 # Tiefe der Auto-Suche. Gesetzt = AUTO-MODUS: das oberste markierte Verzeichnis
 # je Pfad. Noetig, sobald die Roots unterschiedlich tief sind — der Normalfall.
 max_depth = 3
+discovery_timeout_seconds = 30
+cache_enabled = true
+cache_file = "~/.taskplan/projects-cache.json"
+# Refresh-Intervall pro Root-Sektor. Nach Ablauf wird pro Selektorlauf nur ein
+# Sektor aktualisiert. Ein Last-known-good-Sektor bleibt bei Timeout erhalten.
+cache_ttl_seconds = 86400  # 24 Stunden; 0 = kein altersbasierter Refresh
 
 # Einfache Variante (eine Liste, ein Treffer genuegt):
 # markers = ["TODO.md", "CLAUDE.md", ".git", "pyproject.toml"]

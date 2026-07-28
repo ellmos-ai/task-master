@@ -365,7 +365,7 @@ class TaskClient:
         status: Optional[str] = None,
         priority: Optional[str] = None,
         include_done: bool = False,
-        limit: int = 50,
+        limit: Optional[int] = 50,
         effort: Optional[str] = None,
         scope: Optional[str] = None,
         project_path: Optional[str] = None,
@@ -397,7 +397,10 @@ class TaskClient:
                     params.append(value)
 
             where = "WHERE " + " AND ".join(conditions) if conditions else ""
-            params.append(limit)
+            limit_clause = ""
+            if limit is not None:
+                params.append(limit)
+                limit_clause = "LIMIT ?"
 
             rows = conn.execute(f"""
                 SELECT {_SELECT_COLUMNS}
@@ -409,7 +412,7 @@ class TaskClient:
                         WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5
                     END,
                     created_at ASC
-                LIMIT ?
+                {limit_clause}
             """, params).fetchall()
 
             return [self._row_to_dict(r) for r in rows]
