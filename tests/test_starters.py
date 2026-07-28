@@ -15,9 +15,9 @@ from taskplan.starters import get_starter_path, list_starters
 class TestPackagedStarterAssets(unittest.TestCase):
     def test_all_three_roles_and_providers_are_packaged(self):
         names = set(list_starters())
-        self.assertEqual(len(names), 9)
+        self.assertEqual(len(names), 12)
         for role in ("TASKSOLVER", "TASKWRITER", "MAINTAINER"):
-            for provider in ("CLAUDE", "CODEX", "AGY"):
+            for provider in ("CLAUDE", "CODEX", "AGY", "KIMI"):
                 self.assertIn(f"START-{role}-{provider}.bat", names)
 
     def test_starters_are_user_neutral_thin_wrappers(self):
@@ -83,7 +83,8 @@ class TestCentralLauncher(unittest.TestCase):
         for provider, executable in (
                 ("claude", "claude.exe"),
                 ("codex", "codex.exe"),
-                ("agy", "agy.exe")):
+                ("agy", "agy.exe"),
+                ("kimi", "kimi.exe")):
             patches = self._patch_common(provider)
             with patches[0], patches[1], patches[2], patches[3]:
                 command, _ = _provider_command(
@@ -127,6 +128,62 @@ class TestCentralLauncher(unittest.TestCase):
         self.assertEqual(code, 0)
         runner.assert_not_called()
         self.assertIn("[DRY-RUN]", output.getvalue())
+
+
+class TestKimiProviderCommand(unittest.TestCase):
+    """Kimi-Worker: headless (-p), --yolo nur bei Trust-Opt-in, kein --effort.
+
+    Verifiziert gegen Kimi Code CLI 0.29.2 (2026-07-28): die CLI kennt keinen
+    interaktiven Startprompt (positional wird als Subcommand abgelehnt) und
+    kein --effort-Flag; die Reasoning-Stufe kommt aus default_effort des
+    Modells in ~/.kimi-code/config.toml.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.workdir = self.tmp.name
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _command(self, trusted: bool):
+        profile = {
+            "provider": "kimi",
+            "role": "tasksolver",
+            "model": "moonshot-ai/kimi-k3",
+            "reasoning_effort": "max",
+            "continuation": "one_shot",
+            "empty_policy": "stop",
+            "idle_backoff_seconds": 60,
+        }
+        env = {"TASKPLAN_WORKDIR": self.workdir}
+        if trusted:
+            env["TASKPLAN_TRUSTED_AUTOMATION"] = "1"
+        with mock.patch("taskplan.launcher.runtime_profile",
+                        return_value=profile), \
+                mock.patch("taskplan.launcher.startup_prompt",
+                           return_value="authorized startup"), \
+                mock.patch("taskplan.launcher.get_workflow_prompt_path",
+                           return_value=Path(self.workdir) / "TASKSOLVER.txt"), \
+                mock.patch("taskplan.launcher.shutil.which",
+                           side_effect=lambda name: f"C:\\bin\\{name}.exe"):
+            command, _ = _provider_command("tasksolver", "kimi", env=env)
+        return command
+
+    def test_kimi_runs_headless_with_model(self):
+        command = self._command(trusted=True)
+        self.assertTrue(command[0].endswith("kimi.exe"))
+        self.assertIn("--prompt", command)
+        self.assertIn("moonshot-ai/kimi-k3", command)
+
+    def test_kimi_yolo_only_with_trust_opt_in(self):
+        self.assertIn("--yolo", self._command(trusted=True))
+        self.assertNotIn("--yolo", self._command(trusted=False))
+
+    def test_kimi_never_receives_effort_or_interactive_flags(self):
+        command = self._command(trusted=True)
+        self.assertNotIn("--effort", command)
+        self.assertNotIn("--prompt-interactive", command)
 
 
 if __name__ == "__main__":

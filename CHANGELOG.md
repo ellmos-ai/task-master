@@ -54,6 +54,14 @@
 - Begrenzte Projekt-Discovery: konfigurierbarer Timeout liefert Exit-Code `3`
   statt TASKWRITER oder MAINTAINER auf Cloud-Dateisystemen festzuhalten; der
   Scan läuft abbrechbar im Unterprozess und nutzt einen invalidierbaren Cache.
+- Vierter Starter-Provider `kimi` (Kimi Code CLI) für alle drei Rollen:
+  `taskplan launch --provider kimi`, drei weitere paketierte Starter (insgesamt
+  zwölf) sowie `[providers.kimi]`-Sektionen in `taskplan.example.toml`.
+  Verifiziert gegen CLI 0.29.2 (2026-07-28): die CLI kennt keinen interaktiven
+  Startprompt (positional wird als Subcommand abgelehnt) und kein
+  `--effort`-Flag — Kimi-Worker laufen deshalb headless (`kimi --prompt`),
+  die Reasoning-Stufe kommt aus `default_effort` des Modells in
+  `~/.kimi-code/config.toml` und wird im Starter nur angezeigt. [2026-07-28]
 
 ### Security
 - Repository-Hygiene erweitert: lokale Env-/Token-/Credential-/Recovery-/Key-,

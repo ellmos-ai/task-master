@@ -21,7 +21,7 @@ from .doctor import run as doctor
 from .runtime import normalize_role, runtime_profile, startup_prompt
 from .workflows import get_workflow_prompt_path
 
-PROVIDERS = ("claude", "codex", "agy")
+PROVIDERS = ("claude", "codex", "agy", "kimi")
 TRUST_ENV = "TASKPLAN_TRUSTED_AUTOMATION"
 WORKDIR_ENV = "TASKPLAN_WORKDIR"
 DRY_RUN_ENV = "TASKPLAN_STARTER_DRY_RUN"
@@ -119,6 +119,22 @@ def _provider_command(
         command.extend([
             "--append-system-prompt-file", str(prompt_path),
             request_with_path,
+        ])
+        return command, prompt_path
+
+    if provider == "kimi":
+        # Kimi Code CLI (Vertrag verifiziert gegen 0.29.2): die CLI kennt
+        # keinen interaktiven Startprompt (positional ist ein Subcommand und
+        # wird abgelehnt) und kein --effort-Flag. Der Rollen-Worker laeuft
+        # deshalb headless (-p/--prompt); die Reasoning-Stufe kommt aus dem
+        # default_effort des Modells in ~/.kimi-code/config.toml und wird hier
+        # nur angezeigt, nicht uebergeben.
+        command = [executable]
+        if trusted:
+            command.append("--yolo")
+        command.extend([
+            "--model", model,
+            "--prompt", request_with_path,
         ])
         return command, prompt_path
 

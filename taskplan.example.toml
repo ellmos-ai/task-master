@@ -122,6 +122,26 @@ taskwriter = "high"
 tasksolver = "high"
 maintainer = "high"
 
+# Kimi Code CLI: kein interaktiver Startprompt und kein --effort-Flag (Stand
+# 0.29.2) — Worker laufen headless (kimi --prompt); die Reasoning-Stufe kommt
+# aus default_effort des Modells in ~/.kimi-code/config.toml.
+[providers.kimi]
+continuation = "one_shot"
+empty_policy = "stop"
+idle_backoff_seconds = 60
+
+[providers.kimi.models]
+default    = ""
+taskwriter = ""
+tasksolver = ""
+maintainer = ""
+
+[providers.kimi.reasoning_effort]
+default    = "max"
+taskwriter = "max"
+tasksolver = "max"
+maintainer = "max"
+
 # Rueckwaertskompatibilitaet fuer Installationen ohne Provider-Sektionen.
 [models]
 default    = ""

@@ -1,6 +1,6 @@
 # taskplan
 
-> Last-checked: 2026-07-26
+> Last-checked: 2026-07-28
 
 taskplan (`ellmos-ai/taskplan`) ist eine Python-Bibliothek (≥ 3.10, zero dependencies, stdlib only) für deterministische Aufgaben- und Rollenauswahl für LLM-Agenten-Frameworks im `ellmos-ai`-Ökosystem.
 
@@ -21,4 +21,4 @@ taskplan (`ellmos-ai/taskplan`) ist eine Python-Bibliothek (≥ 3.10, zero depen
 
 ## Verifikation
 
-- Pytest Testsuite: 245/245 Tests 100% grün (`python -m pytest tests/`).
+- Pytest Testsuite: 280/280 Tests 100% grün (`python -m pytest tests/`).
