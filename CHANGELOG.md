@@ -15,6 +15,7 @@
 - Projektbasierte TASKWRITER-Erfassungsläufe verwenden nun denselben rollenspezifischen, atomaren Rotationsmechanismus. Reale unklassifizierte Task-Bündel bleiben bis zur Bearbeitung stabil; nur leere Projekt-Sweeps rotieren weiter. `taskplan skip` unterstützt deshalb auch `taskwriter`.
 
 ### Added
+- Technische Hygiene & Doku-Check (Pfad A): `llms.txt` Last-checked Datum auf 2026-07-30 aktualisiert, Test-Badges in `README.md` / `README_de.md` auf 283 passed/bestanden aktualisiert, Repo-Referenz auf `ellmos-ai/task-master` präzisiert und Pytest Testsuite verifiziert (283/283 Tests 100% grün). [2026-07-30]
 - Maschinen- und menschenlesbarer Exit-Vertrag für `next`: stabile Namen
   `BUNDLE_READY`, `NO_WORK`, `ROLE_DISABLED` und
   `RETRYABLE_SELECTOR_ERROR`, deutsche/englische Bedeutungen im JSON sowie

@@ -1,8 +1,8 @@
-# taskplan
+# task-master
 
-> Last-checked: 2026-07-28
+> Last-checked: 2026-07-30
 
-taskplan (`ellmos-ai/taskplan`) ist eine Python-Bibliothek (≥ 3.10, zero dependencies, stdlib only) für deterministische Aufgaben- und Rollenauswahl für LLM-Agenten-Frameworks im `ellmos-ai`-Ökosystem.
+task-master (ehemals `taskplan`, Repo: `ellmos-ai/task-master`) ist eine Python-Bibliothek (≥ 3.10, zero dependencies, stdlib only) für deterministische Aufgaben- und Rollenauswahl für LLM-Agenten-Frameworks im `ellmos-ai`-Ökosystem.
 
 ## Kern-Dokumentation
 
@@ -21,4 +21,4 @@ taskplan (`ellmos-ai/taskplan`) ist eine Python-Bibliothek (≥ 3.10, zero depen
 
 ## Verifikation
 
-- Pytest Testsuite: 280/280 Tests 100% grün (`python -m pytest tests/`).
+- Pytest Testsuite: 283/283 Tests 100% grün (`python -m pytest tests/`).
