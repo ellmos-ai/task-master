@@ -2,7 +2,7 @@
   <img src="assets/banner.svg" alt="TASKPLAN" width="100%">
 </p>
 
-# taskplan
+# TaskMaster
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![Lizenz: MIT](https://img.shields.io/badge/Lizenz-MIT-yellow.svg)](LICENSE)
