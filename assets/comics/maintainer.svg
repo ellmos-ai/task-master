@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" width="800" height="800">
+  <defs>
+    <linearGradient id="m_bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0d1117"/>
+      <stop offset="100%" stop-color="#064e3b"/>
+    </linearGradient>
+    <linearGradient id="m_overall" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#10b981"/>
+      <stop offset="100%" stop-color="#047857"/>
+    </linearGradient>
+    <filter id="m_glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <rect width="800" height="800" rx="36" fill="url(#m_bg)"/>
+  <rect x="24" y="24" width="752" height="752" rx="28" fill="none" stroke="#10b981" stroke-width="2" stroke-opacity="0.3"/>
+
+  <!-- Sparkling Clean Background Folders -->
+  <g transform="translate(100, 140) scale(0.9)">
+    <path d="M 0 20 L 40 20 L 60 40 L 140 40 L 140 110 L 0 110 Z" fill="#38bdf8" fill-opacity="0.3" stroke="#38bdf8" stroke-width="3" filter="url(#m_glow)"/>
+    <!-- Sparkle -->
+    <path d="M 120 20 L 125 30 L 135 35 L 125 40 L 120 50 L 115 40 L 105 35 L 115 30 Z" fill="#ffffff"/>
+  </g>
+
+  <g transform="translate(560, 160) scale(0.9)">
+    <path d="M 0 20 L 40 20 L 60 40 L 140 40 L 140 110 L 0 110 Z" fill="#3fb950" fill-opacity="0.3" stroke="#3fb950" stroke-width="3" filter="url(#m_glow)"/>
+    <path d="M 30 10 L 35 20 L 45 25 L 35 30 L 30 40 L 25 30 L 15 25 L 25 20 Z" fill="#ffffff"/>
+  </g>
+
+  <!-- Recycling Trash Bin on Right -->
+  <g transform="translate(620, 480)">
+    <rect x="0" y="20" width="110" height="140" rx="10" fill="#1f2937" stroke="#10b981" stroke-width="4"/>
+    <rect x="-10" y="0" width="130" height="24" rx="6" fill="#374151" stroke="#10b981" stroke-width="3"/>
+    <!-- Recycle Arrows Symbol -->
+    <path d="M 55 50 L 70 70 H 40 Z" fill="#10b981"/>
+    <path d="M 40 85 L 55 105 H 25 Z" fill="#10b981" transform="rotate(120, 40, 85)"/>
+    <path d="M 70 85 L 85 105 H 55 Z" fill="#10b981" transform="rotate(240, 70, 85)"/>
+    <text x="55" y="140" text-anchor="middle" fill="#6b7280" font-family="system-ui, sans-serif" font-size="11" font-weight="bold">CLEAN BIN</text>
+  </g>
+
+  <!-- CHARACTER: MAINTAINER (Hausmeister) -->
+  <!-- Legs -->
+  <rect x="330" y="520" width="55" height="150" rx="14" fill="#064e3b" stroke="#047857" stroke-width="4"/>
+  <rect x="415" y="520" width="55" height="150" rx="14" fill="#064e3b" stroke="#047857" stroke-width="4"/>
+  <ellipse cx="355" cy="665" rx="26" ry="14" fill="#1f2937"/>
+  <ellipse cx="440" cy="665" rx="26" ry="14" fill="#1f2937"/>
+
+  <!-- Torso / Overalls -->
+  <path d="M 320 270 L 480 270 L 460 530 L 340 530 Z" fill="url(#m_overall)" stroke="#0d1117" stroke-width="5"/>
+  <!-- Pocket -->
+  <rect x="365" y="340" width="70" height="60" rx="8" fill="#047857" stroke="#a7f3d0" stroke-width="2"/>
+  <!-- Feather duster / rag in pocket -->
+  <path d="M 400 340 V 310" stroke="#f59e0b" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="400" cy="305" r="10" fill="#38bdf8"/>
+
+  <!-- Broom Handle held by Both Arms -->
+  <line x1="200" y1="620" x2="520" y2="220" stroke="#78350f" stroke-width="14" stroke-linecap="round"/>
+
+  <!-- Broom Head sweeping floor -->
+  <g transform="translate(150, 590) rotate(35)">
+    <path d="M -40 0 L 40 0 L 60 70 L -60 70 Z" fill="#d97706" stroke="#451a03" stroke-width="4"/>
+    <!-- Bristle lines -->
+    <line x1="-30" y1="20" x2="-45" y2="70" stroke="#78350f" stroke-width="3"/>
+    <line x1="-10" y1="20" x2="-15" y2="70" stroke="#78350f" stroke-width="3"/>
+    <line x1="10" y1="20" x2="15" y2="70" stroke="#78350f" stroke-width="3"/>
+    <line x1="30" y1="20" x2="45" y2="70" stroke="#78350f" stroke-width="3"/>
+  </g>
+
+  <!-- Dust / Swept files on floor moving to bin -->
+  <g opacity="0.7">
+    <rect x="250" y="630" width="30" height="20" rx="4" fill="#64748b" transform="rotate(15, 250, 630)"/>
+    <text x="253" y="643" fill="#ffffff" font-family="sans-serif" font-size="8">.tmp</text>
+
+    <rect x="380" y="620" width="35" height="20" rx="4" fill="#64748b" transform="rotate(-10, 380, 620)"/>
+    <text x="383" y="633" fill="#ffffff" font-family="sans-serif" font-size="8">old.bak</text>
+  </g>
+
+  <!-- Arms -->
+  <path d="M 320 290 L 360 380 L 410 360" fill="none" stroke="#34d399" stroke-width="16" stroke-linecap="round"/>
+  <path d="M 480 290 L 440 340 L 470 310" fill="none" stroke="#34d399" stroke-width="16" stroke-linecap="round"/>
+
+  <!-- Head & Cap -->
+  <rect x="385" y="235" width="30" height="40" fill="#fbcfe8"/>
+  <rect x="340" y="130" width="120" height="115" rx="32" fill="#fde047" stroke="#0d1117" stroke-width="5"/>
+
+  <!-- Cap -->
+  <path d="M 330 145 C 330 90 470 90 470 145 Z" fill="#047857" stroke="#0d1117" stroke-width="4"/>
+  <path d="M 310 145 L 450 145" stroke="#10b981" stroke-width="10" stroke-linecap="round"/>
+
+  <!-- Friendly Eyes & Smile -->
+  <ellipse cx="375" cy="180" rx="11" ry="14" fill="#0d1117"/>
+  <ellipse cx="425" cy="180" rx="11" ry="14" fill="#0d1117"/>
+  <circle cx="378" cy="176" r="4" fill="#ffffff"/>
+  <circle cx="428" cy="176" r="4" fill="#ffffff"/>
+  <path d="M 370 205 Q 400 230 430 205" fill="none" stroke="#0d1117" stroke-width="5" stroke-linecap="round"/>
+
+  <!-- Title Badge -->
+  <rect x="180" y="705" width="440" height="54" rx="27" fill="#064e3b" stroke="#10b981" stroke-width="3"/>
+  <text x="400" y="740" text-anchor="middle" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="22" font-weight="bold" letter-spacing="1">MAINTAINER · Hygiene Keeper</text>
+</svg>

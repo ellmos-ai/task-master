@@ -64,6 +64,22 @@ When nothing is selectable, `next_bundle()` returns `None`. The loop ends as an
 
 ---
 
+## Roles
+
+<p align="center">
+  <img src="assets/comics/tasksolver.svg" alt="TASKSOLVER" width="30%"/>
+  &nbsp;
+  <img src="assets/comics/taskwriter.svg" alt="TASKWRITER" width="30%"/>
+  &nbsp;
+  <img src="assets/comics/maintainer.svg" alt="MAINTAINER" width="30%"/>
+</p>
+
+- **TASKSOLVER**: Focused executor with toolbox. Executes exactly ONE project bundle per pass.
+- **TASKWRITER**: Chronicler with pen and list. Classifies tasks with effort/scope (*"an unrated task is invisible"*).
+- **MAINTAINER**: Caretaker with broom. Keeps files and folder structures clean and tidy.
+
+---
+
 ## Quick start
 
 ```python

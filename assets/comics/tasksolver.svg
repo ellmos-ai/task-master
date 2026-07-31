@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" width="800" height="800">
+  <defs>
+    <linearGradient id="ts_bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0d1117"/>
+      <stop offset="100%" stop-color="#161b22"/>
+    </linearGradient>
+    <linearGradient id="ts_shirt" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1f6beb"/>
+      <stop offset="100%" stop-color="#0d419d"/>
+    </linearGradient>
+    <linearGradient id="ts_box" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f97316"/>
+      <stop offset="100%" stop-color="#c2410c"/>
+    </linearGradient>
+    <filter id="ts_glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <rect width="800" height="800" rx="36" fill="url(#ts_bg)"/>
+  <rect x="24" y="24" width="752" height="752" rx="28" fill="none" stroke="#58a6ff" stroke-width="2" stroke-opacity="0.3"/>
+
+  <!-- Tech Grid Background lines -->
+  <path d="M 80 200 H 720 M 80 400 H 720 M 80 600 H 720" stroke="#30363d" stroke-width="2" stroke-dasharray="8,8"/>
+  <path d="M 200 80 V 720 M 400 80 V 720 M 600 80 V 720" stroke="#30363d" stroke-width="2" stroke-dasharray="8,8"/>
+
+  <!-- CHARACTER: TASKSOLVER (Energetic Macher / Doer) -->
+  <!-- Legs -->
+  <rect x="330" y="520" width="55" height="150" rx="14" fill="#21262d" stroke="#30363d" stroke-width="4"/>
+  <rect x="415" y="520" width="55" height="150" rx="14" fill="#21262d" stroke="#30363d" stroke-width="4"/>
+  <ellipse cx="355" cy="665" rx="26" ry="14" fill="#f59e0b"/>
+  <ellipse cx="440" cy="665" rx="26" ry="14" fill="#f59e0b"/>
+
+  <!-- Torso / Shirt -->
+  <path d="M 320 270 L 480 270 L 460 530 L 340 530 Z" fill="url(#ts_shirt)" stroke="#0d1117" stroke-width="5"/>
+
+  <!-- Belt with tools -->
+  <rect x="335" y="500" width="130" height="24" rx="6" fill="#484f58"/>
+  <rect x="385" y="496" width="30" height="32" rx="4" fill="#f59e0b"/>
+
+  <!-- Left Hand carrying Toolbox (Werkzeugkasten) -->
+  <path d="M 320 290 L 210 330 L 190 440" fill="none" stroke="#58a6ff" stroke-width="16" stroke-linecap="round"/>
+  <g transform="translate(100, 420)">
+    <!-- Toolbox body -->
+    <rect x="0" y="40" width="150" height="95" rx="10" fill="url(#ts_box)" stroke="#7c2d12" stroke-width="4"/>
+    <rect x="0" y="40" width="150" height="20" rx="4" fill="#ea580c"/>
+    <!-- Handle -->
+    <path d="M 45 40 V 15 H 105 V 40" fill="none" stroke="#475569" stroke-width="8" stroke-linecap="round"/>
+    <!-- Tools poking out -->
+    <!-- Wrench -->
+    <path d="M 30 20 L 45 -10" stroke="#94a3b8" stroke-width="8" stroke-linecap="round"/>
+    <circle cx="48" cy="-14" r="10" fill="none" stroke="#94a3b8" stroke-width="5"/>
+    <!-- Hammer -->
+    <path d="M 110 25 L 120 -15" stroke="#78350f" stroke-width="8" stroke-linecap="round"/>
+    <rect x="105" y="-25" width="30" height="16" rx="3" fill="#64748b"/>
+  </g>
+
+  <!-- Right Hand carrying Single Project Bundle Crate -->
+  <path d="M 480 290 L 590 320 L 570 410" fill="none" stroke="#58a6ff" stroke-width="16" stroke-linecap="round"/>
+  <g transform="translate(520, 390) rotate(5)">
+    <rect x="0" y="0" width="170" height="130" rx="14" fill="#161b22" stroke="#58a6ff" stroke-width="4" filter="url(#ts_glow)"/>
+    <rect x="12" y="12" width="146" height="106" rx="8" fill="none" stroke="#30363d" stroke-width="2" stroke-dasharray="6,6"/>
+    <!-- Bundle Icon & Label -->
+    <rect x="35" y="30" width="100" height="35" rx="6" fill="#238636"/>
+    <text x="85" y="53" text-anchor="middle" fill="#ffffff" font-family="system-ui, sans-serif" font-size="15" font-weight="bold">1 BUNDLE</text>
+    <text x="85" y="95" text-anchor="middle" fill="#8b949e" font-family="system-ui, sans-serif" font-size="13" font-weight="bold">EXCLUSIVITY: 100%</text>
+  </g>
+
+  <!-- Neck -->
+  <rect x="385" y="235" width="30" height="40" fill="#fbcfe8"/>
+
+  <!-- Head -->
+  <rect x="340" y="130" width="120" height="115" rx="32" fill="#fde047" stroke="#0d1117" stroke-width="5"/>
+
+  <!-- Goggles on Forehead -->
+  <rect x="330" y="115" width="140" height="36" rx="12" fill="#1f2937" stroke="#58a6ff" stroke-width="3"/>
+  <circle cx="365" cy="133" r="12" fill="#38bdf8" stroke="#ffffff" stroke-width="2"/>
+  <circle cx="435" cy="133" r="12" fill="#38bdf8" stroke="#ffffff" stroke-width="2"/>
+
+  <!-- Cheerful Confident Eyes -->
+  <ellipse cx="375" cy="180" rx="11" ry="14" fill="#0d1117"/>
+  <ellipse cx="425" cy="180" rx="11" ry="14" fill="#0d1117"/>
+  <circle cx="378" cy="176" r="4" fill="#ffffff"/>
+  <circle cx="428" cy="176" r="4" fill="#ffffff"/>
+
+  <!-- Wide Smiling Mouth -->
+  <path d="M 370 205 Q 400 230 430 205 Z" fill="#dc2626" stroke="#0d1117" stroke-width="3"/>
+  <path d="M 378 207 Q 400 215 422 207" fill="#ffffff"/>
+
+  <!-- Title Badge -->
+  <rect x="180" y="705" width="440" height="54" rx="27" fill="#161b22" stroke="#58a6ff" stroke-width="3"/>
+  <text x="400" y="740" text-anchor="middle" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="22" font-weight="bold" letter-spacing="1">TASKSOLVER · Bundle Executor</text>
+</svg>

@@ -67,6 +67,22 @@ Ist nichts wählbar, gibt `next_bundle()` **`None`** zurück. Der Loop endet als
 
 ---
 
+## Rollen
+
+<p align="center">
+  <img src="assets/comics/tasksolver.svg" alt="TASKSOLVER" width="30%"/>
+  &nbsp;
+  <img src="assets/comics/taskwriter.svg" alt="TASKWRITER" width="30%"/>
+  &nbsp;
+  <img src="assets/comics/maintainer.svg" alt="MAINTAINER" width="30%"/>
+</p>
+
+- **TASKSOLVER**: Macher mit Werkzeugkasten. Arbeitet genau EIN Projekt-Bündel pro Durchgang ab.
+- **TASKWRITER**: Chronist mit Stift und Liste. Stuft Aufgaben mit effort/scope ein (*„eine uneingestufte Aufgabe ist unsichtbar"*).
+- **MAINTAINER**: Hausmeister mit Besen. Hält Dateien und Ordnerstrukturen sauber und ordentlich.
+
+---
+
 ## Schnellstart
 
 ```python

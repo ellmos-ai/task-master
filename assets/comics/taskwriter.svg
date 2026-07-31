@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" width="800" height="800">
+  <defs>
+    <linearGradient id="tw2_bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0d1117"/>
+      <stop offset="100%" stop-color="#1e1b4b"/>
+    </linearGradient>
+    <linearGradient id="tw2_vest" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#8b5cf6"/>
+      <stop offset="100%" stop-color="#6d28d9"/>
+    </linearGradient>
+    <filter id="tw2_glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <rect width="800" height="800" rx="36" fill="url(#tw2_bg)"/>
+  <rect x="24" y="24" width="752" height="752" rx="28" fill="none" stroke="#8b5cf6" stroke-width="2" stroke-opacity="0.3"/>
+
+  <!-- Floating particles / runes background -->
+  <circle cx="150" cy="180" r="4" fill="#a78bfa" opacity="0.6"/>
+  <circle cx="680" cy="220" r="6" fill="#a78bfa" opacity="0.4"/>
+  <circle cx="650" cy="550" r="5" fill="#38bdf8" opacity="0.5"/>
+
+  <!-- CHARACTER: TASKWRITER (Chronist / Scribe) -->
+  <!-- Legs -->
+  <rect x="330" y="520" width="55" height="150" rx="14" fill="#1e1b4b" stroke="#312e81" stroke-width="4"/>
+  <rect x="415" y="520" width="55" height="150" rx="14" fill="#1e1b4b" stroke="#312e81" stroke-width="4"/>
+  <ellipse cx="355" cy="665" rx="24" ry="12" fill="#4c1d95"/>
+  <ellipse cx="440" cy="665" rx="24" ry="12" fill="#4c1d95"/>
+
+  <!-- Torso / Vest -->
+  <path d="M 320 270 L 480 270 L 460 530 L 340 530 Z" fill="url(#tw2_vest)" stroke="#0d1117" stroke-width="5"/>
+
+  <!-- Left Arm holding Quill/Stylus -->
+  <path d="M 320 290 L 220 330 L 260 430" fill="none" stroke="#c084fc" stroke-width="16" stroke-linecap="round"/>
+  <!-- Feather Quill / Stylus -->
+  <g transform="translate(240, 420) rotate(-40)">
+    <path d="M 0 0 C -20 -60 -10 -120 30 -160 C 10 -100 20 -50 0 0 Z" fill="#f59e0b" filter="url(#tw2_glow)"/>
+    <line x1="0" y1="0" x2="-5" y2="40" stroke="#ffffff" stroke-width="4" stroke-linecap="round"/>
+  </g>
+
+  <!-- Right Arm holding Task List Scroll -->
+  <path d="M 480 290 L 580 320 L 540 440" fill="none" stroke="#c084fc" stroke-width="16" stroke-linecap="round"/>
+
+  <!-- Task List Scroll / Board -->
+  <g transform="translate(480, 320) rotate(8)">
+    <rect x="0" y="0" width="200" height="260" rx="14" fill="#0f172a" stroke="#8b5cf6" stroke-width="4" filter="url(#tw2_glow)"/>
+    <rect x="14" y="16" width="172" height="228" rx="8" fill="#1e293b"/>
+    <text x="25" y="44" fill="#a78bfa" font-family="system-ui, sans-serif" font-size="16" font-weight="bold">TASK CHRONICLE</text>
+    <line x1="25" y1="52" x2="175" y2="52" stroke="#475569" stroke-width="2"/>
+
+    <!-- Entry 1 -->
+    <rect x="25" y="65" width="150" height="42" rx="6" fill="#334155"/>
+    <text x="35" y="84" fill="#ffffff" font-family="system-ui, sans-serif" font-size="13" font-weight="bold">Build Pipeline</text>
+    <rect x="35" y="92" width="55" height="12" rx="4" fill="#38bdf8"/>
+    <text x="62" y="101" text-anchor="middle" fill="#0f172a" font-family="system-ui, sans-serif" font-size="9" font-weight="bold">eff: LOW</text>
+    <rect x="95" y="92" width="55" height="12" rx="4" fill="#f59e0b"/>
+    <text x="122" y="101" text-anchor="middle" fill="#0f172a" font-family="system-ui, sans-serif" font-size="9" font-weight="bold">scope: 1d</text>
+
+    <!-- Entry 2 -->
+    <rect x="25" y="115" width="150" height="42" rx="6" fill="#334155"/>
+    <text x="35" y="134" fill="#ffffff" font-family="system-ui, sans-serif" font-size="13" font-weight="bold">Refactor Core</text>
+    <rect x="35" y="142" width="55" height="12" rx="4" fill="#ef4444"/>
+    <text x="62" y="151" text-anchor="middle" fill="#ffffff" font-family="system-ui, sans-serif" font-size="9" font-weight="bold">eff: HIGH</text>
+    <rect x="95" y="142" width="55" height="12" rx="4" fill="#10b981"/>
+    <text x="122" y="151" text-anchor="middle" fill="#0f172a" font-family="system-ui, sans-serif" font-size="9" font-weight="bold">scope: 3d</text>
+
+    <!-- Entry 3 -->
+    <rect x="25" y="165" width="150" height="42" rx="6" fill="#334155"/>
+    <text x="35" y="184" fill="#ffffff" font-family="system-ui, sans-serif" font-size="13" font-weight="bold">Doc Update</text>
+    <rect x="35" y="192" width="55" height="12" rx="4" fill="#10b981"/>
+    <text x="62" y="201" text-anchor="middle" fill="#0f172a" font-family="system-ui, sans-serif" font-size="9" font-weight="bold">eff: MIN</text>
+    <rect x="95" y="192" width="55" height="12" rx="4" fill="#38bdf8"/>
+    <text x="122" y="201" text-anchor="middle" fill="#0f172a" font-family="system-ui, sans-serif" font-size="9" font-weight="bold">scope: 0.5d</text>
+  </g>
+
+  <!-- Floating Rule Shield Sign (Uneingestuft = Unsichtbar) -->
+  <g transform="translate(100, 190) rotate(-8)">
+    <rect x="0" y="0" width="220" height="70" rx="14" fill="#ef4444" stroke="#ffffff" stroke-width="3" filter="url(#tw2_glow)"/>
+    <text x="110" y="30" text-anchor="middle" fill="#ffffff" font-family="system-ui, sans-serif" font-size="13" font-weight="900">UNEINGESTUFTE AUFGABE</text>
+    <text x="110" y="52" text-anchor="middle" fill="#fef08a" font-family="system-ui, sans-serif" font-size="15" font-weight="900">= UNSICHTBAR =</text>
+  </g>
+
+  <!-- Head & Glasses -->
+  <rect x="385" y="235" width="30" height="40" fill="#fde047"/>
+  <rect x="340" y="130" width="120" height="115" rx="32" fill="#fef08a" stroke="#0d1117" stroke-width="5"/>
+
+  <!-- Round Scribe Glasses -->
+  <circle cx="370" cy="180" r="22" fill="none" stroke="#7c3aed" stroke-width="5"/>
+  <circle cx="430" cy="180" r="22" fill="none" stroke="#7c3aed" stroke-width="5"/>
+  <line x1="392" y1="180" x2="408" y2="180" stroke="#7c3aed" stroke-width="5"/>
+
+  <!-- Eyes behind glasses -->
+  <circle cx="370" cy="180" r="7" fill="#0d1117"/>
+  <circle cx="430" cy="180" r="7" fill="#0d1117"/>
+  <circle cx="372" cy="177" r="2" fill="#ffffff"/>
+  <circle cx="432" cy="177" r="2" fill="#ffffff"/>
+
+  <!-- Thoughtful Smile -->
+  <path d="M 380 215 Q 400 225 420 215" fill="none" stroke="#0d1117" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- Title Badge -->
+  <rect x="180" y="705" width="440" height="54" rx="27" fill="#1e1b4b" stroke="#8b5cf6" stroke-width="3"/>
+  <text x="400" y="740" text-anchor="middle" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="22" font-weight="bold" letter-spacing="1">TASKWRITER · Effort &amp; Scope</text>
+</svg>
