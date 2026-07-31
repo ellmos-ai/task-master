@@ -1,0 +1,190 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <!-- Background Gradients -->
+    <linearGradient id="bg_grad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0d1117"/>
+      <stop offset="50%" stop-color="#161b22"/>
+      <stop offset="100%" stop-color="#0d1117"/>
+    </linearGradient>
+
+    <!-- Zen Robe Gradients -->
+    <linearGradient id="robe_grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f8fafc"/>
+      <stop offset="100%" stop-color="#e2e8f0"/>
+    </linearGradient>
+    <linearGradient id="obi_grad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+
+    <!-- Word Block Gradients -->
+    <linearGradient id="brick_task" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f97316"/>
+      <stop offset="100%" stop-color="#c2410c"/>
+    </linearGradient>
+    <linearGradient id="brick_master" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#0284c7"/>
+    </linearGradient>
+
+    <!-- Glow Filters -->
+    <filter id="impact_glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="10" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+    <filter id="badge_glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <!-- Outer Canvas & Dark Tech Background -->
+  <rect width="1200" height="630" rx="36" fill="url(#bg_grad)"/>
+  <rect x="24" y="24" width="1152" height="582" rx="28" fill="none" stroke="#58a6ff" stroke-width="2" stroke-opacity="0.3"/>
+
+  <!-- Tech Grid Background Lines -->
+  <path d="M 60 140 H 1140 M 60 280 H 1140 M 60 420 H 1140" stroke="#30363d" stroke-width="2" stroke-dasharray="8,8" opacity="0.4"/>
+  <path d="M 200 60 V 570 M 400 60 V 570 M 600 60 V 570 M 800 60 V 570 M 1000 60 V 570" stroke="#30363d" stroke-width="2" stroke-dasharray="8,8" opacity="0.4"/>
+
+  <!-- IMPACT ENERGY FLASH & RAYS (Behind Character/Blocks) -->
+  <g filter="url(#impact_glow)">
+    <circle cx="600" cy="355" r="90" fill="#38bdf8" opacity="0.25"/>
+    <circle cx="600" cy="355" r="50" fill="#f59e0b" opacity="0.35"/>
+  </g>
+  
+  <!-- Energy Rays radiating from impact point -->
+  <g stroke-linecap="round" opacity="0.7">
+    <line x1="600" y1="355" x2="480" y2="240" stroke="#f59e0b" stroke-width="3" stroke-dasharray="8,6"/>
+    <line x1="600" y1="355" x2="720" y2="240" stroke="#f59e0b" stroke-width="3" stroke-dasharray="8,6"/>
+    <line x1="600" y1="355" x2="440" y2="355" stroke="#38bdf8" stroke-width="4"/>
+    <line x1="600" y1="355" x2="760" y2="355" stroke="#38bdf8" stroke-width="4"/>
+    <line x1="600" y1="355" x2="500" y2="440" stroke="#ef4444" stroke-width="3"/>
+    <line x1="600" y1="355" x2="700" y2="440" stroke="#ef4444" stroke-width="3"/>
+  </g>
+
+  <!-- BROKEN WORD BLOCKS: "TASK" & "MASTER" -->
+  <!-- Block 1: "TASK" (Left side, split into two tilted pieces) -->
+  <g id="task_block">
+    <!-- TASK Left Piece ("TA") -->
+    <g transform="translate(370, 365) rotate(-14)">
+      <path d="M -120 -40 L 0 -40 L -8 -15 L 8 10 L -12 40 L -120 40 Z" fill="url(#brick_task)" stroke="#0d1117" stroke-width="5" stroke-linejoin="round"/>
+      <!-- Inner Brick Outline Detail -->
+      <path d="M -110 -30 L -10 -30 L -16 -12 L 0 10 L -18 30 L -110 30 Z" fill="none" stroke="#ea580c" stroke-width="2"/>
+      <text x="-65" y="14" text-anchor="middle" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="44" font-weight="900" letter-spacing="2">TA</text>
+    </g>
+
+    <!-- TASK Right Piece ("SK") -->
+    <g transform="translate(485, 380) rotate(10)">
+      <path d="M 0 -40 L 110 -40 L 110 40 L -12 40 L 8 10 L -8 -15 Z" fill="url(#brick_task)" stroke="#0d1117" stroke-width="5" stroke-linejoin="round"/>
+      <path d="M 10 -30 L 100 -30 L 100 30 L -2 30 L 14 10 L -2 -12 Z" fill="none" stroke="#ea580c" stroke-width="2"/>
+      <text x="55" y="14" text-anchor="middle" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="44" font-weight="900" letter-spacing="2">SK</text>
+    </g>
+  </g>
+
+  <!-- Block 2: "MASTER" (Right side, split into two tilted pieces) -->
+  <g id="master_block">
+    <!-- MASTER Left Piece ("MAS") -->
+    <g transform="translate(710, 380) rotate(-10)">
+      <path d="M -130 -40 L 0 -40 L -10 -18 L 6 8 L -14 40 L -130 40 Z" fill="url(#brick_master)" stroke="#0d1117" stroke-width="5" stroke-linejoin="round"/>
+      <path d="M -120 -30 L -10 -30 L -18 -14 L -2 8 L -20 30 L -120 30 Z" fill="none" stroke="#0284c7" stroke-width="2"/>
+      <text x="-65" y="14" text-anchor="middle" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="40" font-weight="900" letter-spacing="2">MAS</text>
+    </g>
+
+    <!-- MASTER Right Piece ("TER") -->
+    <g transform="translate(830, 365) rotate(15)">
+      <path d="M 0 -40 L 130 -40 L 130 40 L -14 40 L 6 8 L -10 -18 Z" fill="url(#brick_master)" stroke="#0d1117" stroke-width="5" stroke-linejoin="round"/>
+      <path d="M 10 -30 L 120 -30 L 120 30 L -4 30 L 14 8 L -2 -14 Z" fill="none" stroke="#0284c7" stroke-width="2"/>
+      <text x="65" y="14" text-anchor="middle" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="40" font-weight="900" letter-spacing="2">TER</text>
+    </g>
+  </g>
+
+  <!-- FLYING SPLINTERS & BRICK FRAGMENTS -->
+  <g id="splinters">
+    <!-- Task fragments -->
+    <polygon points="570,330 585,320 580,340" fill="#f97316" stroke="#0d1117" stroke-width="2" transform="rotate(35, 575, 330)"/>
+    <polygon points="420,430 435,420 428,442" fill="#c2410c" stroke="#0d1117" stroke-width="2"/>
+    <rect x="540" y="415" width="14" height="14" rx="2" fill="#f97316" stroke="#0d1117" stroke-width="2" transform="rotate(22, 540, 415)"/>
+    <!-- Master fragments -->
+    <polygon points="625,325 640,320 632,340" fill="#38bdf8" stroke="#0d1117" stroke-width="2" transform="rotate(-40, 630, 330)"/>
+    <polygon points="760,435 775,425 770,448" fill="#0284c7" stroke="#0d1117" stroke-width="2"/>
+    <rect x="650" y="420" width="16" height="12" rx="2" fill="#38bdf8" stroke="#0d1117" stroke-width="2" transform="rotate(-18, 650, 420)"/>
+    <!-- Tiny spark dots -->
+    <circle cx="595" cy="320" r="4" fill="#ffffff"/>
+    <circle cx="605" cy="390" r="5" fill="#f59e0b"/>
+    <circle cx="585" cy="380" r="3" fill="#38bdf8"/>
+    <circle cx="615" cy="340" r="4" fill="#ffffff"/>
+  </g>
+
+  <!-- CHARACTER: ZEN MASTER -->
+  <!-- Left Arm (Back / Counter-balance pose) -->
+  <path d="M 530 190 L 460 215 L 420 260" fill="none" stroke="#f8fafc" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M 530 190 L 460 215 L 420 260" fill="none" stroke="#0d1117" stroke-width="32" stroke-linecap="round" stroke-linejoin="round" opacity="0.15"/>
+  <!-- Left Hand (Fist / Guard) -->
+  <circle cx="410" cy="270" r="18" fill="#fde047" stroke="#0d1117" stroke-width="4"/>
+
+  <!-- Torso & Robe (Kimono / Gi) -->
+  <path d="M 520 175 L 680 175 L 650 310 L 550 310 Z" fill="url(#robe_grad)" stroke="#0d1117" stroke-width="5" stroke-linejoin="round"/>
+  <!-- Robe V-Neck Overlap -->
+  <path d="M 550 175 L 600 240 L 650 175" fill="none" stroke="#0d1117" stroke-width="4" stroke-linecap="round"/>
+  <path d="M 570 175 L 600 210" fill="none" stroke="#cbd5e1" stroke-width="3"/>
+  <!-- Obi Belt -->
+  <rect x="540" y="290" width="120" height="26" rx="6" fill="url(#obi_grad)" stroke="#0d1117" stroke-width="4"/>
+  <path d="M 605 316 L 595 355 L 615 355 L 625 316" fill="#1e293b" stroke="#0d1117" stroke-width="3"/>
+
+  <!-- Neck -->
+  <rect x="585" y="145" width="30" height="35" fill="#fde047" stroke="#0d1117" stroke-width="4"/>
+
+  <!-- Right Arm (Striking Arm - Powerful Chop Downward!) -->
+  <path d="M 670 185 L 645 250 L 604 330" fill="none" stroke="#f8fafc" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M 670 185 L 645 250 L 604 330" fill="none" stroke="#0d1117" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- THE CHOP HAND (Flat Palm-Edge Karate Hand striking impact point at 600, 350) -->
+  <g transform="translate(600, 350) rotate(12)">
+    <!-- Hand edge / Open Palm Slice -->
+    <path d="M -16 -28 L 14 -28 L 18 12 L 4 28 L -16 18 Z" fill="#fde047" stroke="#0d1117" stroke-width="5" stroke-linejoin="round"/>
+    <!-- Thumb tucked in -->
+    <path d="M -12 -10 Q -4 -5 -12 2" fill="none" stroke="#0d1117" stroke-width="3" stroke-linecap="round"/>
+    <!-- Finger crease lines -->
+    <line x1="2" y1="-20" x2="10" y2="-20" stroke="#0d1117" stroke-width="2"/>
+    <line x1="4" y1="-10" x2="12" y2="-10" stroke="#0d1117" stroke-width="2"/>
+    <line x1="4" y1="0" x2="14" y2="0" stroke="#0d1117" stroke-width="2"/>
+  </g>
+
+  <!-- Impact Burst Flash at Hand-Edge Point -->
+  <path d="M 600 315 L 607 343 L 635 350 L 607 357 L 600 385 L 593 357 L 565 350 L 593 343 Z" fill="#ffffff" stroke="#0d1117" stroke-width="2"/>
+
+  <!-- Head (Zen Master) -->
+  <!-- Main Head Shape -->
+  <rect x="540" y="50" width="120" height="105" rx="32" fill="#fde047" stroke="#0d1117" stroke-width="5"/>
+
+  <!-- Topknot (Chonmage / Zen Bun) -->
+  <circle cx="600" cy="35" r="16" fill="#1e293b" stroke="#0d1117" stroke-width="4"/>
+  <rect x="590" y="42" width="20" height="8" rx="3" fill="#f59e0b" stroke="#0d1117" stroke-width="2"/>
+
+  <!-- Eyebrows (Focused & Determined Inward Tilt) -->
+  <path d="M 555 82 L 590 94" stroke="#0d1117" stroke-width="5" stroke-linecap="round"/>
+  <path d="M 645 82 L 610 94" stroke="#0d1117" stroke-width="5" stroke-linecap="round"/>
+
+  <!-- Eyes (Calm, Serene Zen Focus - Closed Concentrated Arcs) -->
+  <path d="M 560 102 Q 575 110 590 102" fill="none" stroke="#0d1117" stroke-width="4" stroke-linecap="round"/>
+  <path d="M 610 102 Q 625 110 640 102" fill="none" stroke="#0d1117" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- Zen Forehead Emblem (Third Eye Red Dot) -->
+  <circle cx="600" cy="74" r="5" fill="#ef4444"/>
+
+  <!-- Focused Serene Mouth -->
+  <path d="M 580 130 Q 600 138 620 130" fill="none" stroke="#0d1117" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- TITLE BADGE & POINTE SUBTITLE (Bottom Center) -->
+  <g transform="translate(600, 535)">
+    <!-- Outer Glow & Badge Background -->
+    <rect x="-360" y="-36" width="720" height="72" rx="36" fill="#161b22" stroke="#58a6ff" stroke-width="3" filter="url(#badge_glow)"/>
+    <rect x="-360" y="-36" width="720" height="72" rx="36" fill="none" stroke="#30363d" stroke-width="1"/>
+    
+    <!-- Main Title -->
+    <text x="0" y="-2" text-anchor="middle" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="34" font-weight="900" letter-spacing="2">TASKMASTER</text>
+    
+    <!-- Subtitle / Pointe -->
+    <text x="0" y="22" text-anchor="middle" fill="#8b949e" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="600" letter-spacing="1">breaks words, not bricks</text>
+  </g>
+</svg>

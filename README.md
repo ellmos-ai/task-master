@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/banner.svg" alt="TASKPLAN" width="100%">
+  <img src="assets/banner-zen.svg" alt="TASKPLAN" width="100%">
 </p>
 
 # TaskMaster
