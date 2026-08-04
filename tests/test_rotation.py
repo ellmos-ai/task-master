@@ -108,6 +108,36 @@ class TestRotationState(unittest.TestCase):
                 Path(last_project(state, "taskwriter")).as_posix(), "/p/second"
             )
 
+    def test_runner_applies_tasksolver_skip_cursor(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory) / "rotation.json"
+            remember_project(state, "tasksolver", "/p/first")
+            store = _Store([
+                {"id": 1, "title": "First", "priority": "medium",
+                 "status": "open", "assigned_to": "",
+                 "project_path": "/p/first", "root_id": ".AI",
+                 "effort": "easy", "scope": "local"},
+                {"id": 2, "title": "Second", "priority": "medium",
+                 "status": "open", "assigned_to": "",
+                 "project_path": "/p/second", "root_id": ".AI",
+                 "effort": "easy", "scope": "local"},
+            ])
+            with mock.patch.object(runner, "TaskClient", return_value=store), \
+                    mock.patch.object(runner, "_lock_view",
+                                      return_value=(LockView(), "lockmaster")), \
+                    mock.patch.object(runner, "active_roles",
+                                      return_value={"tasksolver": True}), \
+                    mock.patch.object(runner, "model_for",
+                                      return_value="test-model"), \
+                    mock.patch.object(runner, "selector_config",
+                                      return_value=SelectorConfig()), \
+                    mock.patch.object(runner, "rotation_state_file",
+                                      return_value=state):
+                work = runner.next_work("tasksolver")
+
+            self.assertEqual(work["bundle"]["project_path"], "/p/second")
+            self.assertEqual(work["rotation"]["previous_project"], "/p/first")
+
     def test_cli_skip_records_the_cursor(self):
         with tempfile.TemporaryDirectory() as directory:
             state = Path(directory) / "rotation.json"
@@ -119,7 +149,7 @@ class TestRotationState(unittest.TestCase):
             self.assertEqual(code, 0)
             self.assertEqual(last_project(state, "maintainer"), "/p/skip-me")
 
-    def test_cli_skip_supports_taskwriter_but_not_tasksolver(self):
+    def test_cli_skip_supports_all_project_roles(self):
         with tempfile.TemporaryDirectory() as directory:
             state = Path(directory) / "rotation.json"
             with mock.patch.object(cfg, "rotation_state_file",
@@ -134,11 +164,13 @@ class TestRotationState(unittest.TestCase):
                     "--project", "/p/solver-skip",
                 ])
             self.assertEqual(writer_code, 0)
-            self.assertEqual(solver_code, 2)
+            self.assertEqual(solver_code, 0)
             self.assertEqual(
                 last_project(state, "taskwriter"), "/p/writer-skip"
             )
-            self.assertEqual(last_project(state, "tasksolver"), "")
+            self.assertEqual(
+                last_project(state, "tasksolver"), "/p/solver-skip"
+            )
 
     def test_missing_or_invalid_state_starts_clean(self):
         with tempfile.TemporaryDirectory() as directory:

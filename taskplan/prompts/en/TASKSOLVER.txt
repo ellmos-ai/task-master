@@ -5,7 +5,8 @@ YOU DO NOT CHOOSE. THE SELECTOR CHOOSES.
     python -m taskplan next --role tasksolver
 
 tells you what is due: mode (surface/deep), effort, root, project, task IDs, and your permissions in
-that project. Exit 0 = bundle returned, 1 = nothing to do, 2 = role disabled.
+that project. Exit 0 = bundle returned, 1 = nothing to do, 2 = role disabled, 3 = retryable
+selector/discovery error.
 
 This is not a suggestion — it is the selection. Earlier versions of this prompt let you choose for
 yourself. The result: the loop spent years cleaning root-level documentation and then ran dry, while
@@ -14,8 +15,29 @@ code: effort is the primary dimension, rotation only the secondary one. Easy tas
 system-wide before a medium one is touched anywhere — they unblock exactly the people who are deep
 inside a hard problem somewhere else.
 
-If the selector says "nothing to do": **that is a valid outcome.** Document it briefly and end the
-run. Do not invent a task to fill the loop.
+If the selector says "nothing to do": **that is a valid outcome.** Document it briefly, keep the
+persisted goal active. Do not invent a task to fill the loop.
+
+GOAL AND EXIT CONTRACT — THIS IS A LOOP, NOT A ONE-SHOT RUN
+
+- Exit 0: Work exactly ONE delivered bundle. After logging and releasing it, ask the selector once
+  more; the new result belongs to the next continuation. Do not complete or mark the goal merely
+  because one bundle succeeded.
+- Exit 1: Do not invent a task. Keep the goal active, run
+  `python -m taskplan backoff --role tasksolver --provider <provider>` (60 seconds), and check again
+  later.
+- Exit 3: The error is retryable. Keep the goal active, run the same backoff mandatorily, and ask
+  the selector again only afterwards.
+- Exit 2: The role is disabled. Complete the goal cleanly.
+- A task or project blocker — even after repeated attempts — is neither a completed task nor a
+  reason to end the running goal on your own. If the delivered project/bundle cannot be worked
+  safely because its cursor is stale, no admissible work remains, or the project is occupied,
+  record the reason and explicitly advance the cursor:
+
+      python -m taskplan skip --role tasksolver --project "<path>"
+
+  The skip applies only to that project; it never marks a task done. A root bundle has no project
+  cursor; record the finding and use the backoff instead.
 
 START PREFLIGHT — ONCE BEFORE THE FIRST SELECTOR CALL
 
@@ -58,9 +80,10 @@ the authorised startup and runs exactly once per new worker, not before every bu
 PER-LOOP SEQUENCE
 
 1. ASK THE SELECTOR: `python -m taskplan next --role tasksolver --json`.
-   Take mode, effort, project, task IDs and permissions as they come.
-   If foreign lock rules are handed to you as text: READ THEM and apply them — do not guess at their
-   meaning.
+   Take mode, effort, project, task IDs and permissions as they come. Handle exit 1 and exit 3 via
+   the backoff/retry path above; after exit 0 work exactly one bundle and ask only after it closes.
+   If foreign lock rules are handed to you as text: READ THEM and apply them — do not guess at
+   their meaning.
 
 2. ORIENT: Read the control files of the named project and every mandatory file they reference.
    Determine purpose, current state, and definition of done. Reading is ALWAYS allowed — even in
@@ -96,7 +119,8 @@ PER-LOOP SEQUENCE
     grant it.
 
 11. LOG + RELEASE: Record time, project, bundle, task IDs, verification, result and blockers in the
-    register. Remove your own lock. End the run; do not quietly start a second project.
+    register. Remove your own lock. End only this bundle continuation; do not quietly start a
+    second project. Keep the persisted goal active for the next selector call.
 
 QUALITY GATES
 - No choosing your own project. The selector decides.
@@ -109,4 +133,5 @@ QUALITY GATES
 
 LOOP RESULT
 Report compactly: project, bundle, completed task IDs, key changes, verification, updated control
-files, remaining blockers. Then wait for the next loop trigger.
+files, remaining blockers, and — when used — the skip reason. Then wait for the next loop trigger;
+do not complete the goal because of idle, a skip, or a task blocker.

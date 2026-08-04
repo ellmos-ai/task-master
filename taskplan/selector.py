@@ -178,6 +178,48 @@ def _candidates(store: TaskStore, effort: str, locks: LockView,
     return out
 
 
+def _project_key(raw) -> str:
+    """Normalisiert einen Projektpfad fuer die Cursor-Rotation."""
+    try:
+        return Path(raw).as_posix().rstrip("/").lower()
+    except (TypeError, ValueError):
+        return str(raw).lower()
+
+
+def _rotate_solver_candidates(tasks: List[dict], after_project: str) -> List[dict]:
+    """Dreht Solver-Kandidaten nach einem expliziten Skip-Cursor.
+
+    Der TASKSOLVER arbeitet normalerweise das vom Selektor gelieferte
+    Aufgabenbuendel ab. Muss ein Projekt wegen eines belegten, veralteten oder
+    nicht zulaessigen Arbeitsstands uebersprungen werden, darf es den
+    persistenten Projekt-Cursor wie die projektbasierten Rollen nutzen. Die
+    Reihenfolge innerhalb eines Projekts bleibt stabil; nur die Projektgruppen
+    werden hinter ``after_project`` neu angeordnet.
+    """
+    if not after_project or not tasks:
+        return tasks
+
+    keys = []
+    for task in tasks:
+        key = _project_key(task.get("project_path") or "")
+        if key and key not in keys:
+            keys.append(key)
+
+    after_key = _project_key(after_project)
+    if after_key not in keys or len(keys) < 2:
+        return tasks
+
+    start = (keys.index(after_key) + 1) % len(keys)
+    order = keys[start:] + keys[:start]
+    rank = {key: index for index, key in enumerate(order)}
+    return sorted(
+        tasks,
+        key=lambda task: rank.get(
+            _project_key(task.get("project_path") or ""), len(order)
+        ),
+    )
+
+
 def _bundle_from(tasks: List[dict], mode: str, effort: str,
                  max_size: int) -> Bundle:
     """Bildet das kleinste sinnvolle Buendel: EIN Projekt, bis zu `max_size` Aufgaben.
@@ -393,6 +435,7 @@ def next_bundle(config: SelectorConfig, store: TaskStore,
         if not config.deep_enabled:
             continue
         deep = _candidates(store, effort, locks, surface=False)
+        deep = _rotate_solver_candidates(deep, after_project)
         if deep:
             return _bundle_from(deep, DEEP, effort, config.max_bundle_size)
 

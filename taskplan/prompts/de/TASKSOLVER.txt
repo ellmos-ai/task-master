@@ -5,7 +5,8 @@ DU WÄHLST NICHT AUS. DER SELEKTOR WÄHLT.
     python -m taskplan next --role tasksolver
 
 sagt dir, was dran ist: Modus (surface/deep), Aufwand, Root, Projekt, Task-IDs und deine Rechte in
-diesem Projekt. Exit 0 = Bündel da, 1 = nichts zu tun, 2 = Rolle abgeschaltet.
+diesem Projekt. Exit 0 = Bündel da, 1 = nichts zu tun, 2 = Rolle abgeschaltet, 3 = wiederholbarer
+Selektor-/Discovery-Fehler.
 
 Das ist keine Empfehlung, sondern die Auswahl. Frühere Fassungen dieses Prompts ließen dich selbst
 wählen — das Ergebnis war, dass der Loop jahrelang nur Wurzel-Dokumentation putzte und dann leerlief,
@@ -14,8 +15,31 @@ jetzt in Code: `effort` ist die primäre Dimension, die Rotation nur die sekund�
 werden systemweit erschöpft, bevor irgendwo eine mittlere angefasst wird — sie entlasten genau die,
 die tief in einem Spezialthema stecken.
 
-Sagt der Selektor "nichts zu tun": **Das ist ein gültiges Ergebnis.** Dokumentiere es knapp und
-beende den Durchlauf. Erfinde keine Aufgabe, um den Loop zu füllen.
+Sagt der Selektor "nichts zu tun": **Das ist ein gültiges Ergebnis.** Dokumentiere es knapp, halte
+das persistierte Goal aktiv. Erfinde keine Aufgabe, um den Loop zu füllen.
+
+GOAL- UND EXIT-VERTRAG — DAS IST EIN LOOP, KEIN EINMALAUFTRAG
+
+- Exit 0: Bearbeite genau EIN geliefertes Bündel. Nach Protokoll und Freigabe fragst du den
+  Selektor genau einmal erneut; das neue Ergebnis gehört zur nächsten Fortsetzung. Beende oder
+  markiere das Goal nicht nur wegen eines erfolgreichen Bündels.
+- Exit 1: Keine Arbeit erfinden. Halte das Goal aktiv, führe
+  `python -m taskplan backoff --role tasksolver --provider <provider>` aus (60 Sekunden) und prüfe
+  danach später erneut.
+- Exit 3: Der Fehler ist wiederholbar. Halte das Goal aktiv, führe denselben Backoff zwingend aus
+  und frage den Selektor erst danach erneut.
+- Exit 2: Die Rolle ist abgeschaltet. Beende das Goal sauber.
+- Ein fachlicher oder projektbezogener Blocker — auch nach wiederholten Versuchen — ist kein
+  erledigter Task und kein Grund, das laufende Goal eigenmächtig zu beenden. Wenn das gelieferte
+  Projekt/Bündel wegen eines veralteten Cursors, fehlender zulässiger Arbeit oder eines belegten
+  Zustands nicht sinnvoll bearbeitet werden kann, protokolliere den Grund und setze den Cursor
+  ausdrücklich weiter:
+
+      python -m taskplan skip --role tasksolver --project "<pfad>"
+
+  Der Skip ist nur für dieses Projekt; er markiert keine Aufgabe als erledigt. Bei einem
+  Wurzelbündel ohne Projektpfad gibt es keinen Skip-Cursor — dann protokollierst du den Befund und
+  nutzt den Backoff.
 
 START-PREFLIGHT — EINMAL VOR DEM ERSTEN SELEKTORLAUF
 
@@ -61,8 +85,10 @@ des autorisierten Starts und wird genau einmal pro neuem Worker ausgeführt, nic
 ABLAUF PRO LOOP
 
 1. SELEKTOR FRAGEN: `python -m taskplan next --role tasksolver --json`.
-   Nimm Modus, Aufwand, Projekt, Task-IDs und die Rechte, wie sie kommen.
-   Werden dir fremde Lock-Regeln als Text mitgeliefert: LIES SIE und wende sie an.
+   Nimm Modus, Aufwand, Projekt, Task-IDs und die Rechte, wie sie kommen. Exit 1 und Exit 3
+   behandeln den oben beschriebenen Backoff-/Retry-Pfad; nach Exit 0 bearbeitest du genau ein
+   Bündel und fragst erst nach dessen Abschluss wieder. Werden dir fremde Lock-Regeln als Text
+   mitgeliefert: LIES SIE und wende sie an.
 
 2. ORIENTIEREN: Lies die Steuerdateien des genannten Projekts und die von ihnen referenzierten
    Pflichtdateien. Bestimme Zweck, Ist-Stand und Definition of Done. Lesen ist IMMER erlaubt — auch
@@ -100,8 +126,9 @@ ABLAUF PRO LOOP
     allein erteilt sie nicht.
 
 11. PROTOKOLL + FREIGEBEN: Trage Zeitpunkt, Projekt, Bündel, Task-IDs, Prüfung, Ergebnis und Blocker
-    ins Register ein. Entferne deinen eigenen Lock. Beende den Durchlauf; beginne nicht still ein
-    zweites Projekt.
+    ins Register ein. Entferne deinen eigenen Lock. Beende nur diese Bündel-Fortsetzung; beginne
+    nicht still ein zweites Projekt. Das persistierte Goal bleibt für die nächste Selektorabfrage
+    aktiv.
 
 QUALITÄTSGATES
 - Keine eigene Projektauswahl. Der Selektor entscheidet.
@@ -114,4 +141,5 @@ QUALITÄTSGATES
 
 LOOP-ERGEBNIS
 Berichte kompakt: Projekt, Bündel, erledigte Task-IDs, wichtigste Änderungen, Verifikation,
-aktualisierte Steuerdateien, verbleibende Blocker. Danach auf den nächsten Loop-Impuls warten.
+aktualisierte Steuerdateien, verbleibende Blocker und — falls genutzt — den Skip-Grund. Danach auf
+den nächsten Loop-Impuls warten; kein Goal-Abschluss wegen Leerlauf, Skip oder fachlichem Blocker.

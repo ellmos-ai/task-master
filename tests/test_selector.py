@@ -267,6 +267,17 @@ class TestBundling(unittest.TestCase):
         bundle = next_bundle(config, store, self.locks)
         self.assertEqual(len(bundle), 2)
 
+    def test_solver_skip_cursor_advances_to_next_project(self):
+        store = FakeStore([
+            task("A1", effort="easy", project="/p/a", root=".AI"),
+            task("B1", effort="easy", project="/p/b", root=".AI"),
+        ])
+        bundle = next_bundle(
+            self.config, store, self.locks, after_project="/p/a"
+        )
+        self.assertIsNotNone(bundle)
+        self.assertEqual(bundle.project_path, "/p/b")
+
 
 if __name__ == "__main__":
     unittest.main()

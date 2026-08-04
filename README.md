@@ -118,12 +118,13 @@ Project-only MAINTAINER bundles and TASKWRITER discovery sweeps intentionally
 contain no task IDs. The selector stores a separate cursor for each role atomically
 at `~/.taskplan/rotation-state.json` (configurable with
 `[loop].rotation_state_file`) and advances to the next candidate on the next run.
-This cursor does not rotate away from a real, still-unprocessed task bundle. A
-project with no evidenced maintenance work or new task can be skipped explicitly:
+The TASKSOLVER normally advances by completing its task bundle; when a stale or
+temporarily unusable project must be bypassed, it can use the same explicit cursor:
 
 ```bash
 python -m taskplan skip --role maintainer --project "<path>"
 python -m taskplan skip --role taskwriter --project "<path>"
+python -m taskplan skip --role tasksolver --project "<path>"
 ```
 
 New tasks remain the responsibility of the TASKWRITER/TASKSOLVER flow.

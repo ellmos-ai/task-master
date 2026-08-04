@@ -33,7 +33,10 @@ from .locks import CREATE, MODIFY, READ, build_lock_view
 from .rotation import last_project, remember_project
 from .selector import next_bundle
 
-PROJECT_ROTATION_ROLES = ("taskwriter", "maintainer")
+# All project-oriented roles can explicitly advance their own cursor.  The
+# solver normally advances by completing tasks; ``taskplan skip`` is the
+# escape hatch for a stale or temporarily unusable bundle.
+PROJECT_ROTATION_ROLES = ("taskwriter", "maintainer", "tasksolver")
 
 
 class ProjectDiscoveryTimeout(TimeoutError):

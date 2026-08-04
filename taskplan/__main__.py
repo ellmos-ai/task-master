@@ -288,12 +288,12 @@ def main(argv: list[str] | None = None) -> int:
         project = _option(rest, "--project", "")
         if not project:
             print("Nutzung: python -m taskplan skip "
-                  "--role <maintainer|taskwriter> "
+                  "--role <maintainer|taskwriter|tasksolver> "
                   "--project <pfad>", file=sys.stderr)
             return 2
-        if role not in ("maintainer", "taskwriter"):
+        if role not in ("maintainer", "taskwriter", "tasksolver"):
             print("skip ist nur für projektbasierte Rollen verfügbar: "
-                  "maintainer oder taskwriter.",
+                  "maintainer, taskwriter oder tasksolver.",
                   file=sys.stderr)
             return 2
         if not remember_project(rotation_state_file(), role, project):
@@ -348,7 +348,7 @@ def main(argv: list[str] | None = None) -> int:
         print("  starters list | starters path --role R --provider P")
         print("            Listet bzw. lokalisiert die gebündelten Windows-Starter.")
         print()
-        print("  skip --role <maintainer|taskwriter> --project PFAD")
+        print("  skip --role <maintainer|taskwriter|tasksolver> --project PFAD")
         print("            Setzt den Projekt-Cursor der Rolle hinter ein Projekt,")
         print("            damit der nächste Lauf den nächsten Kandidaten nimmt.")
         print()

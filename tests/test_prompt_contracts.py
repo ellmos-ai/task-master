@@ -35,6 +35,16 @@ class TestSolverDefersToSelector(unittest.TestCase):
         """Ehrlicher Leerlauf statt erfundener Arbeit."""
         self.assertIn("Erfinde keine Aufgabe", TASKSOLVER)
 
+    def test_solver_keeps_the_goal_running(self):
+        flat = _flat(TASKSOLVER)
+        self.assertIn("persistierte Goal aktiv", flat)
+        self.assertIn("Exit 1", flat)
+        self.assertIn("Exit 3", flat)
+        self.assertIn("taskplan backoff", flat)
+
+    def test_solver_can_advance_a_stale_project_cursor(self):
+        self.assertIn("skip --role tasksolver", TASKSOLVER)
+
     def test_solver_must_not_write_origin_fields(self):
         self.assertIn("assigned_to", TASKSOLVER)
         self.assertIn("created_by", TASKSOLVER)

@@ -121,13 +121,14 @@ Reine MAINTAINER-Projektbündel und TASKWRITER-Erfassungsläufe enthalten
 absichtlich keine Task-IDs. Der Selektor speichert für jede Rolle einen getrennten
 Cursor atomar unter `~/.taskplan/rotation-state.json` (konfigurierbar über
 `[loop].rotation_state_file`) und liefert beim nächsten Lauf den nächsten
-Kandidaten. Von einem echten, noch unbearbeiteten Task-Bündel rotiert der Cursor
-nicht weg. Ein Projekt ohne nachweisbaren Pflegebefund oder neue Aufgabe kann
-ausdrücklich übersprungen werden:
+Kandidaten. Der TASKSOLVER rückt normalerweise durch das Erledigen seines
+Task-Bündels weiter; ein veraltetes oder vorübergehend nicht bearbeitbares Projekt
+kann mit demselben expliziten Cursor übersprungen werden:
 
 ```bash
 python -m taskplan skip --role maintainer --project "<pfad>"
 python -m taskplan skip --role taskwriter --project "<pfad>"
+python -m taskplan skip --role tasksolver --project "<pfad>"
 ```
 
 Neue Aufgaben bleiben der TASKWRITER-/TASKSOLVER-Rollenstrecke vorbehalten.
