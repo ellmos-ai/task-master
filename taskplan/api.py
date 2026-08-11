@@ -84,7 +84,10 @@ def add(title: str, description: str = "", priority: str = "medium",
 
 
 def add_from_ticket(ticket_id: str, title: str, description: str = "",
-                    priority: str = "medium", tags: str = "") -> Dict:
+                    priority: str = "medium", tags: str = "",
+                    effort: str = "", scope: str = "local",
+                    project_path: str = "", root_id: str = "",
+                    source: str = "") -> Dict:
     """Leitet aus einem Ticket einen Task ab (Tickets != Tasks).
 
     Tickets (z. B. dateibasierte Ticket-Systeme, IDs wie T-YYYYMMDD-NN)
@@ -93,11 +96,27 @@ def add_from_ticket(ticket_id: str, title: str, description: str = "",
     das Tag `ticket:<id>` auf das Quell-Ticket. Das Ticket selbst lebt
     unveraendert in seinem eigenen System weiter -- taskplan importiert,
     spiegelt oder verwaltet keine Tickets.
+
+    Dieselbe Luecke wie bei `add()`/`list()` (siehe Commit 00699ca): Ohne
+    `effort`/`scope`/`project_path`/`root_id`/`source` blieb ein aus einem
+    Ticket erzeugter Task unklassifiziert und fiel beim Effort-Gate des
+    Selektors auf die Degradierung zurueck. Die Felder werden additiv
+    durchgereicht -- `created_by`/`assigned_to` bleiben aus denselben
+    Gruenden wie bei `add()` aussen vor.
+
+    Kein Konflikt mit der Ticket-Referenz: Die Kennung `ticket:<id>` lebt
+    weiterhin ausschliesslich in `tags` (unveraendertes Verhalten). `source`
+    ist ein eigenstaendiges Feld mit anderer Bedeutung -- die Fundstelle der
+    Aufgabe (z. B. ein Dateiname wie "TODO.md", siehe TaskClient.source /
+    `_parse_tag_string`), nicht die Ticket-ID. Wird `source` hier nicht
+    gesetzt, bleibt es leer; die Ticket-Zuordnung ist davon unberuehrt.
     """
     ref = f"ticket:{ticket_id}"
     combined = f"{tags},{ref}" if tags else ref
     return get_client().add(title, description=description,
-                            priority=priority, tags=combined)
+                            priority=priority, tags=combined, effort=effort,
+                            scope=scope, project_path=project_path,
+                            root_id=root_id, source=source)
 
 
 def list(status: Optional[str] = None, priority: Optional[str] = None,

@@ -24,7 +24,7 @@
 
 ---
 
-### Befund 3 (offen): `api.add_from_ticket()` leitet Klassifikationsfelder nicht durch
+### Befund 3 (erledigt): `api.add_from_ticket()` leitet Klassifikationsfelder nicht durch
 
 - **Erfasst am:** 2026-08-12 (AP5-Nacharbeit, ASUS-GEI)
 - **Fundort:** `taskplan/api.py`, Funktion `add_from_ticket()`
@@ -38,5 +38,12 @@
 - **Vorschlag:** gleiches Passthrough-Muster wie in `00699ca` anwenden
   (optionale Parameter mit rückwärtskompatiblen Defaults) + Tests analog
   `TestTasksApi`.
-- **Status:** offen — bewusst nicht im AP5-Scope gefixt (war nicht Teil der
-  Definition of Done).
+- **Behoben am:** 2026-08-12 (AP6, ASUS-GEI), siehe `CHANGELOG.md` (Abschnitt
+  Unreleased/Fixed) und Git-Log (Folgecommit zu `00699ca`).
+  `add_from_ticket()` reicht `effort`/`scope`/`project_path`/`root_id`/`source`
+  additiv durch (`created_by`/`assigned_to` bewusst weiterhin ausgeschlossen,
+  wie bei `add()`). Die Ticket-Referenz bleibt unverändert ausschließlich in
+  `tags` als `ticket:<id>` kodiert; `source` ist ein eigenständiges Feld ohne
+  Kollision. 4 neue Tests in `tests/test_taskplan.py` (`TestTasksApi`), volle
+  Suite 295/295 grün.
+- **Status:** erledigt.

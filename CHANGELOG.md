@@ -16,6 +16,15 @@
 - `python -m taskplan help` nennt jetzt auch `projects` (list/refresh/add/
   remove/flag/unflag/markers) — der Befehl war im Dispatch von `main()`
   längst implementiert, fehlte aber vollständig im Hilfetext.
+- `api.add_from_ticket()` reicht jetzt ebenfalls `effort`/`scope`/
+  `project_path`/`root_id`/`source` durch — dieselbe Lücke wie oben, nur für
+  die Ticket-Brücke. Ein aus einem Ticket erzeugter Task blieb bisher
+  unklassifiziert und fiel beim Effort-Gate des Selektors auf die
+  Degradierung zurück. Die Ticket-Referenz bleibt unverändert ausschließlich
+  in `tags` als `ticket:<id>` kodiert; `source` ist ein eigenständiges Feld
+  (die Fundstelle, z. B. ein Dateiname) und kollidiert damit nicht.
+  `created_by`/`assigned_to` bleiben aus denselben Gründen wie bei `add()`
+  außen vor.
 - Windows-Pfad-Docstring im Traversal-Test als Raw-String markiert, damit `python -m pytest` ohne `SyntaxWarning` läuft.
 - TOML-Konfigurationstests überspringen Python 3.10 korrekt, wenn `tomllib` als Stdlib-Modul noch nicht verfügbar ist.
 - Die Projekt-Discovery invalidiert ihr Inventar nicht mehr durch fachfremde Modell-/Provider-Konfigurationsänderungen. Ein 24-Stunden-Refresh erfolgt Root-sektorweise; bei Timeout bleibt der vollständig geschriebene Last-known-good-Sektor aktiv und ein hängender Root rotiert hinter andere fällige Sektoren.

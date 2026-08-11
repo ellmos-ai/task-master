@@ -225,6 +225,53 @@ class TestTasksApi(unittest.TestCase):
         self.assertEqual(self.api.get(task['id'])['tags'],
                          "ticket:T-20260711-02")
 
+    def test_add_from_ticket_forwards_classification_fields(self):
+        """Befund 3 (BEFUNDE.md): dieselbe Luecke wie bei add()/list() (00699ca),
+        nur fuer die Ticket-Bruecke. Ein aus einem Ticket erzeugter Task war
+        unklassifiziert und fiel beim Effort-Gate des Selektors auf die
+        Degradierung zurueck."""
+        task = self.api.add_from_ticket(
+            "T-20260812-01", "Aus Ticket klassifiziert", priority="high",
+            effort="easy", scope="central", project_path="/repos/foo",
+            root_id="OSS", source="TODO.md")
+        fetched = self.api.get(task['id'])
+        self.assertEqual(fetched['effort'], "easy")
+        self.assertEqual(fetched['scope'], "central")
+        self.assertEqual(fetched['project_path'], "/repos/foo")
+        self.assertEqual(fetched['root_id'], "OSS")
+        self.assertEqual(fetched['source'], "TODO.md")
+
+    def test_add_from_ticket_source_does_not_collide_with_ticket_tag(self):
+        """`source` und die Ticket-Referenz sind unabhaengige Felder: Die
+        Ticket-ID lebt ausschliesslich in `tags` als `ticket:<id>` (unveraendert),
+        `source` traegt separat die Fundstelle. Beide muessen nebeneinander
+        bestehen, ohne sich zu ueberschreiben."""
+        task = self.api.add_from_ticket(
+            "T-20260812-02", "Mit Quelle und Tags", tags="infra",
+            source="scanner_tasks.py")
+        fetched = self.api.get(task['id'])
+        self.assertEqual(fetched['tags'], "infra,ticket:T-20260812-02")
+        self.assertEqual(fetched['source'], "scanner_tasks.py")
+
+    def test_add_from_ticket_defaults_stay_unclassified(self):
+        """Ohne explizite Angabe bleibt effort leer (= unklassifiziert) und
+        scope 'local' -- exakt wie bei TaskClient.add()/api.add()."""
+        task = self.api.add_from_ticket("T-20260812-03", "Ohne Einstufung")
+        fetched = self.api.get(task['id'])
+        self.assertEqual(fetched['effort'], "")
+        self.assertEqual(fetched['scope'], "local")
+        self.assertEqual(fetched['source'], "")
+
+    def test_add_from_ticket_signature_matches_definition_of_done(self):
+        """Absichernder Spec-Test, analog zu api.add(): genau die 5 Felder;
+        created_by/assigned_to bleiben aus denselben Gruenden aussen vor."""
+        import inspect
+        sig = inspect.signature(self.api.add_from_ticket)
+        for name in ("effort", "scope", "project_path", "root_id", "source"):
+            self.assertIn(name, sig.parameters)
+        self.assertNotIn("created_by", sig.parameters)
+        self.assertNotIn("assigned_to", sig.parameters)
+
     def test_add_forwards_classification_fields(self):
         """DER Befund: das README-Quickstart-Beispiel ruft genau diese Felder
         auf, `TaskClient.add` unterstuetzt sie laengst -- nur die api-Fassade
