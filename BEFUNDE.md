@@ -21,3 +21,22 @@
   280 Unit-Tests und 21 Subtests bestanden 100% grün (`python -m pytest -q`).
 - **Maßnahme:**  
   `llms.txt` im MAINTAINER-Lauf vom 2026-07-28 auf `280/280 Tests 100% grün` und `Last-checked: 2026-07-28` aktualisiert.
+
+---
+
+### Befund 3 (offen): `api.add_from_ticket()` leitet Klassifikationsfelder nicht durch
+
+- **Erfasst am:** 2026-08-12 (AP5-Nacharbeit, ASUS-GEI)
+- **Fundort:** `taskplan/api.py`, Funktion `add_from_ticket()`
+- **Beleg:**  
+  Dieselbe Fehlerklasse wie die am 2026-08-12 in Commit `00699ca` behobenen
+  Lücken in `add()`/`list()`: `add_from_ticket()` reicht nur
+  `title/description/priority/tags` durch, obwohl `TaskClient` die
+  Schema-v2-Felder (`effort`, `scope`, `project_path`, `root_id`, `source`)
+  kennt. Ein aus einem Ticket erzeugter Task ist damit unklassifiziert und
+  fällt beim Effort-Gate des Selektors auf die Degradierung zurück.
+- **Vorschlag:** gleiches Passthrough-Muster wie in `00699ca` anwenden
+  (optionale Parameter mit rückwärtskompatiblen Defaults) + Tests analog
+  `TestTasksApi`.
+- **Status:** offen — bewusst nicht im AP5-Scope gefixt (war nicht Teil der
+  Definition of Done).
