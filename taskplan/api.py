@@ -63,10 +63,24 @@ def set_agent(agent_id: str) -> None:
 # === Task Operations ===
 
 def add(title: str, description: str = "", priority: str = "medium",
-        tags: str = "") -> Dict:
-    """Erstellt einen neuen Task."""
+        tags: str = "", effort: str = "", scope: str = "local",
+        project_path: str = "", root_id: str = "", source: str = "") -> Dict:
+    """Erstellt einen neuen Task.
+
+    Ohne die Einstufung (`effort`/`scope`/`project_path`/`root_id`/`source`)
+    war die Fassade eine Sackgasse: Das README-Quickstart-Beispiel ruft
+    genau diese Felder auf, und `TaskClient.add` (siehe client.py) trug sie
+    bereits — nur die Fassade reichte sie nicht durch. `created_by` und
+    `assigned_to` sind bewusst KEINE `add()`-Parameter: `created_by` wird
+    ausschliesslich aus `agent_id` gesetzt (unveraenderlich), `assigned_to`
+    ausschliesslich ueber `assign()` — genau die Trennung, die Schema v2
+    eingefuehrt hat, um die alte Vermischung von Anleger/Bearbeiter zu
+    beheben (siehe README "Who created it, who works on it").
+    """
     return get_client().add(title, description=description,
-                            priority=priority, tags=tags)
+                            priority=priority, tags=tags, effort=effort,
+                            scope=scope, project_path=project_path,
+                            root_id=root_id, source=source)
 
 
 def add_from_ticket(ticket_id: str, title: str, description: str = "",
@@ -87,10 +101,22 @@ def add_from_ticket(ticket_id: str, title: str, description: str = "",
 
 
 def list(status: Optional[str] = None, priority: Optional[str] = None,
-         include_done: bool = False, limit: Optional[int] = 50) -> List[Dict]:
-    """Listet Tasks auf (default: nur offene/aktive)."""
+         include_done: bool = False, limit: Optional[int] = 50,
+         effort: Optional[str] = None, scope: Optional[str] = None,
+         project_path: Optional[str] = None, root_id: Optional[str] = None,
+         assigned_to: Optional[str] = None) -> List[Dict]:
+    """Listet Tasks auf (default: nur offene/aktive).
+
+    Dieselbe Luecke wie bei `add()`: `TaskClient.list` unterstuetzt diese
+    Filter laengst (der Selektor braucht sie fuer "erst leichte, dann
+    mittlere"), die Fassade reichte sie nur nicht durch. Das README-
+    Quickstart-Beispiel ruft `tasks.list(effort="easy", scope="local")` auf.
+    """
     return get_client().list(status=status, priority=priority,
-                             include_done=include_done, limit=limit)
+                             include_done=include_done, limit=limit,
+                             effort=effort, scope=scope,
+                             project_path=project_path, root_id=root_id,
+                             assigned_to=assigned_to)
 
 
 def get(task_id: int) -> Optional[Dict]:

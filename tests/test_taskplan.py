@@ -225,6 +225,63 @@ class TestTasksApi(unittest.TestCase):
         self.assertEqual(self.api.get(task['id'])['tags'],
                          "ticket:T-20260711-02")
 
+    def test_add_forwards_classification_fields(self):
+        """DER Befund: das README-Quickstart-Beispiel ruft genau diese Felder
+        auf, `TaskClient.add` unterstuetzt sie laengst -- nur die api-Fassade
+        reichte sie bisher nicht durch und der Aufruf crashte mit
+        TypeError: add() got an unexpected keyword argument 'effort'."""
+        task = self.api.add("Fix encoding in docs", priority="high",
+                            effort="easy", project_path="/repos/foo",
+                            root_id="OSS")
+        fetched = self.api.get(task['id'])
+        self.assertEqual(fetched['effort'], "easy")
+        self.assertEqual(fetched['project_path'], "/repos/foo")
+        self.assertEqual(fetched['root_id'], "OSS")
+        self.assertEqual(fetched['scope'], "local")  # Default unveraendert
+
+    def test_add_forwards_scope_and_source(self):
+        task = self.api.add("Zentral", scope="central", source="TODO.md")
+        fetched = self.api.get(task['id'])
+        self.assertEqual(fetched['scope'], "central")
+        self.assertEqual(fetched['source'], "TODO.md")
+
+    def test_add_signature_matches_definition_of_done(self):
+        """Absichernder Spec-Test: genau die 5 Felder, die TaskClient.add
+        bereits kennt. `created_by`/`assigned_to` bleiben bewusst aussen vor
+        (siehe api.add Docstring) -- `created_by` ist unveraenderlich an
+        agent_id gebunden, `assigned_to` ist ausschliesslich `assign()`
+        vorbehalten."""
+        import inspect
+        sig = inspect.signature(self.api.add)
+        for name in ("effort", "scope", "project_path", "root_id", "source"):
+            self.assertIn(name, sig.parameters)
+        self.assertNotIn("created_by", sig.parameters)
+        self.assertNotIn("assigned_to", sig.parameters)
+
+    def test_list_forwards_classification_filters(self):
+        """Zweite Haelfte desselben README-Quickstart-Crashs: `api.list()`
+        kannte effort/scope/project_path/root_id/assigned_to ebenso wenig wie
+        `api.add()`. `tasks.list(effort="easy", scope="local")` crashte mit
+        TypeError: list() got an unexpected keyword argument 'effort'."""
+        self.api.add("leicht/lokal", effort="easy", scope="local")
+        self.api.add("leicht/zentral", effort="easy", scope="central")
+        self.api.add("mittel/lokal", effort="medium", scope="local")
+
+        easy_local = self.api.list(effort="easy", scope="local")
+        self.assertEqual([t['title'] for t in easy_local], ["leicht/lokal"])
+
+    def test_add_backward_compatible_with_positional_calls(self):
+        """Bestehende Aufrufe mit 1-4 Positionsargumenten duerfen sich durch
+        die neuen, angehaengten Parameter nicht aendern."""
+        task = self.api.add("Titel", "Beschreibung", "high", "tag1,tag2")
+        fetched = self.api.get(task['id'])
+        self.assertEqual(fetched['title'], "Titel")
+        self.assertEqual(fetched['description'], "Beschreibung")
+        self.assertEqual(fetched['priority'], "high")
+        self.assertEqual(fetched['tags'], "tag1,tag2")
+        self.assertEqual(fetched['effort'], "")
+        self.assertEqual(fetched['scope'], "local")
+
 
 class TestWorkflowPrompts(unittest.TestCase):
     def test_workflows_are_imported_from_taskplan(self):

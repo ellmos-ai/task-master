@@ -3,6 +3,19 @@
 ## Unreleased
 
 ### Fixed
+- `api.add()` und `api.list()` reichen jetzt die Einstufungsfelder
+  (`effort`, `scope`, `project_path`, `root_id`, `source` bzw. `assigned_to`)
+  durch an `TaskClient`, das sie bereits unterstützte — die Fassade allein
+  kannte sie nicht. Das README-Quickstart-Beispiel
+  (`tasks.add(..., effort="easy", project_path="/repos/foo", root_id="OSS")`
+  gefolgt von `tasks.list(effort="easy", scope="local")`) schlug bisher mit
+  `TypeError: unexpected keyword argument` fehl. `created_by`/`assigned_to`
+  bleiben bewusst keine `add()`-Parameter (siehe README "Who created it, who
+  works on it") — beide neuen Parameterlisten sind rückwärtskompatibel
+  angehängt, bestehende Aufrufe mit 1–4 Positionsargumenten sind unverändert.
+- `python -m taskplan help` nennt jetzt auch `projects` (list/refresh/add/
+  remove/flag/unflag/markers) — der Befehl war im Dispatch von `main()`
+  längst implementiert, fehlte aber vollständig im Hilfetext.
 - Windows-Pfad-Docstring im Traversal-Test als Raw-String markiert, damit `python -m pytest` ohne `SyntaxWarning` läuft.
 - TOML-Konfigurationstests überspringen Python 3.10 korrekt, wenn `tomllib` als Stdlib-Modul noch nicht verfügbar ist.
 - Die Projekt-Discovery invalidiert ihr Inventar nicht mehr durch fachfremde Modell-/Provider-Konfigurationsänderungen. Ein 24-Stunden-Refresh erfolgt Root-sektorweise; bei Timeout bleibt der vollständig geschriebene Last-known-good-Sektor aktiv und ein hängender Root rotiert hinter andere fällige Sektoren.
