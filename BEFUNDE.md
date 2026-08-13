@@ -47,3 +47,17 @@
   Kollision. 4 neue Tests in `tests/test_taskplan.py` (`TestTasksApi`), volle
   Suite 295/295 grün.
 - **Status:** erledigt.
+
+---
+
+### Befund 4: Prozess-/Locking-/Discovery-Benchmark (2026-08-13)
+
+- **Beleg:** `results/benchmark_locking_20260813.json` und das reproduzierbare
+  Skript `benchmarks/taskplan_locking.py`.
+- **Ergebnis:** 200 synthetische Projekte wurden erkannt, 80/80 parallele
+  SQLite-Schreibvorgänge gespeichert, und genau ein von vier Prozessen gewann
+  den gemeinsamen LockMaster-Claim; alle Prozesse sahen den Lock und wurden
+  von der autonomen Auswahl abgehalten.
+- **Grenze:** Der Lauf simuliert getrennte Prozesse auf einem lokalen
+  Dateisystem. Er ist kein Nachweis für SMB/NFS/OneDrive oder physisch getrennte
+  Maschinen; dafür bleibt ein separat autorisierter Live-Readback offen.

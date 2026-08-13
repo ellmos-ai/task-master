@@ -6,7 +6,7 @@
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![Lizenz: MIT](https://img.shields.io/badge/Lizenz-MIT-yellow.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-283%20bestanden-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-289%20bestanden-brightgreen.svg)](tests/)
 [![llms.txt](https://img.shields.io/badge/llms.txt-verf%C3%BCgbar-orange.svg)](llms.txt)
 
 **Deterministische Aufgabenauswahl für LLM-Agenten.** Keine Abhängigkeiten, nur
@@ -260,6 +260,21 @@ Nachbarn und nicht die ganze Pipeline.
 Anderes System, anderes Lock-Schema? `provider = "rules"` wertet **nichts** aus — es
 reicht die hinterlegten Regeldateien als *Text in den Prompt*. Lieber ein Agent, der
 die echte Regel liest, als ein Parser, der ihre Bedeutung errät.
+
+### Locking- und Discovery-Benchmark
+
+Das Repository enthält einen kostenfreien, nur die Standardbibliothek nutzenden
+Prozess-Benchmark für drei lokale Koordinationsflächen:
+
+```powershell
+python benchmarks/taskplan_locking.py --workers 4 --tasks-per-worker 20 --projects 200 --output results/benchmark_locking_YYYYMMDD.json
+```
+
+Er misst einen begrenzten Discovery-Scan, parallele SQLite-Task-Schreibvorgänge
+und einen LockMaster-Wettlauf um dieselbe `LOCK*.txt`-Datei mit Readback. Der Lauf
+ist ausdrücklich nur eine Simulation mehrerer Prozesse auf einem lokalen
+Dateisystem; SMB/NFS/OneDrive oder physische Mehrmaschinen werden damit nicht
+abgenommen. Siehe [`benchmarks/README.md`](benchmarks/README.md).
 
 ### Rollen, Modelle, Aufgabenquellen, Tiefe
 

@@ -6,7 +6,7 @@
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-283%20passed-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-289%20passed-brightgreen.svg)](tests/)
 [![llms.txt](https://img.shields.io/badge/llms.txt-available-orange.svg)](llms.txt)
 
 **Deterministic task selection for LLM agents.** Zero dependencies, stdlib only,
@@ -252,6 +252,20 @@ not the whole pipeline.
 Different system, different lock scheme? `provider = "rules"` evaluates **nothing** —
 it passes your rule files through as *text into the prompt*. Better an agent that
 reads the real rule than a parser that guesses at its meaning.
+
+### Locking and discovery benchmark
+
+The repository contains a cost-free, stdlib-only process benchmark for the three
+local coordination surfaces:
+
+```powershell
+python benchmarks/taskplan_locking.py --workers 4 --tasks-per-worker 20 --projects 200 --output results/benchmark_locking_YYYYMMDD.json
+```
+
+It measures a bounded discovery scan, concurrent SQLite task writes, and a
+same-resource `LOCK*.txt` race with LockMaster readback. The run is explicitly a
+local-process simulation; it does not certify SMB/NFS/OneDrive or physical
+multi-machine behavior. See [`benchmarks/README.md`](benchmarks/README.md).
 
 ### Roles, models, task sources, depth
 
