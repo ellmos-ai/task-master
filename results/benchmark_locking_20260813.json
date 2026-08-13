@@ -1,0 +1,56 @@
+{
+  "schema_version": "1.0",
+  "timestamp": "2026-08-13T05:25:33.744484+00:00",
+  "environment": {
+    "python": "3.12.10",
+    "implementation": "CPython",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "repository": "ellmos-ai/task-master",
+    "git_revision": "87b8da044e9efcb97cc11f6ef46f6760c0f12420"
+  },
+  "scope": {
+    "processes": 4,
+    "synthetic_discovery_projects": 200,
+    "shared_filesystem": "local-temporary",
+    "physical_machines_tested": false,
+    "network_filesystem_tested": false
+  },
+  "discovery": {
+    "synthetic_projects": 200,
+    "discovered_projects": 200,
+    "elapsed_s": 0.018787699984386563,
+    "projects_per_second": 10645.262600861688,
+    "pass": true
+  },
+  "sqlite_taskplan": {
+    "workers": 4,
+    "tasks_per_worker": 20,
+    "expected_writes": 80,
+    "successful_writes": 80,
+    "stored_tasks": 80,
+    "errors": [],
+    "elapsed_s": 2.078838200017344,
+    "writes_per_second": 38.48303345557751,
+    "pass": true
+  },
+  "lockmaster": {
+    "workers": 4,
+    "claim_attempts_per_worker": 1,
+    "claims_succeeded": 1,
+    "lock_files_after_race": [
+      "LOCK.benchmark.txt"
+    ],
+    "eager_scan_locks": 1,
+    "all_workers_saw_lock": true,
+    "all_workers_denied_selection": true,
+    "errors": [],
+    "elapsed_s": 0.5035662999725901,
+    "pass": true
+  },
+  "pass": true,
+  "limitations": [
+    "Separate processes on one local filesystem are a contention simulation.",
+    "This run does not certify SQLite WAL or file locks over SMB, NFS, or OneDrive.",
+    "A physical multi-machine acceptance run requires an authorized shared filesystem."
+  ]
+}
