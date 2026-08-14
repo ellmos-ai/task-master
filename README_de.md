@@ -6,7 +6,10 @@
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![Lizenz: MIT](https://img.shields.io/badge/Lizenz-MIT-yellow.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-289%20bestanden-brightgreen.svg)](tests/)
+[![Organisation: ellmos-ai](https://img.shields.io/badge/org-ellmos--ai-6366f1.svg)](https://github.com/ellmos-ai)
+[![Dachorganisation: open-bricks](https://img.shields.io/badge/umbrella-open--bricks-0ea5e9.svg)](https://github.com/open-bricks)
+[![Keine Abhängigkeiten](https://img.shields.io/badge/Abh%C3%A4ngigkeiten-keine%20(stdlib)-success.svg)](pyproject.toml)
+[![Tests](https://img.shields.io/badge/tests-302%20bestanden-brightgreen.svg)](tests/)
 [![llms.txt](https://img.shields.io/badge/llms.txt-verf%C3%BCgbar-orange.svg)](llms.txt)
 
 **Deterministische Aufgabenauswahl für LLM-Agenten.** Keine Abhängigkeiten, nur
@@ -38,6 +41,35 @@ deterministischer Selektor entscheidet, *was* dran ist; beim Modell bleibt das U
     → Tiefgang: LEICHT, in der nächsten Root
     → … bis KEINE Root mehr leichte Arbeit hat
     → erst dann: der mittlere Durchgang
+```
+
+```mermaid
+flowchart TD
+    subgraph Discovery["1. Projekt-Erfassung & Discovery"]
+        Roots["Konfigurierte Such-Wurzeln"] --> Scanner["Sektorisierter Scandir<br/>(Cloud-sicher & fehlerisoliert)"]
+        Scanner --> Cache[("LKG-Sektor-Cache<br/>~/.taskplan/")]
+    end
+
+    subgraph Selection["2. Deterministische Selektor-Engine"]
+        Cache --> NextBundle["next_bundle()"]
+        NextBundle --> LockGate{"3-Achsen Lock-Prüfung<br/>(Lesen / Erstellen / Ändern)"}
+        LockGate -->|Gesperrt / Fremd| Skip["Überspringen zum nächsten Kandidaten"]
+        LockGate -->|Frei| EffortGate{"Aufwands-Gate"}
+        EffortGate -->|easy| GlobalEasy["1. Global Leichter Durchgang<br/>(Alle Roots erschöpfen)"]
+        EffortGate -->|medium| MediumPass["2. Mittlerer Durchgang<br/>(Tiefe in einem Projekt)"]
+        EffortGate -->|large / special| NonAuto["Nicht-Autonomes Gate<br/>(Menschliche Entscheidung)"]
+    end
+
+    subgraph Execution["3. Rollen-Ausführung & Rotation"]
+        GlobalEasy --> Roles{"Aktive Rolle"}
+        MediumPass --> Roles
+        Roles -->|TASKWRITER| TW["TASKWRITER<br/>Aufgaben formalisieren & einstufen"]
+        Roles -->|TASKSOLVER| TS["TASKSOLVER<br/>Projektbündel abarbeiten & prüfen"]
+        Roles -->|MAINTAINER| MN["MAINTAINER<br/>Projekt- & Verzeichnishygiene"]
+        TS --> AtomicCursor[("Atomarer Rotations-Cursor<br/>~/.taskplan/rotation-state.json")]
+        TW --> AtomicCursor
+        MN --> AtomicCursor
+    end
 ```
 
 **Der Aufwand ist die primäre Sortierdimension, die Root-Rotation nur die
@@ -375,6 +407,16 @@ Status: `open`, `active`, `done`, `cancelled` · Prioritäten: `critical`, `high
 ```bash
 python -m pytest tests/ -q
 ```
+
+## Ökosystem & Verwandte Module
+
+`taskplan` ist Teil des [`ellmos-ai`](https://github.com/ellmos-ai)-Ökosystems unter dem Dach von [`open-bricks`](https://github.com/open-bricks):
+
+- [gardener](https://github.com/ellmos-ai/gardener) — Organisches Gedächtnis und quellenübergreifender Wissensindex
+- [workflowhooker](https://github.com/ellmos-ai/workflowhooker) — Deterministische Hook- und Lifecycle-Automatisierung für LLM-Workflows
+- [sqlite-transit-sync](https://github.com/ellmos-ai/sqlite-transit-sync) — Lokaler SQLite-Snapshot-Transport und Merge-Engine
+- [ticket-master](https://github.com/ellmos-ai/ticket-master) — Eigenständige Ticket- und Vorgangsverwaltung
+- [open-bricks](https://github.com/open-bricks) — Dachorganisation für modulare Entwicklerwerkzeuge
 
 ## Lizenz
 

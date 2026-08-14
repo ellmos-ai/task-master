@@ -46,7 +46,7 @@ class TestTaskClient(unittest.TestCase):
         self.assertEqual(titles, ["critical", "high", "medium", "low"])
 
     def test_list_excludes_done_and_cancelled_by_default(self):
-        t1 = self.client.add("bleibt")
+        self.client.add("bleibt")
         t2 = self.client.add("erledigt")
         t3 = self.client.add("storniert")
         self.client.done(t2['id'])
@@ -331,6 +331,11 @@ class TestTasksApi(unittest.TestCase):
 
 
 class TestWorkflowPrompts(unittest.TestCase):
+    def test_workflow_constants_are_exposed(self):
+        self.assertIsInstance(TASKSOLVER, str)
+        self.assertIsInstance(TASKWRITER, str)
+        self.assertIsInstance(MAINTAINER, str)
+
     def test_workflows_are_imported_from_taskplan(self):
         self.assertEqual(list_workflows(),
                          ("TASKSOLVER", "TASKWRITER", "MAINTAINER"))

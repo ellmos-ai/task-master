@@ -37,6 +37,7 @@
 - Projektbasierte TASKWRITER-Erfassungsläufe verwenden nun denselben rollenspezifischen, atomaren Rotationsmechanismus. Reale unklassifizierte Task-Bündel bleiben bis zur Bearbeitung stabil; nur leere Projekt-Sweeps rotieren weiter. `taskplan skip` unterstützt deshalb auch `taskwriter`.
 
 ### Added
+- Discoverability, README-Design & SEO-Check (Pfad B): Interaktive Mermaid-Architekturdiagramme für den 3-Rollen-Ablauf und das deterministische Selektor-Gate in `README.md` und `README_de.md` integriert, Ökosystem- und Dachorganisations-Badges (`ellmos-ai`, `open-bricks`, stdlib-only) ergänzt, `llms.txt` Verifikations- und Zeitstempel auf 2026-08-14 synchronisiert, Unused-Imports in Testsuite bereinigt (302/302 Tests 100% grün, Ruff sauber). [2026-08-14]
 - Reproduzierbarer `benchmarks/taskplan_locking.py` für begrenzte Discovery,
   parallele SQLite-TaskClient-Schreibvorgänge und LockMaster-Claim-/Readback;
   das lokale Prozess-Ergebnis vom 13.08.2026 liegt in

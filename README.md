@@ -6,7 +6,10 @@
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-289%20passed-brightgreen.svg)](tests/)
+[![Organization: ellmos-ai](https://img.shields.io/badge/org-ellmos--ai-6366f1.svg)](https://github.com/ellmos-ai)
+[![Umbrella: open-bricks](https://img.shields.io/badge/umbrella-open--bricks-0ea5e9.svg)](https://github.com/open-bricks)
+[![Zero Dependencies](https://img.shields.io/badge/dependencies-zero%20(stdlib)-success.svg)](pyproject.toml)
+[![Tests](https://img.shields.io/badge/tests-302%20passed-brightgreen.svg)](tests/)
 [![llms.txt](https://img.shields.io/badge/llms.txt-available-orange.svg)](llms.txt)
 
 **Deterministic task selection for LLM agents.** Zero dependencies, stdlib only,
@@ -37,6 +40,35 @@ is it safe? did it pass?*).
     → deep dive: EASY, in the next root
     → … until NO root has easy work left
     → only then: the medium pass
+```
+
+```mermaid
+flowchart TD
+    subgraph Discovery["1. Discovery & Inventory Scan"]
+        Roots["Configured Search Roots"] --> Scanner["Sectorized Scandir<br/>(Cloud-Safe & Error-Isolated)"]
+        Scanner --> Cache[("LKG Sector Cache<br/>~/.taskplan/")]
+    end
+
+    subgraph Selection["2. Deterministic Selector Engine"]
+        Cache --> NextBundle["next_bundle()"]
+        NextBundle --> LockGate{"3-Axis Lock Gate<br/>(Read / Create / Modify)"}
+        LockGate -->|Locked / Foreign| Skip["Skip to Next Candidate"]
+        LockGate -->|Unlocked| EffortGate{"Effort Gate"}
+        EffortGate -->|easy| GlobalEasy["1. Global Easy Pass<br/>(Exhaust All Roots)"]
+        EffortGate -->|medium| MediumPass["2. Medium Pass<br/>(Single Project Depth)"]
+        EffortGate -->|large / special| NonAuto["Non-Autonomous Gate<br/>(Prompt Text / Human)"]
+    end
+
+    subgraph Execution["3. Role Execution & Continuity"]
+        GlobalEasy --> Roles{"Active Role"}
+        MediumPass --> Roles
+        Roles -->|TASKWRITER| TW["TASKWRITER<br/>Formalize & Classify Tasks"]
+        Roles -->|TASKSOLVER| TS["TASKSOLVER<br/>Work & Verify Single Bundle"]
+        Roles -->|MAINTAINER| MN["MAINTAINER<br/>Project & Directory Hygiene"]
+        TS --> AtomicCursor[("Atomic Rotation Cursor<br/>~/.taskplan/rotation-state.json")]
+        TW --> AtomicCursor
+        MN --> AtomicCursor
+    end
 ```
 
 **Effort is the primary sort dimension; root rotation is only secondary.** Easy tasks
@@ -359,6 +391,16 @@ Statuses: `open`, `active`, `done`, `cancelled` · Priorities: `critical`, `high
 ```bash
 python -m pytest tests/ -q
 ```
+
+## Ecosystem & Related Modules
+
+`taskplan` is part of the [`ellmos-ai`](https://github.com/ellmos-ai) ecosystem under the [`open-bricks`](https://github.com/open-bricks) umbrella:
+
+- [gardener](https://github.com/ellmos-ai/gardener) — Organic memory and cross-source knowledge index
+- [workflowhooker](https://github.com/ellmos-ai/workflowhooker) — Deterministic hook and lifecycle automation for LLM workflows
+- [sqlite-transit-sync](https://github.com/ellmos-ai/sqlite-transit-sync) — Local SQLite snapshot transport and merge engine
+- [ticket-master](https://github.com/ellmos-ai/ticket-master) — Standalone ticket and issue tracking
+- [open-bricks](https://github.com/open-bricks) — Umbrella organization for modular development tools
 
 ## License
 
