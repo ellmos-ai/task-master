@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Fixed
+- Der TASKSOLVER-Vertrag begrenzt lokale Bündelfehler jetzt auf drei
+  dokumentierte Versuche, protokolliert danach einen SKIP-Grund und setzt die
+  Queue-Prüfung fort. `cldflt.sys`, Locks, Fremdzustände und übrige Gates bleiben
+  lokal fail-closed; es wurde keine neue Retry-Engine oder Task-Status-Semantik
+  erfunden.
 - AGY-Starter können über `TASKPLAN_AGY_SCHEDULE_MINUTES` einen expliziten,
   ablauflosen Schedule-Auftrag erzeugen. Der Auftrag hält jeden Worker-Lauf
   einmalig und verbietet eine Endlosschleife im laufenden Prozess.

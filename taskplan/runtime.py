@@ -45,13 +45,32 @@ def goal_objective(role: str, provider: str = "", lang: str | None = None) -> st
     wait_command = f"python -m taskplan backoff --role {normalized}"
     if profile["provider"]:
         wait_command += f" --provider {profile['provider']}"
+    retry_contract_de = (
+        "Zähle erfolglose Bearbeitungsversuche pro identischer Task-ID oder "
+        "identischem Bündel über Fortsetzungen hinweg. Nach dem dritten "
+        "Fehlschlag dokumentierst du den SKIP-Grund, lässt die Aufgabe offen, "
+        "setzt den Projektcursor weiter und fragst nach anderer autonomer "
+        "Arbeit; der Fehlschlag beendet das Goal nicht. Die Queue gilt erst "
+        "nach Prüfung aller erreichbaren Kandidaten als leer. "
+        if normalized == "tasksolver" else ""
+    )
+    retry_contract_en = (
+        "Count failed work attempts per identical task ID or bundle across "
+        "continuations. After the third failure, document the SKIP reason, "
+        "leave the task open, advance the project cursor, and ask for other "
+        "autonomous work; the failure does not end the goal. Treat the queue "
+        "as empty only after checking every reachable candidate. "
+        if normalized == "tasksolver" else ""
+    )
 
     if chosen == "de":
         return (
             f"Betreibe die TASKPLAN-Rolle {normalized.upper()} fortlaufend. "
             "Bearbeite pro Fortsetzung genau ein vom Selektor geliefertes Bündel "
             "und frage danach den Selektor erneut. Beende das Goal nicht nach "
-            "einem erfolgreichen Bündel. Exit 2 (Rolle deaktiviert) beendet das "
+            "einem erfolgreichen Bündel. "
+            + retry_contract_de
+            + "Exit 2 (Rolle deaktiviert) beendet das "
             "Goal sauber. Exit 3 ist ein wiederholbarer Selektor-/Discovery-Fehler: "
             f"Goal aktiv lassen und `{wait_command}` zwingend ausführen "
             f"(wartet {backoff} Sekunden), bevor erneut gefragt wird. "
@@ -66,7 +85,9 @@ def goal_objective(role: str, provider: str = "", lang: str | None = None) -> st
     return (
         f"Run the TASKPLAN role {normalized.upper()} continuously. Process exactly "
         "one selector-provided bundle per continuation, then ask the selector "
-        "again. Do not complete the goal after one successful bundle. Exit 2 "
+        "again. Do not complete the goal after one successful bundle. "
+        + retry_contract_en
+        + "Exit 2 "
         "(role disabled) completes the goal cleanly. Exit 3 is a retryable "
         "selector/discovery failure: keep the goal active and run "
         f"`{wait_command}` (waits {backoff} seconds) before retrying. On exit 1, "
