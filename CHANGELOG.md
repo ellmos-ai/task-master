@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Fixed
+- AGY-Starter können über `TASKPLAN_AGY_SCHEDULE_MINUTES` einen expliziten,
+  ablauflosen Schedule-Auftrag erzeugen. Der Auftrag hält jeden Worker-Lauf
+  einmalig und verbietet eine Endlosschleife im laufenden Prozess.
 - `api.add()` und `api.list()` reichen jetzt die Einstufungsfelder
   (`effort`, `scope`, `project_path`, `root_id`, `source` bzw. `assigned_to`)
   durch an `TaskClient`, das sie bereits unterstützte — die Fassade allein

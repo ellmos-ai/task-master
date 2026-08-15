@@ -26,6 +26,7 @@ TRUST_ENV = "TASKPLAN_TRUSTED_AUTOMATION"
 WORKDIR_ENV = "TASKPLAN_WORKDIR"
 DRY_RUN_ENV = "TASKPLAN_STARTER_DRY_RUN"
 CLAUDE_MCP_ENV = "TASKPLAN_CLAUDE_MCP_CONFIG"
+AGY_SCHEDULE_MINUTES_ENV = "TASKPLAN_AGY_SCHEDULE_MINUTES"
 
 
 def normalize_provider(provider: str) -> str:
@@ -73,7 +74,23 @@ def _provider_command(
         )
 
     prompt_path = get_workflow_prompt_path(role.upper())
-    request = startup_prompt(role, provider)
+    schedule_minutes = None
+    if provider == "agy":
+        raw_schedule = env.get(AGY_SCHEDULE_MINUTES_ENV, "").strip()
+        if raw_schedule:
+            try:
+                schedule_minutes = int(raw_schedule)
+            except ValueError as exc:
+                raise ValueError(
+                    f"{AGY_SCHEDULE_MINUTES_ENV} muss eine positive Ganzzahl sein"
+                ) from exc
+            if schedule_minutes <= 0:
+                raise ValueError(
+                    f"{AGY_SCHEDULE_MINUTES_ENV} muss eine positive Ganzzahl sein"
+                )
+    request = startup_prompt(
+        role, provider, schedule_minutes=schedule_minutes
+    )
     trusted = _truthy(env.get(TRUST_ENV, ""))
     executable = shutil.which(provider)
     if provider == "agy":

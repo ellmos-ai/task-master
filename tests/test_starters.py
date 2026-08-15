@@ -129,6 +129,32 @@ class TestCentralLauncher(unittest.TestCase):
         runner.assert_not_called()
         self.assertIn("[DRY-RUN]", output.getvalue())
 
+    def test_agy_schedule_interval_reaches_startup_prompt(self):
+        patches = self._patch_common("agy")
+        with patches[0], patches[1] as prompt, patches[2], patches[3]:
+            _provider_command(
+                "tasksolver", "agy",
+                env={
+                    "TASKPLAN_WORKDIR": self.workdir,
+                    "TASKPLAN_AGY_SCHEDULE_MINUTES": "10",
+                },
+            )
+        prompt.assert_called_once_with(
+            "tasksolver", "agy", schedule_minutes=10
+        )
+
+    def test_agy_schedule_interval_rejects_invalid_values(self):
+        patches = self._patch_common("agy")
+        with patches[0], patches[1], patches[2], patches[3]:
+            with self.assertRaisesRegex(ValueError, "positive Ganzzahl"):
+                _provider_command(
+                    "tasksolver", "agy",
+                    env={
+                        "TASKPLAN_WORKDIR": self.workdir,
+                        "TASKPLAN_AGY_SCHEDULE_MINUTES": "never",
+                    },
+                )
+
 
 class TestKimiProviderCommand(unittest.TestCase):
     """Kimi-Worker: headless (-p), --yolo nur bei Trust-Opt-in, kein --effort.
