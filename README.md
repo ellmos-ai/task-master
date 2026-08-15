@@ -337,7 +337,10 @@ Configure model identifiers and reasoning levels in `~/.taskplan/taskplan.toml`.
 launchers use normal provider permission prompts by default. Only a trusted local
 automation should set `TASKPLAN_TRUSTED_AUTOMATION=1` to request unattended write
 permissions. `TASKPLAN_STARTER_DRY_RUN=1` prints the resolved command without
-starting the provider.
+starting the provider. An AGY launcher can set
+`TASKPLAN_AGY_SCHEDULE_MINUTES=<positive integer>` so the generated startup
+request tells AGY itself to create an external recurring schedule with no expiry;
+each trigger remains a one-shot worker and no in-process endless loop is started.
 
 Project discovery has its own `discovery_timeout_seconds` and a portable,
 sectorized snapshot cache under `~/.taskplan/`. `cache_ttl_seconds` defaults to

@@ -86,6 +86,32 @@ class TestCodexGoalPrompt(unittest.TestCase):
         self.assertNotIn("Developer-Anweisung", prompt)
         self.assertIn("mit lokalem Pfad benannte Rollen-Prompt", prompt)
 
+    def test_agy_schedule_is_explicitly_external_and_has_no_expiry(self):
+        data = {"providers": {"agy": {"continuation": "one_shot"}}}
+        with mock.patch.object(cfg, "load_config", return_value=data):
+            prompt = startup_prompt(
+                "taskwriter", "agy", "de", schedule_minutes=5
+            )
+        self.assertIn("AGYs Schedule-Funktion", prompt)
+        self.assertIn("TASKWRITER alle 5 Minuten", prompt)
+        self.assertIn("ohne Ablaufdatum und ohne Endzeit", prompt)
+        self.assertIn("keine Endlosschleife", prompt)
+        self.assertIn("einmaligen Worker-Lauf", prompt)
+
+    def test_schedule_hint_is_ignored_for_non_agy_provider(self):
+        data = {"providers": {"claude": {"continuation": "one_shot"}}}
+        with mock.patch.object(cfg, "load_config", return_value=data):
+            prompt = startup_prompt(
+                "taskwriter", "claude", "de", schedule_minutes=5
+            )
+        self.assertNotIn("Schedule-Funktion", prompt)
+
+    def test_schedule_interval_must_be_positive(self):
+        data = {"providers": {"agy": {"continuation": "one_shot"}}}
+        with mock.patch.object(cfg, "load_config", return_value=data):
+            with self.assertRaisesRegex(ValueError, "positive Ganzzahl"):
+                startup_prompt("tasksolver", "agy", "de", schedule_minutes=0)
+
     def test_non_solver_still_starts_with_selector(self):
         data = {"providers": {"claude": {"continuation": "one_shot"}}}
         with mock.patch.object(cfg, "load_config", return_value=data):

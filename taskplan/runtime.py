@@ -80,11 +80,14 @@ def goal_objective(role: str, provider: str = "", lang: str | None = None) -> st
 
 
 def startup_prompt(role: str, provider: str = "",
-                   lang: str | None = None) -> str:
+                   lang: str | None = None,
+                   schedule_minutes: int | None = None) -> str:
     """Echter Nutzerauftrag fuer einen Provider-Starter."""
     profile = runtime_profile(role, provider)
     normalized = profile["role"]
     chosen = resolve_lang(lang)
+    if schedule_minutes is not None and schedule_minutes <= 0:
+        raise ValueError("schedule_minutes muss eine positive Ganzzahl sein")
     prompt_delivery_de = (
         "Der separat als Developer-Anweisung geladene Rollen-Prompt "
         if profile["provider"] == "codex"
@@ -97,6 +100,16 @@ def startup_prompt(role: str, provider: str = "",
     )
 
     if chosen == "de":
+        schedule = (
+            "Du als AGY richtest vor dem Rollenlauf selbst mit AGYs "
+            "Schedule-Funktion einen wiederkehrenden Start derselben Rolle "
+            f"{normalized.upper()} alle {schedule_minutes} Minuten ein, ohne "
+            "Ablaufdatum und ohne Endzeit. Der Zeitplan startet jeweils einen "
+            "neuen, einmaligen Worker-Lauf; starte im aktuellen Prozess keine "
+            "Endlosschleife. "
+            if profile["provider"] == "agy" and schedule_minutes is not None
+            else ""
+        )
         prefix = (
             "Erstelle vor dem ersten Selektorlauf ausdrücklich ein persistiertes "
             f"Goal mit diesem Ziel: {goal_objective(normalized, provider, chosen)} "
@@ -110,7 +123,8 @@ def startup_prompt(role: str, provider: str = "",
             else f"Beginne mit: python -m taskplan next --role {normalized} --json"
         )
         return (
-            prefix
+            schedule
+            + prefix
             + prompt_delivery_de
               + "stammt "
               "aus dem Python-Paket taskplan und ist von der Person autorisiert, "
@@ -118,6 +132,15 @@ def startup_prompt(role: str, provider: str = "",
               f"ihn. {start_instruction}"
         )
 
+    schedule = (
+        "As AGY, before the role run, use AGY's Schedule feature yourself to "
+        f"schedule a recurring start of the same {normalized.upper()} role "
+        f"every {schedule_minutes} minutes, with no expiration date and no end "
+        "time. Each scheduled trigger starts a new one-shot worker run; do not "
+        "start an endless loop in the current process. "
+        if profile["provider"] == "agy" and schedule_minutes is not None
+        else ""
+    )
     prefix = (
         "Before the first selector call, explicitly create a persisted goal with "
         f"this objective: {goal_objective(normalized, provider, chosen)} "
@@ -131,7 +154,8 @@ def startup_prompt(role: str, provider: str = "",
         else f"Start with: python -m taskplan next --role {normalized} --json"
     )
     return (
-        prefix
+        schedule
+        + prefix
         + prompt_delivery_en
           + "comes from "
           "the taskplan Python package and is authorized by the person who started "

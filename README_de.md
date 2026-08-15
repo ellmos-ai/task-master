@@ -349,7 +349,11 @@ konfiguriert. `TASKPLAN_WORKDIR` setzt optional das Arbeitsverzeichnis;
 standardmäßig die normalen Freigabedialoge des Providers. Nur eine vertrauenswürdige
 lokale Automation soll mit `TASKPLAN_TRUSTED_AUTOMATION=1` unbeaufsichtigte
 Schreibrechte anfordern. `TASKPLAN_STARTER_DRY_RUN=1` zeigt den aufgelösten Befehl,
-ohne den Provider zu starten.
+ohne den Provider zu starten. Ein AGY-Starter kann
+`TASKPLAN_AGY_SCHEDULE_MINUTES=<positive Ganzzahl>` setzen; der erzeugte
+Startauftrag weist AGY dann an, selbst einen externen, wiederkehrenden Zeitplan
+ohne Ablauf einzurichten. Jeder Trigger bleibt ein einmaliger Worker-Lauf; im
+Prozess wird keine Endlosschleife gestartet.
 
 Die Projekt-Discovery besitzt zusätzlich `discovery_timeout_seconds` und einen
 portablen, sektorisierten Snapshot-Cache unter `~/.taskplan/`.
