@@ -76,3 +76,22 @@ Stand: 2026-07-27 — umgesetzt; die Punkte bleiben als Betriebsnachweis erhalte
   - README/README_de, Beispielkonfiguration und Changelog um Fallback-Reihenfolge,
     JSON-Felder und Exit-Semantik ergänzen.
   - Abhängigkeit: TP-DISC-FB-05.
+
+## Bandmaster-Learnings — Task-Lebenszyklus ohne Lock-Doppelbau [2026-08-15]
+
+- [ ] Beim `assign()` optional einen unveränderlichen Bearbeitungs-Snapshot
+  speichern: Task-Version, Scope, Projektzustandsreferenz und externe Claim-ID.
+  TaskMaster erzeugt oder verwaltet den Lock nicht; dafür bleibt der konfigurierte
+  Lock-Provider zuständig.
+- [ ] Für ausdrücklich gebildete Task-Batches eine Freeze-Barriere definieren:
+  Nach Beginn dürfen Mitgliedschaft, Abhängigkeiten und Akzeptanzkriterien nicht
+  still verändert werden. Änderungen erzeugen eine neue Batch-Version.
+- [ ] Validierungsbelege an Task-/Scope-Version und Arbeitsbaum-Fingerprint
+  binden. Eine spätere Mutation setzt den Beleg auf `stale`, statt den Task trotz
+  veralteter Prüfung als erledigt erscheinen zu lassen.
+- [ ] Append-only Recovery-Journal für `assigned`, `started`, `blocked`,
+  `validated`, `done` und abgebrochene Finalisierung ergänzen; wiederholte
+  Befehle müssen idempotent sein.
+- [ ] TaskMaster speichert höchstens Referenzen auf Test-/Commit-/Handoff-Belege.
+  Es führt keine Tests aus, erzeugt keine Commits und implementiert keine zweite
+  Lock-Engine.
