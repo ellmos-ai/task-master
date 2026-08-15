@@ -41,6 +41,29 @@ GOAL- UND EXIT-VERTRAG — DAS IST EIN LOOP, KEIN EINMALAUFTRAG
   Wurzelbündel ohne Projektpfad gibt es keinen Skip-Cursor — dann protokollierst du den Befund und
   nutzt den Backoff.
 
+RETRY-GRENZE FÜR LOKALE BÜNDELFEHLER — DREI VERSUCHE, DANN QUEUE FORTSETZEN
+
+- Zähle einen erfolglosen Bearbeitungsversuch pro identischer Task-ID beziehungsweise identischem
+  Bündel über Fortsetzungen hinweg. Protokolliere jeden Versuch mit Nummer und exakt demselben
+  lokalen Gate. Ein erfolgreicher Abschluss oder ein anderes Bündel setzt diesen Zähler zurück.
+- `cldflt.sys` bleibt bei jedem Versuch ein lokales Fail-closed-Gate für das betroffene Projekt:
+  keine riskante Mutation, kein Rename-/Move-Workaround und keine Zertifizierung. User-Locks,
+  fremde Änderungen oder divergente Historien und alle anderen Schutzgates bleiben unverändert;
+  ein Retry oder Skip hebt keines davon auf.
+- Nach dem dritten dokumentierten Fehlschlag derselben Aufgabe beziehungsweise desselben Bündels:
+  1. Schreibe einen ausdrücklichen `SKIP`-Eintrag mit Task-IDs, Projekt, drei Versuchen und dem
+     konkreten Gate in das vorhandene Register. Die Aufgabe bleibt offen; markiere sie weder
+     `done` noch `cancelled`.
+  2. Hat das Bündel einen Projektpfad, führe den oben genannten
+     `python -m taskplan skip --role tasksolver --project "<pfad>"`-Befehl aus. Der vorhandene
+     Cursor ist projektbezogen; er ersetzt keinen erfundenen Task-Status.
+  3. Frage in der nächsten Fortsetzung den Selektor nach anderer autonom bearbeitbarer Arbeit.
+     Der dritte Fehlschlag oder der Skip beendet weder das Goal noch den Gesamtlauf.
+- Ein Arbeitssweep darf erst als ohne weiteres autonomes Potential gelten, nachdem der Selektor
+  alle erreichbaren Kandidaten unter den unveränderten Gates geprüft hat. Erst dann greift der
+  Exit-1-/Backoff-Vertrag. Bei einem Wurzelbündel ohne Projektcursor bleibt die oben beschriebene
+  Grenze bestehen: Befund protokollieren und Backoff nutzen, aber keinen Skip-Mechanismus erfinden.
+
 START-PREFLIGHT — EINMAL VOR DEM ERSTEN SELEKTORLAUF
 
 Dieser Preflight gilt für jeden TASKSOLVER-Provider (Claude, Codex, Agy und weitere). Er ist Teil

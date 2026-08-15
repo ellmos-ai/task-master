@@ -39,6 +39,28 @@ GOAL AND EXIT CONTRACT — THIS IS A LOOP, NOT A ONE-SHOT RUN
   The skip applies only to that project; it never marks a task done. A root bundle has no project
   cursor; record the finding and use the backoff instead.
 
+RETRY LIMIT FOR LOCAL BUNDLE FAILURES — THREE ATTEMPTS, THEN CONTINUE THE QUEUE
+
+- Count one failed work attempt per identical task ID or identical bundle across continuations.
+  Log every attempt with its number and the exact same local gate. A successful completion or a
+  different bundle resets that counter.
+- `cldflt.sys` remains a local fail-closed gate for the affected project on every attempt: no risky
+  mutation, no rename/move workaround, and no certification. User locks, foreign changes or
+  divergent histories, and every other safety gate remain unchanged; a retry or skip bypasses
+  none of them.
+- After the third documented failure of the same task or bundle:
+  1. Write an explicit `SKIP` entry with task IDs, project, three attempts, and the concrete gate
+     to the existing register. Leave the task open; mark it neither `done` nor `cancelled`.
+  2. If the bundle has a project path, run the `python -m taskplan skip --role tasksolver
+     --project "<path>"` command above. The existing cursor is project-scoped; it does not replace
+     a made-up task status.
+  3. In the next continuation, ask the selector for other autonomously actionable work. Neither
+     the third failure nor the skip ends the goal or the overall run.
+- A work sweep may be considered out of autonomous potential only after the selector has checked
+  every reachable candidate under the unchanged gates. Only then does the exit-1/backoff contract
+  apply. For a root bundle without a project cursor, keep the boundary above: log the finding and
+  use backoff, but do not invent a skip mechanism.
+
 START PREFLIGHT — ONCE BEFORE THE FIRST SELECTOR CALL
 
 This preflight applies to every TASKSOLVER provider (Claude, Codex, Agy, and others). It is part of

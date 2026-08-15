@@ -45,6 +45,23 @@ class TestSolverDefersToSelector(unittest.TestCase):
     def test_solver_can_advance_a_stale_project_cursor(self):
         self.assertIn("skip --role tasksolver", TASKSOLVER)
 
+    def test_local_failure_retry_limit_is_exactly_three(self):
+        flat = _flat(TASKSOLVER)
+        self.assertIn("RETRY-GRENZE FÜR LOKALE BÜNDELFEHLER", flat)
+        self.assertIn("Nach dem dritten dokumentierten Fehlschlag", flat)
+        self.assertIn("drei Versuchen", flat)
+        self.assertIn("Die Aufgabe bleibt offen", flat)
+
+    def test_cldflt_skip_continues_without_weakening_gates(self):
+        flat = _flat(TASKSOLVER)
+        self.assertIn("`cldflt.sys` bleibt", flat)
+        self.assertIn("lokales Fail-closed-Gate", flat)
+        self.assertIn("User-Locks", flat)
+        self.assertIn("divergente Historien", flat)
+        self.assertIn("anderer autonom bearbeitbarer Arbeit", flat)
+        self.assertIn("alle erreichbaren Kandidaten", flat)
+        self.assertIn("beendet weder das Goal noch den Gesamtlauf", flat)
+
     def test_solver_must_not_write_origin_fields(self):
         self.assertIn("assigned_to", TASKSOLVER)
         self.assertIn("created_by", TASKSOLVER)

@@ -10,7 +10,9 @@ from unittest import mock
 from taskplan import config as cfg
 from taskplan import runner
 from taskplan.__main__ import main
-from taskplan.runtime import apply_backoff, runtime_profile, startup_prompt
+from taskplan.runtime import (
+    apply_backoff, goal_objective, runtime_profile, startup_prompt,
+)
 
 
 class TestProviderModels(unittest.TestCase):
@@ -71,6 +73,23 @@ class TestCodexGoalPrompt(unittest.TestCase):
         self.assertIn("45 Sekunden", prompt)
         self.assertIn("TASKPLAN-System- und Modell-Preflight", prompt)
         self.assertIn("erst danach den Selektor", prompt)
+
+    def test_solver_goal_carries_retry_skip_and_queue_continuation(self):
+        data = {
+            "language": {"prompts": "de"},
+            "providers": {"codex": {
+                "continuation": "goal",
+                "empty_policy": "keep_goal",
+                "idle_backoff_seconds": 60,
+            }},
+        }
+        with mock.patch.object(cfg, "load_config", return_value=data):
+            objective = goal_objective("tasksolver", "codex", "de")
+        self.assertIn("Nach dem dritten Fehlschlag", objective)
+        self.assertIn("SKIP-Grund", objective)
+        self.assertIn("lässt die Aufgabe offen", objective)
+        self.assertIn("anderer autonomer Arbeit", objective)
+        self.assertIn("aller erreichbaren Kandidaten", objective)
 
     def test_one_shot_provider_does_not_request_goal(self):
         data = {"providers": {"other": {"continuation": "one_shot"}}}

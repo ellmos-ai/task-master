@@ -163,6 +163,16 @@ python -m taskplan skip --role taskwriter --project "<pfad>"
 python -m taskplan skip --role tasksolver --project "<pfad>"
 ```
 
+Der kanonische TASKSOLVER-Prompt zählt Fehlversuche je Task/Bündel über
+Fortsetzungen hinweg. Nach dem dritten dokumentierten Fehlschlag schreibt er einen
+ausdrücklichen SKIP-Grund, lässt die Aufgabe offen, setzt den vorhandenen
+Projektcursor weiter und fragt den Selektor nach anderer autonomer Arbeit. Ein
+lokales `cldflt.sys`-Risiko bleibt fail-closed; Locks, Fremdzustand, divergente
+Historie und alle anderen Schutzgates bleiben unverändert. Der Arbeitssweep gilt
+erst nach Prüfung aller erreichbaren Kandidaten als leer. Dies ist ein
+Prompt-Vertrag über den bestehenden Projektcursor, kein neuer Task-Status oder
+Retry-Engine.
+
 Neue Aufgaben bleiben der TASKWRITER-/TASKSOLVER-Rollenstrecke vorbehalten.
 
 ### Wer hat es angelegt, wer arbeitet daran

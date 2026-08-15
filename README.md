@@ -159,6 +159,15 @@ python -m taskplan skip --role taskwriter --project "<path>"
 python -m taskplan skip --role tasksolver --project "<path>"
 ```
 
+The canonical TASKSOLVER prompt keeps a per-task/bundle attempt count across
+continuations. After the third documented failure, it records an explicit SKIP
+reason, leaves the task open, advances the existing project cursor, and asks the
+selector for other autonomous work. A local `cldflt.sys` risk remains fail-closed;
+locks, foreign state, divergent history, and every other safety gate are unchanged.
+The work sweep is not considered empty until all reachable candidates have been
+checked. This is a prompt contract over the existing project cursor, not a new
+task-state or retry engine.
+
 New tasks remain the responsibility of the TASKWRITER/TASKSOLVER flow.
 
 ### Who created it, who works on it
