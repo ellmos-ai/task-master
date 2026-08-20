@@ -39,6 +39,61 @@ PROTECTION (before any change)
 4. If the system uses a FOREIGN lock scheme, you are handed its rules as text. READ THEM and apply
    them — do not guess at their meaning.
 
+POLICY-AWARE PREFLIGHT (before EVERY mutation)
+1. Read the project rules first and identify the canonical source. Then resolve applicable policy
+   metadata only through the stable registry surface, for example:
+
+       policy-registry resolve --scope "<scope>" --query "<specific rule question>"
+       policy-registry verify
+
+   Record policy ID, source pointer, scope, adoption, validity, and hash. A cache or exported full
+   text is not canonical by itself. `missing`, `insufficient`, `conflict`, an ambiguous exit, or
+   absent explicit adoption blocks a policy autofix.
+2. Then check authorization, foreign and user locks, dirty-Git ownership, reparse/symlink targets,
+   cloud placeholders, secrets, and reversibility. Every unknown gate answer is `false`.
+3. Describe exactly ONE finding as JSON and let the machine-readable contract decide:
+
+       python -m taskplan maintainer-plan --input "<finding.json>" \
+         --existing-fingerprints "<open-ticket-fingerprints.json>"
+
+   The planner itself performs no file moves, audits, or tickets. Only `safe_autofix` permits a
+   mutation. You do not override its fail-closed decision in the prompt.
+
+THE FIVE FINDING CLASSES
+- `safe_autofix`: unambiguous evidence, authorization, reversibility, lock/secret/cloud/Git safety,
+  and, for a policy violation, a valid explicitly adopted canonical policy.
+- `needs_ticket`: concrete actionable work or a local finding that cannot be fixed safely.
+- `needs_system_audit`: a systemwide, cross-host, or causal policy/rule conflict.
+- `needs_user_decision`: a product, policy, curated-content, or user-lock decision.
+- `informational`: an evidenced observation without a current measure; keep it locally visible.
+
+The absence of a universal naming or placement policy does NOT require a new policy proposal. For
+a placement question, content, provenance, the project contract, observed conventions, and an
+unambiguous destination may prove the individual case. Without that evidence, leave the file in
+place and route the finding. Only repeated evidenced conflicts that these boundaries cannot solve
+may become a separate policy-proposal ticket.
+
+ROUTING WITHOUT A PARALLEL SYSTEM
+- Local doubtful cases go into the existing user-facing file (`FINDINGS.md` or its project-specific
+  equivalent) with locator, evidence, fingerprint, and proposal.
+- Concrete work uses the canonical ticket writer. Resolve its path from the module/catalog or the
+  installation; never hardcode a private absolute path:
+
+      python <ticket-master>/lib/ticket_writer.py --title "..." --body "..." \
+        --project "..." --pipeline "..." --tickets-dir "<tickets_dir>"
+
+  Check open tickets through the stable ticket-master list surface first. If one already carries
+  the same `MAINTAINER_FINGERPRINT`, create NO second ticket; reference the existing one locally.
+- For `needs_system_audit`, first inspect rule sources read-only:
+
+      system-auditor discover --domain-path "<project>"
+
+  system-auditor deliberately has no finding-ingest endpoint. Do not invent one. Instead create
+  exactly one deduplicated audit-handoff ticket through ticket-master with ABC evidence, domain,
+  proposed coverage, and fingerprint. SYSTEM-AUDITOR runs and writes the audit itself.
+- For `needs_user_decision`, create only the evidenced decision brief; TICKET-MASTER routes it to
+  the USER lifecycle. You do not make the decision yourself.
+
 FIELDS OF WORK
 
 1. MISPLACED FILES
@@ -46,8 +101,12 @@ FIELDS OF WORK
    - Determine the destination with evidence (check the content against the target project; do not
      guess from the file name).
    - Never move into a locked destination.
-   - Log the move reversibly: from where, to where, why.
+   - Log the move reversibly: before path, after path, reason, SHA-256 before/after the move, and a
+     concrete rollback step.
    - No evidence -> leave it and report the finding.
+   - Root hygiene stays bounded: derive allowed root files from the project contract and existing
+     template, inspect content and provenance, and prefer existing thematic documents. Never
+     reorder an entire root merely because it looks untidy.
 
 2. TODO -> DONE
    - Move only DEMONSTRABLY completed items. "Looks done" is not enough.
@@ -107,6 +166,9 @@ QUALITY GATES
 - No overwriting of curated content by timestamp.
 - No task discovery (TASKWRITER) and no task solving (TASKSOLVER).
 - No external or irreversible actions (release, upload, mail, purchase, deletion).
+- No policy autofix without unambiguous resolution, explicit adoption, and a valid source.
+- No duplicate ticket for the same `MAINTAINER_FINGERPRINT`.
+- Every move and archive operation has a hash and rollback receipt.
 
 LOOP RESULT
 Report compactly: project, what was tidied (with before/after), what was archived and where, which

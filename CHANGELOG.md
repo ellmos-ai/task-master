@@ -45,6 +45,18 @@
 - Projektbasierte TASKWRITER-Erfassungsläufe verwenden nun denselben rollenspezifischen, atomaren Rotationsmechanismus. Reale unklassifizierte Task-Bündel bleiben bis zur Bearbeitung stabil; nur leere Projekt-Sweeps rotieren weiter. `taskplan skip` unterstützt deshalb auch `taskwriter`.
 
 ### Added
+- Policy-aware MAINTAINER-Planung: `python -m taskplan maintainer-plan`
+  klassifiziert einen belegten JSON-Befund fail-closed als `safe_autofix`,
+  `needs_ticket`, `needs_system_audit`, `needs_user_decision` oder
+  `informational`. Policy-Adoption, Locks, Reversibilität, Symlink-/Cloud-/
+  Dirty-Git-/Secret-Gates und ein stabiler Deduplizierungsfingerprint werden
+  maschinenlesbar geprüft; der Planer mutiert selbst nichts.
+- Der zweisprachige MAINTAINER-Vertrag nutzt `policy-registry`,
+  `system-auditor` und `ticket-master` nur über stabile Oberflächen, routet
+  systemweite Befunde als deduplizierte Audit-Handoff-Tickets und verlangt für
+  Moves Vorher-/Nachher-Pfad, SHA-256 und Rollback-Receipt. Eine fehlende
+  universelle Ablagepolicy löst weiterhin empirische Einzelfallprüfung statt
+  automatischer Policy-Erfindung aus.
 - Discoverability, README-Design & SEO-Check (Pfad B): Interaktive Mermaid-Architekturdiagramme für den 3-Rollen-Ablauf und das deterministische Selektor-Gate in `README.md` und `README_de.md` integriert, Ökosystem- und Dachorganisations-Badges (`ellmos-ai`, `open-bricks`, stdlib-only) ergänzt, `llms.txt` Verifikations- und Zeitstempel auf 2026-08-14 synchronisiert, Unused-Imports in Testsuite bereinigt (302/302 Tests 100% grün, Ruff sauber). [2026-08-14]
 - Reproduzierbarer `benchmarks/taskplan_locking.py` für begrenzte Discovery,
   parallele SQLite-TaskClient-Schreibvorgänge und LockMaster-Claim-/Readback;

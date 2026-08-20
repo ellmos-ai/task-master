@@ -9,7 +9,7 @@
 [![Organisation: ellmos-ai](https://img.shields.io/badge/org-ellmos--ai-6366f1.svg)](https://github.com/ellmos-ai)
 [![Dachorganisation: open-bricks](https://img.shields.io/badge/umbrella-open--bricks-0ea5e9.svg)](https://github.com/open-bricks)
 [![Keine Abhängigkeiten](https://img.shields.io/badge/Abh%C3%A4ngigkeiten-keine%20(stdlib)-success.svg)](pyproject.toml)
-[![Tests](https://img.shields.io/badge/tests-302%20bestanden-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-322%20bestanden-brightgreen.svg)](tests/)
 [![llms.txt](https://img.shields.io/badge/llms.txt-verf%C3%BCgbar-orange.svg)](llms.txt)
 
 **Deterministische Aufgabenauswahl für LLM-Agenten.** Keine Abhängigkeiten, nur
@@ -112,6 +112,60 @@ Ist nichts wählbar, gibt `next_bundle()` **`None`** zurück. Der Loop endet als
 - **TASKSOLVER**: Macher mit Werkzeugkasten. Arbeitet genau EIN Projekt-Bündel pro Durchgang ab.
 - **TASKWRITER**: Chronist mit Stift und Liste. Stuft Aufgaben mit effort/scope ein (*„eine uneingestufte Aufgabe ist unsichtbar"*).
 - **MAINTAINER**: Hausmeister mit Besen. Hält Dateien und Ordnerstrukturen sauber und ordentlich.
+
+### Policy-aware Wartungspläne
+
+Der MAINTAINER löst vor jeder Mutation die anwendbaren Projektregeln und
+Policy-Metadaten auf. Danach gibt er genau einen belegten JSON-Befund an einen
+deterministischen, fail-closed arbeitenden Planer:
+
+```bash
+python -m taskplan maintainer-plan --input finding.json \
+  --existing-fingerprints open-ticket-fingerprints.json
+```
+
+Die Eingabe hält beobachtete Fakten fest, keine Befehle:
+
+```json
+{
+  "kind": "placement",
+  "locator": "docs/legacy.md",
+  "summary": "Historical document is in the project root",
+  "evidence": ["docs/legacy.md:1", "README.md:120"],
+  "policy": {"resolution": "none"},
+  "destination": {
+    "path": "docs/archive/legacy.md",
+    "content_evidence": "The header declares the document historical.",
+    "provenance": "Git history and document header"
+  },
+  "gates": {
+    "authorized": true, "reversible": true, "foreign_lock": false,
+    "user_lock": false, "hard_delete": false, "symlink_safe": true,
+    "cloud_safe": true, "dirty_git_safe": true, "secret_safe": true
+  },
+  "impact": {
+    "systemwide": false, "cross_host": false,
+    "causal_policy_conflict": false, "requires_user_decision": false
+  }
+}
+```
+
+Die Ausgabe klassifiziert den Befund als `safe_autofix`, `needs_ticket`,
+`needs_system_audit`, `needs_user_decision` oder `informational`. Nur
+`safe_autofix` erlaubt eine Mutation. Fehlende Policy-Adoption, Fremd-/User-Locks,
+unbelegter Rollback, Hard-Delete-Aufträge, unsichere Links/Cloud-Platzhalter,
+ungeklärtes Dirty-Git-Eigentum und Secret-Risiken blockieren fail-closed.
+
+Der Planer verschiebt keine Datei, führt kein Audit aus und erzeugt kein Ticket.
+Die Rolle nutzt Nachbarmodule nur über stabile Oberflächen: `policy-registry
+resolve/verify`, das read-only arbeitende `system-auditor discover` und die
+kanonischen Listen-/Writer-Werkzeuge des ticket-master. Weil system-auditor
+bewusst keinen Finding-Ingest-Endpunkt besitzt, wird ein systemweiter Fund zu
+genau einem deduplizierten Audit-Handoff-Ticket statt zu einer zweiten
+Auditablage. `MAINTAINER_FINGERPRINT` verhindert doppelte Tickets. Eine empirisch
+belegte Ablage darf ohne universelle Policy auskommen, wenn Inhalt, Provenienz und
+Projektvertrag genau einen Zielort belegen; das Fehlen einer allgemeinen
+Benennungspolicy erfindet keine neue Policy.
 
 ---
 

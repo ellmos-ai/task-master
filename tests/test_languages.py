@@ -101,9 +101,13 @@ class TestPromiseParityAcrossLanguages(unittest.TestCase):
         },
         "MAINTAINER": {
             "de": ["NIE HART LÖSCHEN", "ARCHIVIEREN VOR KÜRZEN",
-                   "NIEMALS per Zeitstempel"],
+                   "NIEMALS per Zeitstempel", "policy-registry resolve",
+                   "maintainer-plan", "MAINTAINER_FINGERPRINT",
+                   "system-auditor discover", "keinen Finding-Ingest-Endpunkt"],
             "en": ["NEVER HARD-DELETE", "ARCHIVE BEFORE TRUNCATING",
-                   "NEVER decide by timestamp"],
+                   "NEVER decide by timestamp", "policy-registry resolve",
+                   "maintainer-plan", "MAINTAINER_FINGERPRINT",
+                   "system-auditor discover", "no finding-ingest endpoint"],
         },
     }
 

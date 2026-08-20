@@ -203,6 +203,37 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         return 0
 
+    if command == "maintainer-plan":
+        import json
+        from pathlib import Path
+
+        from .maintenance import (
+            MaintenanceInputError,
+            load_fingerprints,
+            plan_finding,
+        )
+
+        input_name = _option(rest, "--input", "")
+        fingerprints_name = _option(rest, "--existing-fingerprints", "")
+        if not input_name:
+            print("Nutzung: python -m taskplan maintainer-plan --input FINDING.json "
+                  "[--existing-fingerprints FINGERPRINTS.json]", file=sys.stderr)
+            return 2
+        try:
+            payload = json.loads(Path(input_name).read_text(encoding="utf-8"))
+            fingerprints = load_fingerprints(
+                Path(fingerprints_name) if fingerprints_name else None
+            )
+            plan = plan_finding(
+                payload,
+                existing_ticket_fingerprints=fingerprints,
+            )
+        except (OSError, json.JSONDecodeError, MaintenanceInputError) as exc:
+            print(f"Ungültiger MAINTAINER-Befund: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(plan.as_dict(), ensure_ascii=False, indent=2))
+        return 0
+
     if command == "runtime":
         from .runtime import runtime_profile
         role = _option(rest, "--role", "tasksolver")
@@ -332,6 +363,11 @@ def main(argv: list[str] | None = None) -> int:
         print("  prompt <ROLLE>")
         print("            Gibt den Rollen-Prompt aus (TASKSOLVER, TASKWRITER,")
         print("            MAINTAINER).")
+        print()
+        print("  maintainer-plan --input FINDING.json")
+        print("            Prüft Policy-, Evidenz-, Lock-, Reversibilitäts- und")
+        print("            Routing-Gates und liefert einen JSON-Plan; führt selbst")
+        print("            weder Dateimoves noch Audits noch Tickets aus.")
         print()
         print("  runtime --role R [--provider P] [--field FELD]")
         print("            Liefert Provider, Rollenmodell, Reasoning und Fortsetzung.")

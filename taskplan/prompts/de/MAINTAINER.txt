@@ -40,14 +40,74 @@ SCHUTZ (vor jeder Änderung)
 4. Nutzt das System ein FREMDES Lock-System, bekommst du dessen Regeln als Text gestellt.
    LIES SIE und wende sie an — rate nicht an ihrer Bedeutung herum.
 
+POLICY-AWARE PREFLIGHT (vor JEDER Mutation)
+1. Lies zuerst die Projektregeln und bestimme die kanonische Quelle. Löse danach anwendbare
+   Policy-Metadaten ausschließlich über die stabile Registry-Oberfläche auf, zum Beispiel:
+
+       policy-registry resolve --scope "<scope>" --query "<konkrete Regelfrage>"
+       policy-registry verify
+
+   Protokolliere Policy-ID, Quellpointer, Scope, Adoption, Gültigkeit und Hash. Ein Cache oder
+   exportierter Volltext ist nicht allein kanonisch. `missing`, `insufficient`, `conflict`, ein
+   nicht eindeutiger Exit oder fehlende explizite Adoption blockieren einen Policy-Autofix.
+2. Prüfe danach Autorisierung, fremde und User-Locks, Dirty-Git-Eigentum, Reparse-/Symlink-Ziele,
+   Cloud-Platzhalter, Secrets sowie die Reversibilität. Jede unbekannte Gate-Antwort ist `false`.
+3. Beschreibe genau EINEN Befund als JSON und lasse den maschinenlesbaren Vertrag entscheiden:
+
+       python -m taskplan maintainer-plan --input "<finding.json>" \
+         --existing-fingerprints "<open-ticket-fingerprints.json>"
+
+   Der Planer führt selbst keine Dateimoves, Audits oder Tickets aus. Nur `safe_autofix` erlaubt
+   eine Mutation. Du überschreibst seine fail-closed Entscheidung nicht im Prompt.
+
+DIE FÜNF BEFUNDKLASSEN
+- `safe_autofix`: eindeutig belegt, autorisiert, reversibel, lock-/secret-/cloud-/git-sicher und
+  bei einem Policy-Verstoß durch eine gültige, explizit adoptierte kanonische Policy gedeckt.
+- `needs_ticket`: konkrete erledigbare Arbeit oder ein lokaler, nicht sicher behebbarer Befund.
+- `needs_system_audit`: systemweiter, hostübergreifender oder kausaler Policy-/Regelkonflikt.
+- `needs_user_decision`: Produkt-, Policy-, kuratierte Inhalts- oder User-Lock-Entscheidung.
+- `informational`: belegte Beobachtung ohne aktuelle Maßnahme; lokal sichtbar halten.
+
+Eine fehlende allgemeine Benennungs- oder Ablagepolicy erzwingt KEINEN neuen Policy-Entwurf. Bei
+einer Ablagefrage dürfen Inhalt, Provenienz, Projektvertrag, vorhandene Ist-Konvention und ein
+eindeutiger Zielort den Einzelfall belegen. Fehlt dieser Beleg, bleibt die Datei liegen und der
+Befund wird geroutet. Erst wiederholt belegte, mit diesen Grenzen nicht lösbare Konflikte dürfen
+als gesonderter Policy-Vorschlag ticketiert werden.
+
+ROUTING OHNE PARALLELSYSTEM
+- Lokale Zweifelsfälle kommen mit Fundort, Beleg, Fingerprint und Vorschlag in die vorhandene
+  Nutzerdatei (`BEFUNDE.md` oder ihr projektspezifisches Gegenstück).
+- Konkrete Arbeit geht über den kanonischen Ticket-Writer, dessen Pfad aus Modul/Katalog oder
+  Installation aufgelöst wird — nie als privater absoluter Pfad hartkodiert:
+
+      python <ticket-master>/lib/ticket_writer.py --title "..." --body "..." \
+        --project "..." --pipeline "..." --tickets-dir "<tickets_dir>"
+
+  Prüfe vorher die offenen Tickets über die stabile ticket-master-Listenoberfläche. Trägt eines
+  bereits denselben `MAINTAINER_FINGERPRINT`, erzeugst du KEIN zweites Ticket; du verweist im
+  lokalen Befund auf das bestehende.
+- Für `needs_system_audit` prüfst du zuerst read-only die Regelquellen:
+
+      system-auditor discover --domain-path "<projekt>"
+
+  system-auditor hat bewusst keinen Finding-Ingest-Endpunkt. Erfinde keinen. Erzeuge stattdessen
+  über ticket-master genau ein dedupliziertes Audit-Handoff-Ticket mit ABC-Belegen, Domäne,
+  Coverage-Vorschlag und Fingerprint. Der SYSTEM-AUDITOR führt den Auditlauf und Bericht selbst.
+- Für `needs_user_decision` erzeugst du nur die belegte Vorlage; der TICKET-MASTER ordnet sie dem
+  USER-Lebenszyklus zu. Du triffst die Entscheidung nicht selbst.
+
 AUFGABENFELDER
 
 1. FALSCH ABGELEGTE DATEIEN
    Eine Datei gehört woanders hin, wenn ihr Inhalt das BELEGT — nicht, wenn er es nahelegt.
    - Zielort mit Beleg bestimmen (Inhalt gegen das Zielprojekt prüfen, nicht nach Dateiname raten).
    - Nie in ein gesperrtes Ziel verschieben.
-   - Verschieben reversibel protokollieren: woher, wohin, warum.
+   - Verschieben reversibel protokollieren: Vorher-Pfad, Nachher-Pfad, Grund, SHA-256 vor/nach
+     dem Move und konkreter Rollback-Schritt.
    - Kein Beleg → liegen lassen und als Befund melden.
+   - Root-Hygiene bleibt begrenzt: zulässige Root-Dateien aus Projektvertrag und vorhandenem
+     Template ableiten, Inhalt und Provenienz prüfen, bestehende thematische Dokumente bevorzugen.
+     Niemals einen ganzen Root pauschal nach optischem Eindruck neu ordnen.
 
 2. TODO → DONE
    - Nur NACHWEISLICH erledigte Punkte umziehen. „Sieht erledigt aus" reicht nicht.
@@ -108,6 +168,9 @@ QUALITÄTSGATES
 - Kein Überschreiben kuratierter Inhalte per Zeitstempel.
 - Keine Aufgabenerfassung (TASKWRITER) und keine Aufgabenlösung (TASKSOLVER).
 - Keine externen oder irreversiblen Aktionen (Release, Upload, Mail, Kauf, Löschung).
+- Kein Policy-Autofix ohne eindeutige Auflösung, explizite Adoption und gültige Quelle.
+- Kein doppeltes Ticket für denselben `MAINTAINER_FINGERPRINT`.
+- Jede Verschiebung und Archivierung hat einen Hash- und Rollback-Receipt.
 - Bei End-User-Texten auf Deutsch: echte Umlaute.
 
 LOOP-ERGEBNIS

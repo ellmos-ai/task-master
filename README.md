@@ -9,7 +9,7 @@
 [![Organization: ellmos-ai](https://img.shields.io/badge/org-ellmos--ai-6366f1.svg)](https://github.com/ellmos-ai)
 [![Umbrella: open-bricks](https://img.shields.io/badge/umbrella-open--bricks-0ea5e9.svg)](https://github.com/open-bricks)
 [![Zero Dependencies](https://img.shields.io/badge/dependencies-zero%20(stdlib)-success.svg)](pyproject.toml)
-[![Tests](https://img.shields.io/badge/tests-302%20passed-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-322%20passed-brightgreen.svg)](tests/)
 [![llms.txt](https://img.shields.io/badge/llms.txt-available-orange.svg)](llms.txt)
 
 **Deterministic task selection for LLM agents.** Zero dependencies, stdlib only,
@@ -109,6 +109,59 @@ When nothing is selectable, `next_bundle()` returns `None`. The loop ends as an
 - **TASKSOLVER**: Focused executor with toolbox. Executes exactly ONE project bundle per pass.
 - **TASKWRITER**: Chronicler with pen and list. Classifies tasks with effort/scope (*"an unrated task is invisible"*).
 - **MAINTAINER**: Caretaker with broom. Keeps files and folder structures clean and tidy.
+
+### Policy-aware maintenance plans
+
+The MAINTAINER resolves applicable project rules and policy metadata before a
+mutation, then passes one evidenced JSON finding through a deterministic,
+fail-closed planner:
+
+```bash
+python -m taskplan maintainer-plan --input finding.json \
+  --existing-fingerprints open-ticket-fingerprints.json
+```
+
+The input records observed facts, not commands:
+
+```json
+{
+  "kind": "placement",
+  "locator": "docs/legacy.md",
+  "summary": "Historical document is in the project root",
+  "evidence": ["docs/legacy.md:1", "README.md:120"],
+  "policy": {"resolution": "none"},
+  "destination": {
+    "path": "docs/archive/legacy.md",
+    "content_evidence": "The header declares the document historical.",
+    "provenance": "Git history and document header"
+  },
+  "gates": {
+    "authorized": true, "reversible": true, "foreign_lock": false,
+    "user_lock": false, "hard_delete": false, "symlink_safe": true,
+    "cloud_safe": true, "dirty_git_safe": true, "secret_safe": true
+  },
+  "impact": {
+    "systemwide": false, "cross_host": false,
+    "causal_policy_conflict": false, "requires_user_decision": false
+  }
+}
+```
+
+The output classifies the finding as `safe_autofix`, `needs_ticket`,
+`needs_system_audit`, `needs_user_decision`, or `informational`. Only
+`safe_autofix` permits a mutation. Missing policy adoption, foreign/user locks,
+unproven rollback, hard-delete requests, unsafe links/cloud placeholders,
+unknown dirty-Git ownership, and secret risk fail closed.
+
+The planner performs no move, audit, or ticket operation. The role consumes
+neighbouring modules through their stable surfaces: `policy-registry
+resolve/verify`, read-only `system-auditor discover`, and ticket-master's
+canonical list/writer tools. Because system-auditor deliberately has no finding
+ingest endpoint, systemwide findings become one deduplicated audit-handoff
+ticket rather than a second audit store. `MAINTAINER_FINGERPRINT` suppresses
+duplicate tickets. Evidence-based placement may remain policy-free when content,
+provenance, and the project contract prove one destination; the absence of a
+universal naming policy does not invent a new policy.
 
 ---
 

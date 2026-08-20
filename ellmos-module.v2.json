@@ -8,7 +8,8 @@
   "visibility": "public-candidate",
   "provides": [
     "tasks.default",
-    "tasks.workflow"
+    "tasks.workflow",
+    "tasks.maintenance"
   ],
   "requires": [],
   "optional": [],

@@ -89,3 +89,11 @@ from .selector import (  # noqa: F401
     SelectorConfig,
     next_bundle,
 )
+
+from .maintenance import (  # noqa: F401
+    CLASSIFICATIONS,
+    MaintenanceInputError,
+    MaintenancePlan,
+    finding_fingerprint,
+    plan_finding,
+)

@@ -155,6 +155,29 @@ class TestMaintainerGates(unittest.TestCase):
     def test_maintainer_neither_writes_nor_solves(self):
         self.assertIn("Keine Aufgabenerfassung", MAINTAINER)
 
+    def test_policy_preflight_and_five_finding_classes_are_required(self):
+        flat = _flat(MAINTAINER)
+        self.assertIn("policy-registry resolve", flat)
+        for classification in (
+            "safe_autofix",
+            "needs_ticket",
+            "needs_system_audit",
+            "needs_user_decision",
+            "informational",
+        ):
+            self.assertIn(classification, flat)
+
+    def test_routing_uses_stable_neighbour_surfaces(self):
+        flat = _flat(MAINTAINER)
+        self.assertIn("system-auditor discover", flat)
+        self.assertIn("ticket_writer.py", flat)
+        self.assertIn("keinen Finding-Ingest-Endpunkt", flat)
+
+    def test_moves_require_hash_and_rollback_receipt(self):
+        flat = _flat(MAINTAINER)
+        for promise in ("Vorher-Pfad", "Nachher-Pfad", "SHA-256", "Rollback"):
+            self.assertIn(promise, flat)
+
 
 class TestRoleSeparation(unittest.TestCase):
     """Die Rollentrennung ist eine Qualitaetsgrenze, keine Organisation."""
