@@ -30,7 +30,7 @@ from .config import (
     traversal_config,
 )
 from .locks import CREATE, MODIFY, READ, build_lock_view
-from .rotation import last_project, remember_project
+from .rotation import deferred_tasks, last_project, remember_project
 from .selector import next_bundle
 
 # All project-oriented roles can explicitly advance their own cursor.  The
@@ -122,11 +122,15 @@ def next_work(role: str = "tasksolver") -> dict:
     }
     previous_project = ""
     rotation_path = None
+    deferred_ids: list = []
     if role in PROJECT_ROTATION_ROLES:
         rotation_path = rotation_state_file()
         previous_project = last_project(rotation_path, role)
+        deferred_ids = deferred_tasks(rotation_path, role)
         if previous_project:
             result["rotation"] = {"previous_project": previous_project}
+        if deferred_ids:
+            result.setdefault("rotation", {})["deferred_tasks"] = list(deferred_ids)
     # Der TASKWRITER braucht die Projektliste: Ist alles eingestuft, sucht er
     # das naechste Projekt, das noch GAR KEINE Aufgaben hat. Nur fuer ihn
     # erheben - fuer den Solver waere es verschwendete Zeit.
@@ -173,7 +177,8 @@ def next_work(role: str = "tasksolver") -> dict:
                 return result
 
     bundle = next_bundle(config, store, view, role=role,
-                        after_project=previous_project)
+                        after_project=previous_project,
+                        deferred_task_ids=deferred_ids)
 
     # Fremde Lock-Regeln gehen als TEXT weiter — nicht ausgewertet, sondern
     # dem LLM zum Lesen gegeben.

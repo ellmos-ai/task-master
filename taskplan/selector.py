@@ -220,6 +220,42 @@ def _rotate_solver_candidates(tasks: List[dict], after_project: str) -> List[dic
     )
 
 
+def _apply_task_revolver(tasks: List[dict],
+                         deferred_ids: Optional[List[int]]) -> List[dict]:
+    """Reiht zurueckgestellte Aufgaben ans Ende ALLER Kandidaten.
+
+    Der Projekt-Cursor ist zu grob, wenn genau EINE Aufgabe blockiert ist:
+    Das Projekt kommt im naechsten Rotationszyklus wieder, und dieselbe
+    Aufgabe steht erneut vorn (``ORDER BY priority, updated_at, created_at``
+    ist stabil). Der einzige verbleibende Hebel waere, ihre Etiketten zu
+    verbiegen — ``effort`` hochstufen, ``priority`` senken, ``status``
+    faelschen. Das waere Datenverfaelschung: Diese Felder beschreiben
+    Eigenschaften der Aufgabe, nicht ihre Position in der Warteschlange.
+
+    Deshalb dieser Revolver. Solange es frische Kandidaten gibt, werden
+    NUR sie geliefert — eine zurueckgestellte Aufgabe soll auch nicht ueber
+    die Projektbuendelung wieder hereinrutschen. Ist die Trommel einmal
+    durch (alles zurueckgestellt), kommt die am laengsten wartende Aufgabe
+    dran; so verhungert keine und der Loop laeuft nie kuenstlich leer.
+    """
+    if not deferred_ids or not tasks:
+        return tasks
+
+    rank = {}
+    for index, raw in enumerate(deferred_ids):
+        try:
+            rank[int(raw)] = index
+        except (TypeError, ValueError):
+            continue
+    if not rank:
+        return tasks
+
+    fresh = [t for t in tasks if t.get("id") not in rank]
+    if fresh:
+        return fresh
+    return sorted(tasks, key=lambda t: rank.get(t.get("id"), len(rank)))
+
+
 def _bundle_from(tasks: List[dict], mode: str, effort: str,
                  max_size: int) -> Bundle:
     """Bildet das kleinste sinnvolle Buendel: EIN Projekt, bis zu `max_size` Aufgaben.
@@ -404,7 +440,8 @@ def _maintainer_bundle(config: SelectorConfig, store: TaskStore,
 
 def next_bundle(config: SelectorConfig, store: TaskStore,
                 locks: LockView, role: str = "tasksolver",
-                after_project: str = "") -> Optional[Bundle]:
+                after_project: str = "",
+                deferred_task_ids: Optional[List[int]] = None) -> Optional[Bundle]:
     """Was ist als Naechstes dran? None = nichts zu tun.
 
     Gibt der Selektor None zurueck, endet der Durchlauf EHRLICH als Leerlauf —
@@ -428,6 +465,10 @@ def next_bundle(config: SelectorConfig, store: TaskStore,
     for effort in efforts:
         # 1. Oberflaeche zuerst — sie ist billig und entlastet sofort.
         surface = _candidates(store, effort, locks, surface=True)
+        # Wurzelaufgaben haben kein Projekt — der Projekt-Cursor greift dort
+        # nicht. Fuer sie ist der Revolver der einzige Weg, eine blockierte
+        # Aufgabe zurueckzustellen, ohne ihre Etiketten zu verfaelschen.
+        surface = _apply_task_revolver(surface, deferred_task_ids)
         if surface:
             return _bundle_from(surface, SURFACE, effort, config.max_bundle_size)
 
@@ -435,6 +476,7 @@ def next_bundle(config: SelectorConfig, store: TaskStore,
         if not config.deep_enabled:
             continue
         deep = _candidates(store, effort, locks, surface=False)
+        deep = _apply_task_revolver(deep, deferred_task_ids)
         deep = _rotate_solver_candidates(deep, after_project)
         if deep:
             return _bundle_from(deep, DEEP, effort, config.max_bundle_size)

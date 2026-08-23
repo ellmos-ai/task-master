@@ -411,6 +411,7 @@ class TaskClient:
                         WHEN 'critical' THEN 1 WHEN 'high' THEN 2
                         WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5
                     END,
+                    COALESCE(NULLIF(updated_at, ''), created_at) ASC,
                     created_at ASC
                 {limit_clause}
             """, params).fetchall()

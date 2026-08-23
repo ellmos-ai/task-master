@@ -313,25 +313,53 @@ def main(argv: list[str] | None = None) -> int:
 
     if command == "skip":
         from .config import rotation_state_file
-        from .rotation import remember_project
+        from .rotation import defer_task, remember_project, undefer_task
 
         role = _option(rest, "--role", "maintainer")
         project = _option(rest, "--project", "")
-        if not project:
+        task_raw = _option(rest, "--task", "")
+        undo = "--undo" in rest
+        if not project and not task_raw:
             print("Nutzung: python -m taskplan skip "
                   "--role <maintainer|taskwriter|tasksolver> "
-                  "--project <pfad>", file=sys.stderr)
+                  "[--project <pfad>] [--task <id> [--undo]]", file=sys.stderr)
             return 2
         if role not in ("maintainer", "taskwriter", "tasksolver"):
             print("skip ist nur für projektbasierte Rollen verfügbar: "
                   "maintainer, taskwriter oder tasksolver.",
                   file=sys.stderr)
             return 2
-        if not remember_project(rotation_state_file(), role, project):
-            print("Rotationszustand konnte nicht geschrieben werden.",
-                  file=sys.stderr)
-            return 1
-        print(f"Übersprungen für den nächsten Lauf: {project}")
+
+        state_file = rotation_state_file()
+
+        # Aufgabenebene zuerst: Eine einzelne blockierte Aufgabe soll nicht
+        # ueber ihre Etiketten aus der Auswahl gedraengt werden muessen.
+        if task_raw:
+            try:
+                task_id = int(task_raw)
+            except ValueError:
+                print(f"--task erwartet eine Zahl, nicht {task_raw!r}.",
+                      file=sys.stderr)
+                return 2
+            if undo:
+                if not undefer_task(state_file, role, task_id):
+                    print("Rotationszustand konnte nicht geschrieben werden.",
+                          file=sys.stderr)
+                    return 1
+                print(f"Wieder eingereiht: Aufgabe {task_id}")
+            else:
+                if not defer_task(state_file, role, task_id):
+                    print("Rotationszustand konnte nicht geschrieben werden.",
+                          file=sys.stderr)
+                    return 1
+                print(f"Ans Ende gereiht für die Rolle {role}: Aufgabe {task_id}")
+
+        if project:
+            if not remember_project(state_file, role, project):
+                print("Rotationszustand konnte nicht geschrieben werden.",
+                      file=sys.stderr)
+                return 1
+            print(f"Übersprungen für den nächsten Lauf: {project}")
         return 0
 
     if command in ("help", "-h", "--help"):
@@ -384,9 +412,15 @@ def main(argv: list[str] | None = None) -> int:
         print("  starters list | starters path --role R --provider P")
         print("            Listet bzw. lokalisiert die gebündelten Windows-Starter.")
         print()
-        print("  skip --role <maintainer|taskwriter|tasksolver> --project PFAD")
-        print("            Setzt den Projekt-Cursor der Rolle hinter ein Projekt,")
+        print("  skip --role <maintainer|taskwriter|tasksolver>")
+        print("       [--project PFAD] [--task ID [--undo]]")
+        print("            --project setzt den Projekt-Cursor hinter ein Projekt,")
         print("            damit der nächste Lauf den nächsten Kandidaten nimmt.")
+        print("            --task reiht EINE blockierte Aufgabe ans Ende aller")
+        print("            Kandidaten (Revolver) — statt sie über ihre Etiketten")
+        print("            (effort/priority/status) aus der Auswahl zu drängen.")
+        print("            Sind alle Kandidaten zurückgestellt, kommt die am")
+        print("            längsten wartende dran; --undo reiht wieder vor ein.")
         print()
         print("Als Bibliothek:  from taskplan import api as tasks")
         return 0
