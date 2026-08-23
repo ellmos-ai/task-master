@@ -37,9 +37,16 @@ GOAL- UND EXIT-VERTRAG — DAS IST EIN LOOP, KEIN EINMALAUFTRAG
 
       python -m taskplan skip --role tasksolver --project "<pfad>"
 
-  Der Skip ist nur für dieses Projekt; er markiert keine Aufgabe als erledigt. Bei einem
-  Wurzelbündel ohne Projektpfad gibt es keinen Skip-Cursor — dann protokollierst du den Befund und
-  nutzt den Backoff.
+  Der Skip ist nur für dieses Projekt; er markiert keine Aufgabe als erledigt.
+
+  Blockiert dagegen eine EINZELNE Aufgabe, stellst du genau diese zurück:
+
+      python -m taskplan skip --role tasksolver --task <ID>
+
+  Sie rutscht ans Ende der Warteschlange und kommt wieder, sobald nichts Frischeres mehr da ist;
+  `--undo` holt sie sofort zurück. Das wirkt auch bei Wurzelaufgaben ohne Projektpfad, für die
+  der Projekt-Cursor nichts ausrichtet. Reihenfolge ist Rotationszustand, nicht Aufgaben-
+  eigenschaft: Dieser Hebel verschiebt die Aufgabe, ohne ihre Einstufung anzufassen.
 
 RETRY-GRENZE FÜR LOKALE BÜNDELFEHLER — DREI VERSUCHE, DANN QUEUE FORTSETZEN
 
@@ -54,15 +61,18 @@ RETRY-GRENZE FÜR LOKALE BÜNDELFEHLER — DREI VERSUCHE, DANN QUEUE FORTSETZEN
   1. Schreibe einen ausdrücklichen `SKIP`-Eintrag mit Task-IDs, Projekt, drei Versuchen und dem
      konkreten Gate in das vorhandene Register. Die Aufgabe bleibt offen; markiere sie weder
      `done` noch `cancelled`.
-  2. Hat das Bündel einen Projektpfad, führe den oben genannten
-     `python -m taskplan skip --role tasksolver --project "<pfad>"`-Befehl aus. Der vorhandene
-     Cursor ist projektbezogen; er ersetzt keinen erfundenen Task-Status.
+  2. Blockiert genau eine Aufgabe, stelle sie mit
+     `python -m taskplan skip --role tasksolver --task <ID>` zurück. Ist das ganze Projekt
+     betroffen, führe zusätzlich den oben genannten
+     `python -m taskplan skip --role tasksolver --project "<pfad>"`-Befehl aus. Beide Cursor
+     verschieben nur die Reihenfolge; keiner ersetzt einen erfundenen Task-Status.
   3. Frage in der nächsten Fortsetzung den Selektor nach anderer autonom bearbeitbarer Arbeit.
      Der dritte Fehlschlag oder der Skip beendet weder das Goal noch den Gesamtlauf.
 - Ein Arbeitssweep darf erst als ohne weiteres autonomes Potential gelten, nachdem der Selektor
   alle erreichbaren Kandidaten unter den unveränderten Gates geprüft hat. Erst dann greift der
-  Exit-1-/Backoff-Vertrag. Bei einem Wurzelbündel ohne Projektcursor bleibt die oben beschriebene
-  Grenze bestehen: Befund protokollieren und Backoff nutzen, aber keinen Skip-Mechanismus erfinden.
+  Exit-1-/Backoff-Vertrag. Bei einem Wurzelbündel ohne Projektcursor greift der Task-Skip
+  (`--task <ID>`); darüber hinaus bleibt die Grenze bestehen: Befund protokollieren und Backoff
+  nutzen, aber keinen weiteren Mechanismus erfinden.
 
 START-PREFLIGHT — EINMAL VOR DEM ERSTEN SELEKTORLAUF
 

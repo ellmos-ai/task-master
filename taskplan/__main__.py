@@ -10,6 +10,38 @@ def _option(args: list[str], name: str, default: str = "") -> str:
     return args[index + 1] if index + 1 < len(args) else default
 
 
+def _release_claim_on_defer(task_id: int, store=None) -> str:
+    """Loest den Claim einer zurueckgestellten Aufgabe — sichtbar.
+
+    Zuruecklegen heisst: Ich arbeite gerade NICHT daran. Genau das bestreitet
+    ein stehender ``assigned_to``-Eintrag. Bliebe er, waere eine Blockade nur
+    gegen die naechste getauscht: Der Solver uebergeht die Aufgabe zwar, der
+    MAINTAINER aber meidet ihr ganzes Projekt weiter, weil er jede zugewiesene
+    Aufgabe als 'dort arbeitet jemand' liest.
+
+    Der bisherige Inhaber wird IMMER genannt. Ein geloester Claim ist eine
+    Aussage ueber fremde Arbeit und darf nicht still passieren.
+
+    Rueckgabe: der geloeste Inhaber, oder "" wenn nichts zu loesen war.
+    """
+    if store is None:
+        from .client import TaskClient
+        store = TaskClient()
+    task = store.get(task_id)
+    if not task:
+        return ""
+    owner = task.get("assigned_to") or ""
+    if not owner:
+        return ""
+    if store.assign(task_id, "", ""):
+        print(f"  Claim von {owner!r} geloest — zurueckgestellt heisst, "
+              f"dass niemand daran arbeitet.")
+        return owner
+    print(f"  Achtung: Claim von {owner!r} steht weiter und sperrt das "
+          f"Projekt fuer den MAINTAINER.", file=sys.stderr)
+    return ""
+
+
 def _projects_command(args: list[str]) -> int:
     """Die manuelle Projekt-Registry — der Fallback der Auto-Erkennung.
 
@@ -353,6 +385,7 @@ def main(argv: list[str] | None = None) -> int:
                           file=sys.stderr)
                     return 1
                 print(f"Ans Ende gereiht für die Rolle {role}: Aufgabe {task_id}")
+                _release_claim_on_defer(task_id)
 
         if project:
             if not remember_project(state_file, role, project):

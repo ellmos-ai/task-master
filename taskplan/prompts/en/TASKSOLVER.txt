@@ -36,8 +36,16 @@ GOAL AND EXIT CONTRACT — THIS IS A LOOP, NOT A ONE-SHOT RUN
 
       python -m taskplan skip --role tasksolver --project "<path>"
 
-  The skip applies only to that project; it never marks a task done. A root bundle has no project
-  cursor; record the finding and use the backoff instead.
+  The skip applies only to that project; it never marks a task done.
+
+  If instead a SINGLE task is blocking, defer exactly that one:
+
+      python -m taskplan skip --role tasksolver --task <ID>
+
+  It moves to the back of the queue and returns once nothing fresher is left; `--undo` brings it
+  back at once. This also works for root tasks without a project path, where the project cursor
+  has no effect. Order is rotation state, not a task property: this lever moves the task without
+  touching its classification.
 
 RETRY LIMIT FOR LOCAL BUNDLE FAILURES — THREE ATTEMPTS, THEN CONTINUE THE QUEUE
 
@@ -51,15 +59,17 @@ RETRY LIMIT FOR LOCAL BUNDLE FAILURES — THREE ATTEMPTS, THEN CONTINUE THE QUEU
 - After the third documented failure of the same task or bundle:
   1. Write an explicit `SKIP` entry with task IDs, project, three attempts, and the concrete gate
      to the existing register. Leave the task open; mark it neither `done` nor `cancelled`.
-  2. If the bundle has a project path, run the `python -m taskplan skip --role tasksolver
-     --project "<path>"` command above. The existing cursor is project-scoped; it does not replace
-     a made-up task status.
+  2. If exactly one task is blocking, defer it with `python -m taskplan skip --role tasksolver
+     --task <ID>`. If the whole project is affected, additionally run the
+     `python -m taskplan skip --role tasksolver --project "<path>"` command above. Both cursors
+     only move ordering; neither replaces a made-up task status.
   3. In the next continuation, ask the selector for other autonomously actionable work. Neither
      the third failure nor the skip ends the goal or the overall run.
 - A work sweep may be considered out of autonomous potential only after the selector has checked
   every reachable candidate under the unchanged gates. Only then does the exit-1/backoff contract
-  apply. For a root bundle without a project cursor, keep the boundary above: log the finding and
-  use backoff, but do not invent a skip mechanism.
+  apply. For a root bundle without a project cursor, the task skip (`--task <ID>`) applies; beyond
+  that, keep the boundary above: log the finding and use backoff, but do not invent any further
+  mechanism.
 
 START PREFLIGHT — ONCE BEFORE THE FIRST SELECTOR CALL
 

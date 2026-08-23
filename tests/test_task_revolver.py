@@ -15,6 +15,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from taskplan.__main__ import _release_claim_on_defer
 from taskplan.client import TaskClient
 from taskplan.locks import LockView
 from taskplan.rotation import (
@@ -222,6 +223,57 @@ class TestUpdatedAtOrdering(unittest.TestCase):
         order = [t["id"] for t in client.list(status="open", limit=None)]
         self.assertEqual(order, [first, second],
                          "Leerer Stempel darf nicht nach vorn oder hinten kippen")
+
+
+class TestClaimReleaseOnDefer(unittest.TestCase):
+    """Zuruecklegen und 'ich arbeite daran' schliessen einander aus.
+
+    Gemessener Ausgangsbefund (2026-08-24): Der Selektor filtert
+    ``assigned_to`` NICHT — 145 offene Aufgaben trugen einen Claim und wurden
+    trotzdem ausgeliefert. Ein Claim wirkt allein als MAINTAINER-Sperre
+    (``busy``). Bliebe er beim Zuruecklegen stehen, waere die Blockade nur
+    verschoben: Der Solver uebergeht die Aufgabe, der MAINTAINER meidet ihr
+    Projekt weiter.
+    """
+
+    def test_claim_is_released_and_named(self):
+        client = TaskClient(db_path=":memory:", agent_id="test")
+        task_id = client.add("Geclaimt", priority="medium")["id"]
+        client.assign(task_id, "codex")
+
+        owner = _release_claim_on_defer(task_id, store=client)
+
+        self.assertEqual(owner, "codex", "Der bisherige Inhaber muss benannt werden")
+        self.assertEqual(client.get(task_id)["assigned_to"], "",
+                         "Der Claim muss geloest sein")
+
+    def test_unclaimed_task_is_left_alone(self):
+        client = TaskClient(db_path=":memory:", agent_id="test")
+        task_id = client.add("Ohne Claim", priority="medium")["id"]
+
+        self.assertEqual(_release_claim_on_defer(task_id, store=client), "")
+        self.assertEqual(client.get(task_id)["assigned_to"], "")
+
+    def test_missing_task_is_not_an_error(self):
+        client = TaskClient(db_path=":memory:", agent_id="test")
+        self.assertEqual(_release_claim_on_defer(999999, store=client), "")
+
+    def test_authorship_survives_the_release(self):
+        """``created_by``/``agent_id`` duerfen dabei NICHT verlorengehen.
+
+        Genau das war der Fehler des alten Wrappers, den ``assign`` behoben
+        hat — wer die Aufgabe angelegt hat, muss nachvollziehbar bleiben.
+        """
+        client = TaskClient(db_path=":memory:", agent_id="anleger")
+        task_id = client.add("Mit Herkunft", priority="medium")["id"]
+        client.assign(task_id, "codex")
+        before = client.get(task_id)
+
+        _release_claim_on_defer(task_id, store=client)
+
+        after = client.get(task_id)
+        self.assertEqual(after["created_by"], before["created_by"])
+        self.assertEqual(after["agent_id"], before["agent_id"])
 
 
 if __name__ == "__main__":
