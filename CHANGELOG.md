@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### Added
+- **Aufgaben-Revolver:** `python -m taskplan skip --role R --task <ID> [--undo]`
+  stellt eine einzelne Aufgabe ans Ende der Warteschlange. Bis dahin war
+  Rotation nur projektweit — blockierte genau eine Aufgabe ein Projekt, stand
+  sie nach jedem Zyklus wieder vorn, und der einzige verbleibende Hebel waren
+  ihre Etiketten (`effort` hochstufen, `priority` senken, `status` fälschen).
+  Alle drei behaupten etwas Falsches über die Aufgabe. Reihenfolge ist jetzt
+  Rotationszustand statt Aufgabeneigenschaft. Wirkt auch für Wurzelaufgaben
+  ohne Projektpfad, wo der Projekt-Cursor nichts ausrichtet.
+- Der Store sortiert zusätzlich nach `updated_at` (Rückfall auf `created_at`)
+  als Grundfairness gegen Verhungern. Gemessene Einschränkung: `datetime.now()`
+  hat unter Windows rund 15,6 ms Granularität und trennt deshalb nur
+  Operationen, die mehr als einen Takt auseinanderliegen — die verlässliche
+  Zusage ist der explizite Revolver.
+- Ein zurückgestellter Task verliert seinen Claim (`assigned_to`), unter
+  Nennung des bisherigen Inhabers. Zurücklegen heißt „ich arbeite nicht daran";
+  ein stehender Claim behauptet das Gegenteil und hätte die Blockade nur gegen
+  eine MAINTAINER-Sperre getauscht.
+
 ### Fixed
 - Der TASKSOLVER-Vertrag begrenzt lokale Bündelfehler jetzt auf drei
   dokumentierte Versuche, protokolliert danach einen SKIP-Grund und setzt die
