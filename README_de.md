@@ -385,7 +385,10 @@ Konfiguration, nicht in den Starter.
 Starter bleiben bewusst dünn. `[execution] provider` wählt den Default-Provider;
 `[providers.<name>.models]` und `[providers.<name>.reasoning_effort]` bestimmen Modell
 und Reasoning je Rolle. Die bisherige Sektion `[models]` bleibt als kompatibler
-Fallback erhalten.
+Fallback erhalten. Bei Codex bedeuten leere oder fehlende Werte „kein TASKPLAN-
+Override“: Der Starter lässt die entsprechenden CLI-Flags weg und Codex erbt die
+kanonischen Defaults aus `~/.codex/config.toml`. So ist nicht auf jedem Host eine
+zweite Modellkonfiguration Pflicht; ausdrückliche Rollen-Overrides bleiben erhalten.
 
 Codex nutzt `continuation = "goal"`. TASKPLAN erzeugt einen ausdrücklichen
 Nutzerauftrag, der ein persistiertes Goal autorisiert, pro Fortsetzung genau ein
@@ -398,8 +401,8 @@ beliebige Starter; `python -m taskplan startup-prompt ...` erzeugt den
 providerspezifischen Nutzerauftrag. Kein Benutzername, Home-Pfad oder Modell wird im
 Starter fest verdrahtet.
 
-Das Wheel enthält neun nutzerneutrale Windows-Starter für
-TASKSOLVER/TASKWRITER/MAINTAINER × Claude/Codex/Agy:
+Das Wheel enthält zwölf nutzerneutrale Windows-Starter für
+TASKSOLVER/TASKWRITER/MAINTAINER × Claude/Codex/Agy/Kimi:
 
 ```powershell
 python -m taskplan starters list
@@ -408,7 +411,10 @@ python -m taskplan launch --role tasksolver --provider codex
 ```
 
 Modell-Identifier und Reasoning-Level werden in `~/.taskplan/taskplan.toml`
-konfiguriert. `TASKPLAN_WORKDIR` setzt optional das Arbeitsverzeichnis;
+konfiguriert. Für Codex sind diese Einträge optionale rollenspezifische Overrides;
+ohne sie bleibt die Codex-CLI-Konfiguration maßgeblich. Andere Provider benötigen
+weiterhin TASKPLAN-Einträge für Modell und Reasoning. `TASKPLAN_WORKDIR` setzt
+optional das Arbeitsverzeichnis;
 `TASKPLAN_CLAUDE_MCP_CONFIG` optional ein Claude-MCP-Profil. Paket-Starter nutzen
 standardmäßig die normalen Freigabedialoge des Providers. Nur eine vertrauenswürdige
 lokale Automation soll mit `TASKPLAN_TRUSTED_AUTOMATION=1` unbeaufsichtigte

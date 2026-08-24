@@ -29,6 +29,13 @@
   eine MAINTAINER-Sperre getauscht.
 
 ### Fixed
+- Codex-Starter scheitern nicht mehr, wenn `~/.taskplan/taskplan.toml` fehlt
+  oder dort kein Codex-Modell bzw. Reasoning hinterlegt ist. Leere Werte sind
+  jetzt bewusst „kein TASKPLAN-Override“: Der zentrale Launcher lässt
+  `--model` bzw. `model_reasoning_effort` weg und übernimmt damit die eine
+  kanonische Codex-CLI-Konfiguration aus `~/.codex/config.toml`. Explizite
+  Rollenwerte und geerbte Provider-Defaults bleiben unverändert vorrangig;
+  andere Provider behalten ihre Pflichtkonfiguration.
 - Der TASKSOLVER-Vertrag begrenzt lokale Bündelfehler jetzt auf drei
   dokumentierte Versuche, protokolliert danach einen SKIP-Grund und setzt die
   Queue-Prüfung fort. `cldflt.sys`, Locks, Fremdzustände und übrige Gates bleiben

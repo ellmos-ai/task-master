@@ -77,12 +77,14 @@ empty_policy = "keep_goal"
 idle_backoff_seconds = 60
 
 [providers.codex.models]
+# Leer = kein TASKPLAN-Override; Codex erbt aus ~/.codex/config.toml.
 default    = ""
 taskwriter = ""
 tasksolver = ""
 maintainer = ""
 
 [providers.codex.reasoning_effort]
+# Auch Reasoning ist optional; nichtleere Werte bleiben rollenbezogene Overrides.
 default    = "high"
 taskwriter = "high"
 tasksolver = "xhigh"

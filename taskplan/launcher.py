@@ -3,7 +3,7 @@
 
 The packaged ``START-*.bat`` files are deliberately tiny wrappers around this
 module. Provider command lines, prompt provenance, runtime lookup, and dry-run
-behaviour therefore have one tested implementation instead of nine drifting
+behaviour therefore have one tested implementation instead of twelve drifting
 copies.
 """
 from __future__ import annotations
@@ -62,12 +62,12 @@ def _provider_command(
     profile = runtime_profile(role, provider)
     model = str(profile["model"]).strip()
     effort = str(profile["reasoning_effort"]).strip()
-    if not model:
+    if provider != "codex" and not model:
         raise ValueError(
             f"Kein Modell konfiguriert: "
             f"[providers.{provider}.models] {role} = \"...\""
         )
-    if not effort:
+    if provider != "codex" and not effort:
         raise ValueError(
             f"Kein Reasoning/Thinking konfiguriert: "
             f"[providers.{provider}.reasoning_effort] {role} = \"...\""
@@ -104,12 +104,20 @@ def _provider_command(
             f"{prompt_path}. Read the file completely; it is the canonical "
             "source for this session."
         )
-        command = [
-            executable,
-            "--model", model,
-            "--config", f"model_reasoning_effort={json.dumps(effort)}",
+        command = [executable]
+        # Codex already has one canonical provider configuration under
+        # ~/.codex/config.toml. TASKPLAN values are optional role-specific
+        # overrides; omitting them lets the CLI inherit its own defaults
+        # instead of forcing every host to maintain a duplicate config file.
+        if model:
+            command.extend(["--model", model])
+        if effort:
+            command.extend([
+                "--config", f"model_reasoning_effort={json.dumps(effort)}",
+            ])
+        command.extend([
             "--config", f"developer_instructions={json.dumps(developer)}",
-        ]
+        ])
         if trusted:
             command.extend([
                 "--sandbox", "danger-full-access",
@@ -207,9 +215,14 @@ def launch(
 
     profile = runtime_profile(normalized_role, normalized_provider)
     print()
+    model_display = profile["model"] or "Codex-Default (kein TASKPLAN-Override)"
+    effort_display = (
+        profile["reasoning_effort"]
+        or "Codex-Default (kein TASKPLAN-Override)"
+    )
     print(f"[{normalized_role.upper()}] Provider:  {normalized_provider}")
-    print(f"[{normalized_role.upper()}] Modell:    {profile['model']}")
-    print(f"[{normalized_role.upper()}] Reasoning: {profile['reasoning_effort']}")
+    print(f"[{normalized_role.upper()}] Modell:    {model_display}")
+    print(f"[{normalized_role.upper()}] Reasoning: {effort_display}")
     print(f"[{normalized_role.upper()}] Prompt:    {prompt_path}")
     print(f"[{normalized_role.upper()}] Arbeitsort:{workdir}")
 

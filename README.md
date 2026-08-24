@@ -372,7 +372,11 @@ bundled runner or launcher consumes it yet; it is therefore not a functional
 
 Launchers are intentionally thin. `[execution] provider` selects a default provider;
 `[providers.<name>.models]` and `[providers.<name>.reasoning_effort]` select values
-per role. The legacy `[models]` section remains a compatible fallback.
+per role. The legacy `[models]` section remains a compatible fallback. For Codex,
+blank or missing values mean "no TASKPLAN override": the launcher omits those CLI
+flags and Codex inherits its canonical `~/.codex/config.toml` defaults. This avoids
+a second mandatory model configuration on every host while preserving explicit
+role overrides.
 
 Codex uses `continuation = "goal"`. TASKPLAN generates an explicit user startup
 prompt that authorizes a persisted goal, processes one bundle per continuation,
@@ -384,8 +388,8 @@ exposes the profile to any shell; `python -m taskplan startup-prompt ...` emits 
 provider-specific user request. No user name, home path, or model is hardcoded in
 the launcher.
 
-The wheel includes nine user-neutral Windows launchers for
-TASKSOLVER/TASKWRITER/MAINTAINER × Claude/Codex/Agy:
+The wheel includes twelve user-neutral Windows launchers for
+TASKSOLVER/TASKWRITER/MAINTAINER × Claude/Codex/Agy/Kimi:
 
 ```powershell
 python -m taskplan starters list
@@ -394,6 +398,9 @@ python -m taskplan launch --role tasksolver --provider codex
 ```
 
 Configure model identifiers and reasoning levels in `~/.taskplan/taskplan.toml`.
+For Codex these entries are optional role-specific overrides; without them the
+Codex CLI configuration remains authoritative. Other providers still require
+TASKPLAN model and reasoning entries.
 `TASKPLAN_WORKDIR` optionally selects the worker directory;
 `TASKPLAN_CLAUDE_MCP_CONFIG` optionally supplies a Claude MCP profile. Packaged
 launchers use normal provider permission prompts by default. Only a trusted local
