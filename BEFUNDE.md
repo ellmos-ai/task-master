@@ -100,7 +100,7 @@
 
 ## Befund 6 — Aufgaben zeigen auf nicht registrierte Arbeitsklone
 
-**Beobachtet 2026-08-24, zwei belegte Faelle, unbehoben.**
+**Beobachtet 2026-08-24, drei belegte Faelle, unbehoben.**
 
 > **Nachtrag 2026-08-24, 04:45 — der urspruengliche Befund war zu breit.**
 > Er nannte #2097 und #2098 als "zwei Faelle in Folge". Die Pruefung von #2098
