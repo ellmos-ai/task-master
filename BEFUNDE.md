@@ -100,7 +100,7 @@
 
 ## Befund 6 — Aufgaben zeigen auf nicht registrierte Arbeitsklone
 
-**Beobachtet 2026-08-24, ein belegter Fall, unbehoben.**
+**Beobachtet 2026-08-24, zwei belegte Faelle, unbehoben.**
 
 > **Nachtrag 2026-08-24, 04:45 — der urspruengliche Befund war zu breit.**
 > Er nannte #2097 und #2098 als "zwei Faelle in Folge". Die Pruefung von #2098
@@ -109,8 +109,13 @@
 > `C:\_Local_DEV\repos\DokuReader` existiert hier gar nicht (nur der
 > Laptop-Slot kennt es). Ein Suffix im Namen ist also kein Beleg; entscheidend
 > ist allein, was die Registry des jeweiligen Hosts fuehrt.
-> Belegt bleibt der Befund fuer #2097. Das vermutete Muster steht damit auf
-> einem einzigen Fall — zu wenig, um daraus eine Regel abzuleiten.
+> Belegt bleibt der Befund fuer #2097. Das vermutete Muster stand damit
+> zunaechst auf einem einzigen Fall — zu wenig fuer eine Regel.
+>
+> **Zweiter Nachtrag 2026-08-24, 05:35:** Der StreamingGuide-Fall weiter unten
+> liefert den zweiten Beleg, und zwar einen deutlich staerkeren. Das Muster
+> traegt jetzt — praeziser gefasst als anfangs: Es geht nicht um Suffixe im
+> Namen, sondern um Klone, die kein Mensch mehr zuordnen kann.
 
 Der Selektor lieferte zu #2097 (CareCenter-for-Codex) als `project_path` den
 Klon `CareCenter-for-Codex-tasksolver-1765-1766-1761`. Kanonisch ist laut
@@ -143,6 +148,25 @@ der genannte Klon ist in keiner Registry gefuehrt.
   Wer den Slot des falschen Hosts liest, "korrigiert" also einen Pfad, der
   hier nie existiert hat. Massgeblich ist immer der Slot des Hosts, auf dem
   gearbeitet wird.
+- **Zweiter, weit drastischerer Fall — StreamingGuide (2026-08-24, #1770/#1122):**
+  Hier kippt die Groessenordnung. In `C:\_Local_DEV
+epos\` liegen **zehn** Klone
+  desselben Projekts, sieben davon in der Registry. Die Namen erzaehlen die
+  Entstehung: `-task1770-verify-20260810`, `-task1770-clean-20260812`,
+  `-task1770-fresh-20260812`, `-tasksolver-1116-1122-1123`,
+  `-tasksolver-1116-1122-rerun-20260812`, `_task1770_streamingguide_clean_...`.
+  Jeder Lauf hat einen neuen Klon angelegt, statt einen bestehenden zu nutzen —
+  offenbar, um einen "sauberen" Ausgangsstand zu erzwingen. Welcher Stand gilt,
+  ist von aussen nicht mehr erkennbar.
+  Der im Task genannte Pfad zeigt hier nicht einmal auf einen Klon, sondern auf
+  ein vollstaendiges Git-Repository **in OneDrive** (Remote gesetzt, Branch
+  master, 118 uncommittete Aenderungen, kein Plan-D-Pointer). Genau das
+  untersagt Plan D, weil synchronisierte `.git`-Objektdateien eine bekannte
+  Korruptionsquelle sind.
+  Damit steht der Befund nicht mehr auf einem Einzelfall. Das Muster ist:
+  **Wer einen unklaren Repository-Zustand vorfindet, legt einen neuen Klon an
+  statt den Zustand zu klaeren.** Das verschiebt das Problem und vervielfacht
+  es — beim naechsten Lauf ist die Lage unklarer als zuvor, nicht klarer.
 - **Naechster Schritt:** Owner-Entscheidung, ob (a) der TASKWRITER Pfade beim
   Erfassen gegen `repos.json` aufloest, (b) der Selektor eine Abweichung
   meldet statt sie durchzureichen, oder (c) die verwaisten Suffix-Klone
