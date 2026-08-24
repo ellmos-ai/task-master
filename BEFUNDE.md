@@ -96,3 +96,38 @@
   Ablaufdatum bekommen (analog zum 24h-Verfall der LOCK-Dateien), (b) der
   Selektor nur `status == "active"` als `busy` liest und `assigned_to`
   ignoriert, oder (c) der Bestand einmalig nach Alter bereinigt wird.
+
+
+## Befund 6 — Aufgaben zeigen auf nicht registrierte Arbeitsklone
+
+**Beobachtet 2026-08-24, zwei Faelle in Folge, unbehoben.**
+
+Der Selektor lieferte nacheinander #2097 (CareCenter-for-Codex) und #2098
+(DokuReader). Beide Aufgaben nennen als `project_path` einen Klon mit
+Task-ID-Suffix — `CareCenter-for-Codex-tasksolver-1765-1766-1761`
+beziehungsweise `REL-PUB_DokuReader-tasksolver-1084-1085` — und nicht den
+kanonischen Plan-D-Klon, den `.SYNC/*/repos.json` auf beiden Hosts fuehrt.
+
+- **Warum das schadet:** Der Suffix-Klon von #2097 stand auf einem
+  Feature-Branch, vier Commits vor `origin/main` und zwei Wochen alt. Wer den
+  Pfad ungeprueft uebernimmt, misst einen veralteten Stand, behebt dort etwas,
+  das kanonisch schon anders aussieht, und pusht es womoeglich in einen Zweig,
+  den niemand mehr liest. Bei #2097 war genau das die Gefahr: Die im Task
+  genannten Testzahlen stammten aus dem Suffix-Klon und waren doppelt ueberholt.
+- **Warum es unauffaellig ist:** Der Pfad existiert, enthaelt dasselbe Repo und
+  laesst sich fehlerfrei betreten. Nichts schlaegt fehl — man misst nur das
+  falsche Objekt. Ohne Abgleich gegen `repos.json` faellt es nicht auf.
+- **Groessenordnung:** Allein zu CareCenter liegen vier Klone am Host, drei
+  davon nicht registriert. Die Suffix-Namen deuten darauf hin, dass frueher
+  Loop-Laeufe je Buendel einen eigenen Klon angelegt und stehen gelassen haben.
+- **Herkunft, vermutet — nicht belegt:** Wahrscheinlich hat der TASKWRITER den
+  Pfad aus dem Arbeitsverzeichnis des Laufs uebernommen, in dem er die Aufgabe
+  erkannt hat, statt ihn gegen die Registry aufzuloesen. Geprueft wurde das
+  nicht; es ist eine Vermutung, kein Befund.
+- **Wirksame Gegenmassnahme im Lauf:** Vor der ersten Messung
+  `.SYNC/*/repos.json` konsultieren und die Abweichung im Task vermerken —
+  so geschehen bei #2097.
+- **Naechster Schritt:** Owner-Entscheidung, ob (a) der TASKWRITER Pfade beim
+  Erfassen gegen `repos.json` aufloest, (b) der Selektor eine Abweichung
+  meldet statt sie durchzureichen, oder (c) die verwaisten Suffix-Klone
+  aufgeraeumt werden. Letzteres ist MAINTAINER-Gebiet, nicht meines.
