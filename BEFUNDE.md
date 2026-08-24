@@ -100,7 +100,7 @@
 
 ## Befund 6 — Aufgaben zeigen auf nicht registrierte Arbeitsklone
 
-**Beobachtet 2026-08-24, drei belegte Faelle, unbehoben.**
+**Beobachtet 2026-08-24, vier belegte Faelle, unbehoben.**
 
 > **Nachtrag 2026-08-24, 04:45 — der urspruengliche Befund war zu breit.**
 > Er nannte #2097 und #2098 als "zwei Faelle in Folge". Die Pruefung von #2098
@@ -182,6 +182,21 @@ epos\` liegen **zehn** Klone
   vereint beide Muster: toter Pfad (Erfassung nicht gegen Registry aufgeloest)
   **und** unklarer Klonzustand. Nicht bearbeitet — beide Aufgaben in den Revolver,
   Klaerung als D-20260824-003 abgelegt. Damit steht der Befund auf drei Faellen.
+- **Vierter Fall — VermieterZentrale (2026-08-24, #760/#764/#766), neue Facette:**
+  Der `project_path` `.SOFTWARE\CASH\DEV_VermieterZentrale_CASHCOW` existiert
+  nicht (auch der Parent `.SOFTWARE\CASH` fehlt); die Registry fuehrt nur einen
+  **leeren** Evidence-Klon. Das echte Projekt liegt im **anderen** Themenordner:
+  `.SOFTWARE\FINANCE\DEV_VermieterZentrale_CASHCOW`. Belegt ist die Zugehoerigkeit
+  hart — die FINANCE-`TODO.md` nennt TASKPLAN #762/#757/#756 aus demselben
+  Nummernkreis, und #760 (Kautionsmodul) ist dort seit 2026-08-01 (TW-VZ-14)
+  bereits ERLEDIGT. Die neue Facette gegenueber den ersten drei Faellen: Es ist
+  kein verwaister Klon, sondern ein gleichnamiges Projekt im falschen
+  Themenordner — der TASKWRITER muesste beim Aufloesen also nicht nur die Registry,
+  sondern auch themenordner-uebergreifend pruefen. Das Zielprojekt ist zudem nicht
+  Plan-D-faehig (kein Git, roh in OneDrive mit .bak-Dateien, Cloud-Lock). Codex hat
+  das seit 2026-08-11 viermal geskippt; der Selektor liefert es trotzdem in jeder
+  Runde. Nicht bearbeitet, Klaerung als D-20260824-004. Der Befund steht damit auf
+  vier Faellen.
 - **Naechster Schritt:** Owner-Entscheidung, ob (a) der TASKWRITER Pfade beim
   Erfassen gegen `repos.json` aufloest, (b) der Selektor eine Abweichung
   meldet statt sie durchzureichen, oder (c) die verwaisten Suffix-Klone
