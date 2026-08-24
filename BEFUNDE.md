@@ -167,6 +167,21 @@ epos\` liegen **zehn** Klone
   **Wer einen unklaren Repository-Zustand vorfindet, legt einen neuen Klon an
   statt den Zustand zu klaeren.** Das verschiebt das Problem und vervielfacht
   es — beim naechsten Lauf ist die Lage unklarer als zuvor, nicht klarer.
+- **Dritter Fall — cockroachdb-aws-hackathon / roshambo (2026-08-24, #1965/#1966):**
+  Der Selektor lieferte den `project_path`
+  `C:\Users\lukas\OneDrive\.TOPICS\.SOFTWARE\LLM\cockroachdb-aws-hackathon` —
+  ein Verzeichnis, das **nicht existiert** (`No such file or directory`). Die
+  Registry fuehrt stattdessen `C:\_Local_DEV\repos\roshambo`,
+  `roshambo-starmap`, `cockroachdb-skills` plus mehrere unregistrierte
+  `roshambo-*`-Klone. Diesmal ist der Pfad also nicht nur ein unregistrierter
+  Klon (wie #2097), sondern ein **totes** Verzeichnis: Der Task zeigt ins Leere,
+  das echte Material liegt in `.HACKATHONS/2026-roshambo` (unter Judging-Hold).
+  Verschaerfend: Der lokale `roshambo`-Klon steht nicht auf dem eingereichten
+  Tag-Stand (`f56efcb` existiert im Klon gar nicht; HEAD `b2b2bc7`), und der von
+  der Freeze-Order verlangte `judging-hold/post-submission`-Branch fehlt. Der Fall
+  vereint beide Muster: toter Pfad (Erfassung nicht gegen Registry aufgeloest)
+  **und** unklarer Klonzustand. Nicht bearbeitet — beide Aufgaben in den Revolver,
+  Klaerung als D-20260824-003 abgelegt. Damit steht der Befund auf drei Faellen.
 - **Naechster Schritt:** Owner-Entscheidung, ob (a) der TASKWRITER Pfade beim
   Erfassen gegen `repos.json` aufloest, (b) der Selektor eine Abweichung
   meldet statt sie durchzureichen, oder (c) die verwaisten Suffix-Klone
