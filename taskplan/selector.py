@@ -234,9 +234,26 @@ def _apply_task_revolver(tasks: List[dict],
 
     Deshalb dieser Revolver. Solange es frische Kandidaten gibt, werden
     NUR sie geliefert — eine zurueckgestellte Aufgabe soll auch nicht ueber
-    die Projektbuendelung wieder hereinrutschen. Ist die Trommel einmal
-    durch (alles zurueckgestellt), kommt die am laengsten wartende Aufgabe
-    dran; so verhungert keine und der Loop laeuft nie kuenstlich leer.
+    die Projektbuendelung wieder hereinrutschen.
+
+    Ist auf dieser Aufwandsstufe ALLES zurueckgestellt, gibt die Funktion
+    eine LEERE Liste zurueck. Der Aufrufer geht damit zur naechsthoeheren
+    Stufe weiter (``easy_first_globally``) beziehungsweise am Ende in den
+    ehrlichen Leerlauf.
+
+    Diese Zeile war zuerst anders gebaut — sie lieferte die am laengsten
+    wartende Aufgabe zurueck, als Schutz gegen Verhungern. Der Live-Lauf
+    2026-08-24 02:35 widerlegte das: Von 10 offenen ``easy``-Aufgaben
+    trugen 7 ``scope=central`` (nie autonom), die uebrigen 3 waren
+    zurueckgestellt. Der Fallback lieferte prompt eine davon erneut — und
+    verhinderte damit, dass der Selektor ueberhaupt zu ``medium``
+    weiterging. Bei 1497 offenen Aufgaben liess der Verhungerungsschutz
+    also alles andere verhungern.
+
+    Verhungern droht ohne ihn nicht: Die Trommel waechst nur durch
+    ausdrueckliches ``skip --task``, eine zurueckgestellte Aufgabe kehrt
+    zurueck, sobald irgendein frischer Kandidat auftaucht, und ``--undo``
+    ist der bewusste Hebel.
     """
     if not deferred_ids or not tasks:
         return tasks
@@ -250,10 +267,10 @@ def _apply_task_revolver(tasks: List[dict],
     if not rank:
         return tasks
 
-    fresh = [t for t in tasks if t.get("id") not in rank]
-    if fresh:
-        return fresh
-    return sorted(tasks, key=lambda t: rank.get(t.get("id"), len(rank)))
+    # Leere Liste, wenn alles zurueckgestellt ist: Der Aufrufer eskaliert
+    # dann zur naechsten Aufwandsstufe statt eine blockierte Aufgabe erneut
+    # auszuliefern (siehe Docstring, Live-Befund 2026-08-24).
+    return [t for t in tasks if t.get("id") not in rank]
 
 
 def _bundle_from(tasks: List[dict], mode: str, effort: str,

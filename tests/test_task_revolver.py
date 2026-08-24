@@ -121,16 +121,41 @@ class TestRevolverSelection(unittest.TestCase):
                              deferred_task_ids=[1])
         self.assertEqual([t["title"] for t in bundle.tasks], ["Frei"])
 
-    def test_full_drum_serves_the_longest_waiting_first(self):
-        """Ist alles zurueckgestellt, verhungert niemand — die Trommel dreht."""
+    def test_full_drum_escalates_instead_of_reserving_a_blocked_task(self):
+        """Ist auf einer Stufe alles zurueckgestellt, geht es eine Stufe hoeher.
+
+        Diese Zusicherung ersetzt eine fruehere. Bis 2026-08-24 lieferte der
+        Revolver in diesem Fall die am laengsten wartende Aufgabe zurueck —
+        gedacht als Schutz gegen Verhungern. Der Live-Lauf widerlegte das:
+        Von 10 offenen ``easy``-Aufgaben trugen 7 ``scope=central`` (nie
+        autonom), die uebrigen 3 waren zurueckgestellt. Der Fallback reichte
+        prompt eine davon erneut heraus und verhinderte damit, dass der
+        Selektor ueberhaupt zu ``medium`` weiterging. Der Verhungerungsschutz
+        liess also den Rest der Warteschlange verhungern.
+        """
         store = FakeStore([
-            task("Zuerst zurueckgestellt", project="/p/a", root=".SOFTWARE"),
-            task("Danach zurueckgestellt", project="/p/b", root=".RESEARCH"),
+            task("Blockiert und easy", project="/p/a", root=".SOFTWARE",
+                 effort="easy"),
+            task("Frei, aber teurer", project="/p/b", root=".RESEARCH",
+                 effort="medium"),
         ])
         bundle = next_bundle(self.config, store, self.locks,
-                             deferred_task_ids=[2, 1])
-        self.assertIsNotNone(bundle, "Voll besetzte Trommel darf nicht leerlaufen")
-        self.assertEqual(bundle.tasks[0]["title"], "Danach zurueckgestellt")
+                             deferred_task_ids=[1])
+        self.assertIsNotNone(bundle, "Die naechste Stufe traegt die Arbeit")
+        self.assertEqual([t["title"] for t in bundle.tasks],
+                         ["Frei, aber teurer"])
+        self.assertEqual(bundle.effort, "medium")
+
+    def test_exhausted_queue_is_an_honest_idle(self):
+        """Ist ueberall alles zurueckgestellt, wird keine Arbeit erfunden."""
+        store = FakeStore([
+            task("Einzige, zurueckgestellt", project="/p/a", root=".SOFTWARE"),
+        ])
+        bundle = next_bundle(self.config, store, self.locks,
+                             deferred_task_ids=[1])
+        self.assertIsNone(bundle,
+                          "Leere Warteschlange muss Exit 1 ergeben, nicht "
+                          "eine blockierte Aufgabe erneut ausliefern")
 
     def test_revolver_also_covers_surface_tasks(self):
         """Wurzelaufgaben haben kein Projekt — dort ist der Revolver der einzige Hebel."""
