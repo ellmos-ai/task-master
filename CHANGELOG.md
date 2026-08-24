@@ -11,6 +11,13 @@
   Alle drei behaupten etwas Falsches über die Aufgabe. Reihenfolge ist jetzt
   Rotationszustand statt Aufgabeneigenschaft. Wirkt auch für Wurzelaufgaben
   ohne Projektpfad, wo der Projekt-Cursor nichts ausrichtet.
+  Ist eine Aufwandsstufe vollständig zurückgestellt, eskaliert der Selektor
+  zur nächsten Stufe; erst eine wirklich leere Warteschlange ergibt Exit 1.
+  Eine erste Fassung lieferte hier stattdessen die am längsten wartende
+  Aufgabe zurück — als Schutz gegen Verhungern gedacht, verhinderte sie im
+  Live-Lauf die Eskalation überhaupt und ließ damit den Rest der
+  Warteschlange verhungern (Messung 2026-08-24: 7 von 10 offenen
+  `easy`-Aufgaben `scope=central`, die übrigen 3 zurückgestellt).
 - Der Store sortiert zusätzlich nach `updated_at` (Rückfall auf `created_at`)
   als Grundfairness gegen Verhungern. Gemessene Einschränkung: `datetime.now()`
   hat unter Windows rund 15,6 ms Granularität und trennt deshalb nur
