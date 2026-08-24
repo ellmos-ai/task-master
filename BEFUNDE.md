@@ -100,13 +100,22 @@
 
 ## Befund 6 — Aufgaben zeigen auf nicht registrierte Arbeitsklone
 
-**Beobachtet 2026-08-24, zwei Faelle in Folge, unbehoben.**
+**Beobachtet 2026-08-24, ein belegter Fall, unbehoben.**
 
-Der Selektor lieferte nacheinander #2097 (CareCenter-for-Codex) und #2098
-(DokuReader). Beide Aufgaben nennen als `project_path` einen Klon mit
-Task-ID-Suffix — `CareCenter-for-Codex-tasksolver-1765-1766-1761`
-beziehungsweise `REL-PUB_DokuReader-tasksolver-1084-1085` — und nicht den
-kanonischen Plan-D-Klon, den `.SYNC/*/repos.json` auf beiden Hosts fuehrt.
+> **Nachtrag 2026-08-24, 04:45 — der urspruengliche Befund war zu breit.**
+> Er nannte #2097 und #2098 als "zwei Faelle in Folge". Die Pruefung von #2098
+> widerlegt das: Dort ist der Suffix-Klon der auf diesem Host **registrierte**
+> Pfad — `.SYNC/workstation/repos.json` fuehrt ihn, und ein Verzeichnis
+> `C:\_Local_DEV\repos\DokuReader` existiert hier gar nicht (nur der
+> Laptop-Slot kennt es). Ein Suffix im Namen ist also kein Beleg; entscheidend
+> ist allein, was die Registry des jeweiligen Hosts fuehrt.
+> Belegt bleibt der Befund fuer #2097. Das vermutete Muster steht damit auf
+> einem einzigen Fall — zu wenig, um daraus eine Regel abzuleiten.
+
+Der Selektor lieferte zu #2097 (CareCenter-for-Codex) als `project_path` den
+Klon `CareCenter-for-Codex-tasksolver-1765-1766-1761`. Kanonisch ist laut
+`.SYNC/*/repos.json` auf **beiden** Hosts `C:\_Local_DEV\repos\CareCenter-for-Codex`;
+der genannte Klon ist in keiner Registry gefuehrt.
 
 - **Warum das schadet:** Der Suffix-Klon von #2097 stand auf einem
   Feature-Branch, vier Commits vor `origin/main` und zwei Wochen alt. Wer den
@@ -127,6 +136,13 @@ kanonischen Plan-D-Klon, den `.SYNC/*/repos.json` auf beiden Hosts fuehrt.
 - **Wirksame Gegenmassnahme im Lauf:** Vor der ersten Messung
   `.SYNC/*/repos.json` konsultieren und die Abweichung im Task vermerken —
   so geschehen bei #2097.
+- **Die Registry ist hostabhaengig, und das ist keine Nebensaechlichkeit**
+  (gelernt an #2098): Fuer DokuReader fuehrt der Laptop-Slot
+  `C:\_Local_DEV\repos\DokuReader`, der Workstation-Slot dagegen zwei
+  Suffix-Klone — und der schoene Pfad existiert auf der Workstation nicht.
+  Wer den Slot des falschen Hosts liest, "korrigiert" also einen Pfad, der
+  hier nie existiert hat. Massgeblich ist immer der Slot des Hosts, auf dem
+  gearbeitet wird.
 - **Naechster Schritt:** Owner-Entscheidung, ob (a) der TASKWRITER Pfade beim
   Erfassen gegen `repos.json` aufloest, (b) der Selektor eine Abweichung
   meldet statt sie durchzureichen, oder (c) die verwaisten Suffix-Klone
