@@ -73,7 +73,7 @@
   144 offene Aufgaben tragen einen `assigned_to`-Eintrag; sie verteilen sich
   auf 80 von 350 bekannten Projekten. Inhaber sind `tasksolver-codex` (137),
   `codex` (6) und `antigravity` (1).
-- **Mechanik:** `selector.py:393` markiert ein Projekt als `busy`, sobald
+- **Mechanik vor dem Fix vom 2026-08-30:** `selector.py:393` markierte ein Projekt als `busy`, sobald
   *irgendeine* seiner Aufgaben `status == "active"` **oder** ein nichtleeres
   `assigned_to` hat. Der MAINTAINER meidet `busy`-Projekte vollständig. Damit
   sind derzeit 23% der Projektlandschaft für ihn unerreichbar.
@@ -89,13 +89,26 @@
   `taskplan skip --task <ID>` den Claim der zurueckgestellten Aufgabe mit und
   benennt den bisherigen Inhaber. Das deckt den geordneten Rueckzug ab — nicht
   aber den Abbruch, bei dem gar kein Befehl mehr laeuft.
+- **Terminale Claims behoben (2026-08-30):** Ein historisches `assigned_to`
+  sperrt ein Projekt nicht mehr, sobald der Task `done` oder `cancelled` ist.
+  Der Selektorvertrag ist damit explizit:
+
+  | Task-Zustand | `assigned_to` | MAINTAINER-Projekt busy? |
+  |---|---|---|
+  | `open` | gesetzt | ja — schützt das Zeitfenster vor dem Lock |
+  | `active` | beliebig | ja |
+  | `done` / `cancelled` | gesetzt | nein — nur historische Zuordnung |
+
+  Ein Regressionstest deckt beide terminalen Zustände ab; die vollständige
+  Suite bestand mit 357 Tests plus 38 Subtests.
 - **Nicht behoben, bewusst:** Die 144 Bestandsclaims wurden NICHT gesammelt
   geloest. Ein Claim ist eine Aussage ueber fremde Arbeit; ihn ohne Auftrag
   massenhaft zu entfernen, waere derselbe Fehler in die andere Richtung.
-- **Naechster Schritt:** Owner-Entscheidung noetig, ob (a) Claims ein
-  Ablaufdatum bekommen (analog zum 24h-Verfall der LOCK-Dateien), (b) der
-  Selektor nur `status == "active"` als `busy` liest und `assigned_to`
-  ignoriert, oder (c) der Bestand einmalig nach Alter bereinigt wird.
+- **Weiter offen:** Für tatsächlich verwaiste, weiterhin `open` stehende Claims
+  bleibt eine Owner-Entscheidung nötig: Ablaufdatum oder gezielte Bereinigung.
+  `assigned_to` vollständig zu ignorieren wäre keine sichere Korrektur, weil
+  dann das belegte Zeitfenster zwischen `assign()` und Projekt-Lock wieder
+  kollidieren könnte.
 
 
 ## Befund 6 — Aufgaben zeigen auf nicht registrierte Arbeitsklone

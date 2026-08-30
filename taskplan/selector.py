@@ -383,9 +383,10 @@ def _maintainer_bundle(config: SelectorConfig, store: TaskStore,
     "Niemand" heisst zweierlei — beides muss geprueft werden, keines genuegt
     allein:
       * kein fremder Lock (der Solver setzt ihn, BEVOR er anfaengt), UND
-      * keine aktive/zugewiesene Aufgabe (der Solver hat sie geclaimt, aber
-        seinen Lock vielleicht noch nicht gesetzt — genau dieses Zeitfenster
-        liess die Kollisionen entstehen).
+      * keine aktive oder nichtterminal zugewiesene Aufgabe (der Solver hat
+        sie geclaimt, aber seinen Lock vielleicht noch nicht gesetzt — genau
+        dieses Zeitfenster liess die Kollisionen entstehen). Ein historisches
+        ``assigned_to`` an ``done``/``cancelled`` ist keine laufende Arbeit.
     """
     if not config.projects:
         return None
@@ -396,7 +397,7 @@ def _maintainer_bundle(config: SelectorConfig, store: TaskStore,
         except (TypeError, ValueError):
             return str(raw).lower()
 
-    busy = set()        # jemand arbeitet dort: aktiv ODER geclaimt
+    busy = set()        # jemand arbeitet dort: aktiv ODER nichtterminal geclaimt
     touched = set()     # hat ueberhaupt schon Aufgaben (egal welchen Status)
 
     # Auch aktive/zugewiesene Arbeit jenseits eines festen Verlaufsfensters
@@ -407,7 +408,10 @@ def _maintainer_bundle(config: SelectorConfig, store: TaskStore,
             continue
         key = _key(project)
         touched.add(key)
-        if task.get("status") == "active" or task.get("assigned_to"):
+        status = task.get("status")
+        if status == "active" or (
+            status not in {"done", "cancelled"} and task.get("assigned_to")
+        ):
             busy.add(key)
 
     # Der Maintainer bevorzugt Projekte, die schon BERUEHRT sind — und das ist

@@ -36,8 +36,13 @@
   eine MAINTAINER-Sperre getauscht.
 
 ### Fixed
+- Der MAINTAINER behandelt ein historisches `assigned_to` an terminalen Tasks
+  (`done`/`cancelled`) nicht länger als laufende Projektbelegung. Ein Claim an
+  einem offenen Task sowie `status=active` bleiben weiterhin busy und schützen
+  das Zeitfenster zwischen `assign()` und dem Projekt-Lock. Es wurden weder
+  Claim-TTL noch Bestandsbereinigung oder neue Sync-Semantik eingeführt.
 - Veralteten Verifikationsstand in `README.md`, `README_de.md` und `llms.txt`
-  mit dem belegten Stand vom 2026-08-30 synchronisiert: 356/356 Tests plus
+  mit dem belegten Stand vom 2026-08-30 synchronisiert: 357/357 Tests plus
   38/38 Subtests bestanden.
 - Codex-Starter scheitern nicht mehr, wenn `~/.taskplan/taskplan.toml` fehlt
   oder dort kein Codex-Modell bzw. Reasoning hinterlegt ist. Leere Werte sind
