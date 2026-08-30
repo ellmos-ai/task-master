@@ -16,7 +16,7 @@ Abgrenzung: Tasks sind KEINE Tickets. Tickets (z. B. das dateibasierte
 Ticket-System) koennen ueber api.add_from_ticket() zu Tasks fuehren,
 muessen es aber nicht -- beide Systeme bleiben getrennt.
 """
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 from .client import (  # noqa: F401
     TaskClient,

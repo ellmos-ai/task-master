@@ -3,6 +3,13 @@
 ## Unreleased
 
 ### Added
+- **`origin_host`-Spalte in `rinnsal_tasks`** (Nutzerentscheidung 2B,
+  T-20260830-167536816): `add()` setzt sie deterministisch aus dem
+  LIVE-Hostnamen (`socket.gethostname()`) — nicht aus Config oder
+  Umgebungsvariable. `update()`/`assign()` fassen sie nie an (Herkunft =
+  Ersterzeugung). Bestandszeilen bleiben `NULL`: Herkunft laesst sich
+  rueckwirkend nicht rekonstruieren. Additive, idempotente Migration fuer
+  bestehende DBs.
 - **Aufgaben-Revolver:** `python -m taskplan skip --role R --task <ID> [--undo]`
   stellt eine einzelne Aufgabe ans Ende der Warteschlange. Bis dahin war
   Rotation nur projektweit — blockierte genau eine Aufgabe ein Projekt, stand

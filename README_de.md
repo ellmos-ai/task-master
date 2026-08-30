@@ -240,6 +240,11 @@ client.add("…")                      # setzt created_by  (unveränderlich)
 client.assign(task_id, to="claude")  # setzt assigned_to + delegation_status
 ```
 
+`origin_host` speichert den Live-Hostnamen (`socket.gethostname()`) zum Anlage-
+zeitpunkt — einmalig von `add()` gesetzt, von `update()`/`assign()` nie berührt,
+und `NULL` bei Zeilen aus der Zeit vor dieser Spalte (Herkunft ist rückwirkend
+nicht rekonstruierbar).
+
 Wer eine Aufgabe übernimmt, schreibt in `assigned_to` — **niemals** in das Feld, das
 die Herkunft trägt.
 

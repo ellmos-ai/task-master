@@ -22,6 +22,7 @@ Author: Lukas Geiger
 License: MIT
 """
 import os
+import socket
 import sqlite3
 from pathlib import Path
 from typing import Optional, List, Dict
@@ -75,6 +76,15 @@ CREATE INDEX IF NOT EXISTS idx_tasks_project ON rinnsal_tasks(project_path);
 CREATE INDEX IF NOT EXISTS idx_tasks_root ON rinnsal_tasks(root_id);
 """
 
+# Schema v3 (2026-08-30, Nutzerentscheidung 2B / T-20260830-167536816): woher
+# stammt ein Task, wenn `taskplan.db` je hostuebergreifend zusammengefuehrt
+# wird? Herkunft laesst sich rueckwirkend nicht rekonstruieren -- deshalb wird
+# die Spalte JETZT angelegt, auch ohne aktiven Cross-Host-Abgleich. Bestand
+# bleibt NULL (keine Rekonstruktion).
+SCHEMA_V3_COLUMNS = {
+    "origin_host": "TEXT",
+}
+
 VALID_STATUSES = ('open', 'active', 'done', 'cancelled')
 VALID_PRIORITIES = ('critical', 'high', 'medium', 'low')
 
@@ -89,7 +99,7 @@ _SELECT_COLUMNS = (
     "id, title, description, status, priority, agent_id, tags, "
     "created_at, updated_at, done_at, "
     "project_path, root_id, effort, scope, source, "
-    "created_by, assigned_to, delegation_status"
+    "created_by, assigned_to, delegation_status, origin_host"
 )
 
 
@@ -215,6 +225,7 @@ class TaskClient:
         try:
             conn.executescript(TASK_SCHEMA_SQL)
             self._migrate_to_v2(conn)
+            self._migrate_to_v3(conn)
             conn.commit()
         finally:
             if not self._is_memory:
@@ -234,6 +245,18 @@ class TaskClient:
                 conn.execute(
                     f"ALTER TABLE rinnsal_tasks ADD COLUMN {column} {definition}")
         conn.executescript(SCHEMA_V2_INDEXES)
+
+    def _migrate_to_v3(self, conn: sqlite3.Connection) -> None:
+        """Ergaenzt `origin_host`. Additiv, idempotent, ohne Datenaenderung.
+
+        Bestandszeilen bleiben NULL -- Herkunft laesst sich rueckwirkend nicht
+        rekonstruieren (Nutzerentscheidung 2B, T-20260830-167536816).
+        """
+        existing = {r[1] for r in conn.execute("PRAGMA table_info(rinnsal_tasks)")}
+        for column, definition in SCHEMA_V3_COLUMNS.items():
+            if column not in existing:
+                conn.execute(
+                    f"ALTER TABLE rinnsal_tasks ADD COLUMN {column} {definition}")
 
     def backfill_from_tags(self) -> int:
         """Uebertraegt die alte `tags`-Konvention in die v2-Spalten.
@@ -307,16 +330,19 @@ class TaskClient:
             raise ValueError(f"scope muss einer von {VALID_SCOPES} sein")
 
         now = datetime.now().isoformat()
+        origin_host = socket.gethostname().strip()
         conn = self._get_conn()
         try:
             cursor = conn.execute("""
                 INSERT INTO rinnsal_tasks
                     (title, description, status, priority, agent_id, tags,
                      created_at, updated_at,
-                     project_path, root_id, effort, scope, source, created_by)
-                VALUES (?, ?, 'open', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     project_path, root_id, effort, scope, source, created_by,
+                     origin_host)
+                VALUES (?, ?, 'open', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (title, description, priority, self.agent_id, tags, now, now,
-                  project_path, root_id, effort, scope, source, self.agent_id))
+                  project_path, root_id, effort, scope, source, self.agent_id,
+                  origin_host))
             conn.commit()
             return {
                 'id': cursor.lastrowid,
@@ -335,6 +361,7 @@ class TaskClient:
                 'created_by': self.agent_id,
                 'assigned_to': '',
                 'delegation_status': '',
+                'origin_host': origin_host,
             }
         finally:
             self._close_conn(conn)
@@ -563,5 +590,5 @@ class TaskClient:
             'project_path': row[10], 'root_id': row[11], 'effort': row[12],
             'scope': row[13], 'source': row[14],
             'created_by': row[15], 'assigned_to': row[16],
-            'delegation_status': row[17],
+            'delegation_status': row[17], 'origin_host': row[18],
         }

@@ -237,6 +237,10 @@ client.assign(task_id, to="claude")  # sets assigned_to + delegation_status
 Whoever takes a task writes to `assigned_to` — **never** to the field carrying the
 origin.
 
+`origin_host` records the live hostname (`socket.gethostname()`) at creation time —
+set once by `add()`, never touched by `update()`/`assign()`, and left `NULL` on rows
+that predate the column (origin can't be reconstructed after the fact).
+
 ---
 
 ## Three roles
