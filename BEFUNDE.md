@@ -171,3 +171,36 @@ epos\` liegen **zehn** Klone
   Erfassen gegen `repos.json` aufloest, (b) der Selektor eine Abweichung
   meldet statt sie durchzureichen, oder (c) die verwaisten Suffix-Klone
   aufgeraeumt werden. Letzteres ist MAINTAINER-Gebiet, nicht meines.
+
+
+## Befund 7 — TASKSOLVER-System- und Modell-Preflight
+
+**Geprüft am 2026-08-30 vor dem ersten Selector-Aufruf; vollständig.**
+
+- **Aktuelle Quellen:** OpenAIs [Modellauswahl-Leitfaden](https://developers.openai.com/api/docs/guides/latest-model),
+  der [Modellvergleich](https://developers.openai.com/api/docs/models/compare)
+  und die [Dokumentation zu GPT-5.6 Sol](https://developers.openai.com/api/docs/models/gpt-5.6-sol).
+  Zusätzlich wurde der lokale Codex-Modellcache geprüft.
+- **Erwogene Modelle:** `gpt-5.6-sol` als leistungsstärkstes Modell für
+  komplexe professionelle Arbeit, `gpt-5.6-terra` als ausgewogene und
+  günstigere Variante sowie `gpt-5.6-luna` für günstige Routinearbeit.
+  Die offiziellen Preise pro Million Token lagen beim Prüfzeitpunkt bei
+  4/20 US-Dollar (Sol), 2/12 US-Dollar (Terra) und 0,20/1,20 US-Dollar
+  (Luna), jeweils für Ein-/Ausgabe.
+- **Entscheidung:** Kein TASKPLAN-spezifischer Modell-Override. Die vorhandene
+  Codex-Konfiguration `gpt-5.6-sol` mit mittlerem Reasoning bleibt wirksam.
+  TASKSOLVER umfasst systemweite, teils sicherheitskritische und wechselnd
+  komplexe Arbeit; der Kostenvorteil von Terra oder Luna rechtfertigt deshalb
+  keinen pauschalen Fähigkeitsverzicht für die gesamte Rolle.
+- **Systembefund:** `taskplan` 0.5.0 und `codex-cli` 0.150.1 sind verfügbar.
+  `python -m taskplan doctor` fand genau die aktive Datenbank und keine
+  widersprüchliche Konfiguration. Die Runtime steht auf Goal-Fortsetzung,
+  `keep_goal` bei leerer Auswahl und 60 Sekunden Backoff. Rollenprompt,
+  Startup-Prompt, Paketressource, Launcher und Windows-Starter wurden bis zum
+  trockenen Starter-Aufruf erfolgreich durchgängig geprüft.
+- **Instandhaltung:** Nur der veraltete Teststand in den beiden READMEs und in
+  `llms.txt` wurde von 322 auf den aktuell belegten Stand synchronisiert; die
+  Modell- und Runtime-Konfiguration blieb unverändert.
+- **Verifikation:** 117 fokussierte Tests bestanden; anschließend bestanden
+  die vollständige Suite mit 356 Tests plus 38 Subtests, `compileall` und die
+  Starter-Trockenläufe. Der Arbeitsbaum war vor der Instandhaltung sauber.

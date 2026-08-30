@@ -9,7 +9,7 @@
 [![Organisation: ellmos-ai](https://img.shields.io/badge/org-ellmos--ai-6366f1.svg)](https://github.com/ellmos-ai)
 [![Dachorganisation: open-bricks](https://img.shields.io/badge/umbrella-open--bricks-0ea5e9.svg)](https://github.com/open-bricks)
 [![Keine Abhängigkeiten](https://img.shields.io/badge/Abh%C3%A4ngigkeiten-keine%20(stdlib)-success.svg)](pyproject.toml)
-[![Tests](https://img.shields.io/badge/tests-322%20bestanden-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-356%20bestanden-brightgreen.svg)](tests/)
 [![llms.txt](https://img.shields.io/badge/llms.txt-verf%C3%BCgbar-orange.svg)](llms.txt)
 
 **Deterministische Aufgabenauswahl für LLM-Agenten.** Keine Abhängigkeiten, nur

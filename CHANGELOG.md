@@ -36,6 +36,9 @@
   eine MAINTAINER-Sperre getauscht.
 
 ### Fixed
+- Veralteten Verifikationsstand in `README.md`, `README_de.md` und `llms.txt`
+  mit dem belegten Stand vom 2026-08-30 synchronisiert: 356/356 Tests plus
+  38/38 Subtests bestanden.
 - Codex-Starter scheitern nicht mehr, wenn `~/.taskplan/taskplan.toml` fehlt
   oder dort kein Codex-Modell bzw. Reasoning hinterlegt ist. Leere Werte sind
   jetzt bewusst „kein TASKPLAN-Override“: Der zentrale Launcher lässt
