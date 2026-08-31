@@ -14,6 +14,7 @@ from taskplan.__main__ import main
 from taskplan.runtime import (
     apply_backoff, goal_objective, runtime_profile, startup_prompt,
 )
+from taskplan.traversal import TraversalConfig
 
 
 class TestProviderModels(unittest.TestCase):
@@ -159,6 +160,36 @@ class TestCodexGoalPrompt(unittest.TestCase):
 
 
 class TestDiscoveryTimeout(unittest.TestCase):
+    def test_bounded_discovery_rejects_auto_mode_without_roots(self):
+        empty = TraversalConfig(roots=[])
+        with mock.patch.object(runner, "traversal_config", return_value=empty), \
+                mock.patch("taskplan.config.discovery_mode", return_value="hybrid"), \
+                mock.patch.object(runner.subprocess, "run") as process:
+            with self.assertRaises(runner.DiscoveryConfigurationError):
+                runner._discover_projects_bounded(30)
+        process.assert_not_called()
+
+    def test_configuration_error_is_retryable_without_inventory_fallback(self):
+        store = mock.Mock(db_path=Path("C:/tasks.db"))
+        view = mock.Mock(extra_rules=[])
+        with mock.patch.object(runner, "active_roles", return_value={
+                "taskwriter": True, "tasksolver": True, "maintainer": True}), \
+                mock.patch.object(runner, "TaskClient", return_value=store), \
+                mock.patch.object(runner, "_lock_view", return_value=(view, "lockmaster")), \
+                mock.patch.object(runner, "rotation_state_file", return_value=Path("state")), \
+                mock.patch.object(runner, "last_project", return_value=""), \
+                mock.patch.object(runner, "deferred_tasks", return_value=[]), \
+                mock.patch.object(
+                    runner, "_discover_projects_bounded",
+                    side_effect=runner.DiscoveryConfigurationError("no roots"),
+                ), \
+                mock.patch("taskplan.discovery.fallback_after_failure") as fallback:
+            work = runner.next_work("taskwriter")
+        self.assertTrue(work["retryable"])
+        self.assertEqual(work["error"], "project_discovery_configuration_error")
+        self.assertIsNone(work["bundle"])
+        fallback.assert_not_called()
+
     def test_all_exit_codes_have_stable_names_and_two_languages(self):
         self.assertEqual(
             {code: status["name"] for code, status in runner.EXIT_STATUS.items()},

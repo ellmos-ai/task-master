@@ -60,11 +60,16 @@ def _projects_command(args: list[str]) -> int:
     if action == "list":
         from .runner import (ProjectDiscoveryTimeout,
                              _discover_projects_bounded, _exit_line)
+        from .discovery import DiscoveryConfigurationError
         entries = load_registry(configured)
         try:
             total, metadata = _discover_projects_bounded(
                 discovery_timeout_seconds(), with_metadata=True
             )
+        except DiscoveryConfigurationError as exc:
+            print(_exit_line(3), file=sys.stderr)
+            print(f"Projekt-Discovery falsch konfiguriert: {exc}", file=sys.stderr)
+            return 3
         except (ProjectDiscoveryTimeout, RuntimeError) as exc:
             from .discovery import read_last_known_good
             fallback = read_last_known_good()
@@ -97,10 +102,15 @@ def _projects_command(args: list[str]) -> int:
     if action == "refresh":
         from .runner import (ProjectDiscoveryTimeout,
                              _discover_projects_bounded, _exit_line)
+        from .discovery import DiscoveryConfigurationError
         try:
             total, metadata = _discover_projects_bounded(
                 discovery_timeout_seconds(), force=True, with_metadata=True
             )
+        except DiscoveryConfigurationError as exc:
+            print(_exit_line(3), file=sys.stderr)
+            print(f"Projekt-Discovery falsch konfiguriert: {exc}", file=sys.stderr)
+            return 3
         except (ProjectDiscoveryTimeout, RuntimeError) as exc:
             print(_exit_line(3), file=sys.stderr)
             print(f"Projekt-Discovery nicht verfügbar: {exc}", file=sys.stderr)

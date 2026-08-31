@@ -47,6 +47,11 @@
   eine MAINTAINER-Sperre getauscht.
 
 ### Fixed
+- Projekt-Discovery behandelt `auto`/`hybrid` ohne konfigurierte Traversal-Roots
+  nicht länger als gesunden `fresh_cache`-Leerlauf. `next` und `projects`
+  liefern jetzt den retrybaren Exit 3, ohne auf ein manuelles Teilinventar
+  zurückzufallen; `taskplan doctor` meldet denselben Zustand als Fehler. Der
+  ausdrücklich rootlose Modus `manual` bleibt unverändert zulässig.
 - Der MAINTAINER behandelt ein historisches `assigned_to` an terminalen Tasks
   (`done`/`cancelled`) nicht länger als laufende Projektbelegung. Ein Claim an
   einem offenen Task sowie `status=active` bleiben weiterhin busy und schützen

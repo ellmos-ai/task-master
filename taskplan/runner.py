@@ -31,6 +31,10 @@ from .config import (
     traversal_config,
 )
 from .locks import CREATE, MODIFY, READ, build_lock_view
+from .discovery import (
+    DiscoveryConfigurationError,
+    validate_discovery_configuration,
+)
 from .rotation import deferred_tasks, last_project, remember_project
 from .selector import (
     Bundle,
@@ -57,6 +61,9 @@ def _discover_projects_bounded(
 ):
     """Discovery in einem abbrechbaren Unterprozess mit persistentem Cache."""
     from .traversal import Project
+    from .config import discovery_mode
+
+    validate_discovery_configuration(traversal_config(), discovery_mode())
 
     if timeout <= 0:
         from .discovery import discover_snapshot
@@ -153,6 +160,18 @@ def next_work(role: str = "tasksolver") -> dict:
                 config.projects, discovery_metadata = discovered, {}
             if discovery_metadata:
                 result["discovery"] = discovery_metadata
+        except DiscoveryConfigurationError as exc:
+            result.update({
+                "bundle": None,
+                "retryable": True,
+                "error": "project_discovery_configuration_error",
+                "reason": (
+                    f"{exc} Der Lauf endet kontrolliert statt einen leeren "
+                    "Projektbestand vorzutäuschen. Nach Korrektur der "
+                    "Konfiguration erneut versuchen."
+                ),
+            })
+            return result
         except (ProjectDiscoveryTimeout, RuntimeError) as exc:
             from .discovery import fallback_after_failure
 
