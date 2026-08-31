@@ -121,9 +121,32 @@ AUFGABENFELDER
      entscheiden. Kuratierter Inhalt wird nicht überschrieben, weil eine Datei jünger ist.
      Widerspruch stattdessen sichtbar machen und melden.
 
-4. ARCHITEKTURVERZEICHNISSE
+4. ARCHITEKTURVERZEICHNISSE UND PFADANGABEN
    Verzeichnisbäume und Dateilisten in der Doku gegen den REALEN Baum abgleichen — nicht gegen die
    Erinnerung und nicht gegen eine ältere Fassung derselben Doku.
+
+   Das gilt NICHT NUR für Baumdiagramme und Listen, sondern für JEDE Pfadangabe, auch mitten
+   im Fließtext. Der teuerste Fall ist die Angabe, die auflösbar AUSSIEHT, aber vom Standort
+   der Datei aus ins Leere zeigt:
+
+       python "<OneDrive>/_scripts/doc_path_check.py" <doku-wurzel>               --search-root <wo-die-datei-wirklich-liegen-kann> --quiet
+
+   Meldet `WURZEL_FEHLT`, wenn die Doku z. B. `lib/werkzeug.py` sagt, es dort nicht gibt, die
+   Datei aber woanders im Baum liegt. Prüfraum und Suchraum bewusst TRENNEN — das genannte
+   Werkzeug liegt fast immer außerhalb des Ordners, dessen Doku es nennt; genau deshalb ist
+   die Angabe missverständlich.
+
+   Warum das zählt (gemessen 2026-08-31, Trampelpfadanalyse am Ticketsystem): `_TICKETS/README.md`
+   nannte das Pflichtwerkzeug fünfmal als nacktes `lib/ticket_writer.py`. Zwei von sechs naiven
+   Proben fanden es nicht, hielten es für "nicht verfügbar", schrieben das Ticket von Hand und
+   erfanden die ID — der Mechanismus hinter zwei realen ID-Kollisionen. Ein Agent, der ein
+   vorgeschriebenes Werkzeug nicht findet, hält seine Umgehung für legitim und begründet sie
+   plausibel. Ein Pfad ohne Wurzel ist deshalb kein Schönheitsfehler, sondern eine Einladung
+   zur Umgehung.
+
+   Beim Reparieren: die Wurzel EINMAL prominent nennen und die übrigen Erwähnungen darauf
+   beziehen, statt jede Fundstelle aufzublähen. Und ausdrücklich dazuschreiben, was gilt, wenn
+   das Werkzeug trotzdem nicht gefunden wird ("suche danach" statt stillschweigend ersetzen).
 
 5. ZU LANGE LOGS („cut and clue")
    - ARCHIVIEREN VOR KÜRZEN: Der abgeschnittene Teil wandert vollständig in eine Archivdatei.
