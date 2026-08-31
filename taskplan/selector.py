@@ -64,6 +64,10 @@ class SelectorConfig:
     easy_first_globally: bool = True        # easy ueber ALLE Roots vor dem ersten medium
     projects_per_dive: int = 1
     max_bundle_size: int = 3
+    # Direkte Konstruktionen (Bibliothek/Bestandstests) behalten den alten
+    # rein cursorbasierten Vertrag. Die geladene Konfiguration aktiviert den
+    # persistenten Pool standardmäßig explizit.
+    review_pool_enabled: bool = False
     # Nur der TASKWRITER braucht sie: Ist alles eingestuft, sucht er das
     # naechste Projekt, das noch GAR KEINE Aufgaben hat. Ohne diese Liste
     # findet er es nicht — und haette wieder nichts zu tun.
@@ -290,6 +294,21 @@ def _bundle_from(tasks: List[dict], mode: str, effort: str,
                   project_path=project, tasks=same)
 
 
+def taskwriter_unclassified_bundle(
+    config: SelectorConfig, store: TaskStore, locks: LockView
+) -> Optional[Bundle]:
+    """Dringende Writer-Arbeit auf Taskebene, noch vor Projekt-Reviews."""
+    open_tasks = store.list(status="open", limit=500)
+    unclassified = [t for t in open_tasks
+                    if not t.get("effort") and _reachable(t, locks)]
+    if not unclassified:
+        return None
+    surface = [t for t in unclassified if not t.get("project_path")]
+    pool = surface or unclassified
+    return _bundle_from(pool, SURFACE if surface else DEEP,
+                        "", config.max_bundle_size)
+
+
 def _writer_bundle(config: SelectorConfig, store: TaskStore,
                    locks: LockView,
                    after_project: str = "") -> Optional[Bundle]:
@@ -313,14 +332,9 @@ def _writer_bundle(config: SelectorConfig, store: TaskStore,
     Writer keine Steuerdateien.
     """
     # 1. Unklassifizierte zuerst.
-    open_tasks = store.list(status="open", limit=500)
-    unclassified = [t for t in open_tasks
-                    if not t.get("effort") and _reachable(t, locks)]
-    if unclassified:
-        surface = [t for t in unclassified if not t.get("project_path")]
-        pool = surface or unclassified
-        return _bundle_from(pool, SURFACE if surface else DEEP,
-                            "", config.max_bundle_size)
+    unclassified = taskwriter_unclassified_bundle(config, store, locks)
+    if unclassified is not None:
+        return unclassified
 
     # 2. Alles eingestuft -> ein Projekt suchen, das noch keine Aufgaben hat.
     if not config.deep_enabled or not config.projects:
@@ -457,6 +471,40 @@ def _maintainer_bundle(config: SelectorConfig, store: TaskStore,
     project = candidates[0]
     return Bundle(mode=DEEP, effort="", root_id=project.root_id,
                   project_path=str(project.path), tasks=[])
+
+
+def review_project_candidates(
+    config: SelectorConfig,
+    store: TaskStore,
+    role: str,
+) -> List:
+    """Strukturell zulässige Projekte vor Pool-, Hash- und Lockbewertung.
+
+    Der Pool braucht die vollständige Liste, um `lock` diagnostizieren und
+    effort/last_presented korrekt sortieren zu können. Nur echte fachliche
+    Parallelbelegung des MAINTAINER-Projekts wird hier vorab entfernt.
+    """
+    if not config.deep_enabled:
+        return []
+    if role == "taskwriter":
+        return list(config.projects)
+    if role != "maintainer":
+        return []
+
+    busy = set()
+    for task in store.list(limit=None, include_done=True):
+        project = task.get("project_path")
+        if not project:
+            continue
+        status = task.get("status")
+        if status == "active" or (
+            status not in {"done", "cancelled"} and task.get("assigned_to")
+        ):
+            busy.add(_project_key(project))
+    return [
+        project for project in config.projects
+        if _project_key(project.path) not in busy
+    ]
 
 
 def next_bundle(config: SelectorConfig, store: TaskStore,

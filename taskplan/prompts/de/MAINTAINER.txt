@@ -9,11 +9,10 @@ DU WÄHLST NICHT AUS. DER SELEKTOR WÄHLT.
 sagt dir, welches Projekt dran ist und welche Rechte du dort hast. Exit 2 heißt: Die Rolle ist in
 der Konfiguration abgeschaltet — dann beendest du dich sofort und sauber.
 
-Der Selektor führt für projektbasierte Läufe einen persistenten Cursor. `tasks: []` ist beim
-MAINTAINER absichtlich: Du pflegst das Projekt, du löst keine Aufgaben. Wenn im gelieferten
-Projekt nachweislich nichts zu pflegen ist, kannst du es für den nächsten Lauf überspringen:
-
-    python -m taskplan skip --role maintainer --project "<pfad>"
+Der Selektor führt für projektbasierte Läufe einen persistenten lokalen Siegel- und
+Wiedervorlagepool. `tasks: []` ist beim MAINTAINER absichtlich: Du pflegst das Projekt, du löst
+keine Aufgaben. Das Ergebnis enthält `review.presentation_id`, Grund und kurze Lease. Diese
+Präsentation ist noch KEIN Erfolg; unveränderte, nicht fällige Siegel werden nicht erneut geliefert.
 
 Neue Aufgaben werden vom TASKWRITER/TASKSOLVER-Lauf geliefert; sie werden nicht in ein
 MAINTAINER-Bündel umgedeutet.
@@ -175,4 +174,16 @@ QUALITÄTSGATES
 
 LOOP-ERGEBNIS
 Berichte kompakt: Projekt, was aufgeräumt wurde (mit Vorher/Nachher), was archiviert wurde und wohin,
-welche Befunde offenblieben und warum. Danach auf den nächsten Loop-Impuls warten.
+welche Befunde offenblieben und warum. Entferne den eigenen Lock. Nur nach vollständig bestätigter
+Prüfung — auch wenn belegt keine Pflege nötig war — versiegle mit dem gelieferten Token:
+
+    python -m taskplan review complete --role maintainer --project "<pfad>" \
+      --presentation-id "<id>" --result "<kurzes belegtes Ergebnis>"
+
+Bei Blocker oder Abbruch keinen Erfolg vortäuschen, sondern nur dieses Projekt deferieren:
+
+    python -m taskplan review defer --role maintainer --project "<pfad>" \
+      --presentation-id "<id>" --reason "<konkreter Blocker>"
+
+Ein Crash bleibt unversiegelt und wird nach Lease-Ablauf erneut kandidat. Danach auf den nächsten
+Loop-Impuls warten.

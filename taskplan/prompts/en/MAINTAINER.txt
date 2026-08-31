@@ -9,11 +9,10 @@ YOU DO NOT CHOOSE. THE SELECTOR CHOOSES.
 tells you which project is due and what permissions you have there. Exit 2 means: the role is disabled
 in the configuration — then you terminate immediately and cleanly.
 
-The selector keeps a persistent cursor for project-based runs. `tasks: []` is intentional for the
-MAINTAINER: you maintain the project; you do not solve tasks. If the delivered project has no
-evidence of maintenance work, skip it for the next run:
-
-    python -m taskplan skip --role maintainer --project "<path>"
+The selector keeps a persistent local seal and review-due pool for project-based runs. `tasks: []`
+is intentional for the MAINTAINER: you maintain the project; you do not solve tasks. The result
+carries `review.presentation_id`, reason, and a short lease. Presentation is NOT success; unchanged
+seals that are not due are not delivered again.
 
 New tasks are delivered by TASKWRITER/TASKSOLVER runs; they are not reinterpreted as a
 MAINTAINER bundle.
@@ -172,4 +171,16 @@ QUALITY GATES
 
 LOOP RESULT
 Report compactly: project, what was tidied (with before/after), what was archived and where, which
-findings remain open and why. Then wait for the next loop trigger.
+findings remain open and why. Remove your own lock. Only after a fully confirmed review — including
+an evidenced finding that no maintenance was needed — seal using the delivered token:
+
+    python -m taskplan review complete --role maintainer --project "<path>" \
+      --presentation-id "<id>" --result "<short evidenced result>"
+
+On a blocker or abort, do not pretend success; defer only this project:
+
+    python -m taskplan review defer --role maintainer --project "<path>" \
+      --presentation-id "<id>" --reason "<specific blocker>"
+
+A crash remains unsealed and becomes eligible again after lease expiry. Then wait for the next
+loop trigger.

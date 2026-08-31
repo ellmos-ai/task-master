@@ -9,7 +9,7 @@
 [![Organization: ellmos-ai](https://img.shields.io/badge/org-ellmos--ai-6366f1.svg)](https://github.com/ellmos-ai)
 [![Umbrella: open-bricks](https://img.shields.io/badge/umbrella-open--bricks-0ea5e9.svg)](https://github.com/open-bricks)
 [![Zero Dependencies](https://img.shields.io/badge/dependencies-zero%20(stdlib)-success.svg)](pyproject.toml)
-[![Tests](https://img.shields.io/badge/tests-357%20passed-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-391%20passed-brightgreen.svg)](tests/)
 [![llms.txt](https://img.shields.io/badge/llms.txt-available-orange.svg)](llms.txt)
 
 **Deterministic task selection for LLM agents.** Zero dependencies, stdlib only,
@@ -65,9 +65,9 @@ flowchart TD
         Roles -->|TASKWRITER| TW["TASKWRITER<br/>Formalize & Classify Tasks"]
         Roles -->|TASKSOLVER| TS["TASKSOLVER<br/>Work & Verify Single Bundle"]
         Roles -->|MAINTAINER| MN["MAINTAINER<br/>Project & Directory Hygiene"]
-        TS --> AtomicCursor[("Atomic Rotation Cursor<br/>~/.taskplan/rotation-state.json")]
-        TW --> AtomicCursor
-        MN --> AtomicCursor
+        TS --> AtomicCursor[("Task Revolver / Cursor<br/>~/.taskplan/rotation-state.json")]
+        TW --> ReviewPool[("Local Review Seals<br/>taskplan_project_reviews")]
+        MN --> ReviewPool
     end
 ```
 
@@ -200,15 +200,34 @@ python -m taskplan projects markers
 | `3` | `RETRYABLE_SELECTOR_ERROR` | Retryable selector/discovery error |
 
 Project-only MAINTAINER bundles and TASKWRITER discovery sweeps intentionally
-contain no task IDs. The selector stores a separate cursor for each role atomically
-at `~/.taskplan/rotation-state.json` (configurable with
-`[loop].rotation_state_file`) and advances to the next candidate on the next run.
-The TASKSOLVER normally advances by completing its task bundle; when a stale or
-temporarily unusable project must be bypassed, it can use the same explicit cursor:
+contain no task IDs. They use a separate, host-local seal per `(role, project)` in
+the same SQLite database. `next` first records a short presentation lease and returns
+`review.presentation_id`; presentation alone is never success. Only a confirmed
+completion stores the current deterministic project hash, result, review time and
+next due time. A blocker is deferred without writing success:
 
 ```bash
-python -m taskplan skip --role maintainer --project "<path>"
-python -m taskplan skip --role taskwriter --project "<path>"
+python -m taskplan review complete --role maintainer --project "<path>" \
+  --presentation-id "<id>" --result "checked"
+python -m taskplan review defer --role taskwriter --project "<path>" \
+  --presentation-id "<id>" --reason "blocked"
+python -m taskplan review unseal --role maintainer --project "<path>" \
+  --reason "manual recheck"
+python -m taskplan review status --role maintainer --project "<path>" --json
+```
+
+An unchanged seal before `next_due_at` is not presented. A content-hash change,
+due interval, manual unseal, or never-presented project opens it. Git metadata,
+caches, builds, TASKPLAN's own locks, and configured glob exclusions do not churn
+the hash. Diagnostics distinguish locks, active leases, deferred projects,
+unchanged seals, hash breaks, due reviews, manual unseals, and hash errors.
+
+The TASKSOLVER keeps its existing task-level revolver and project cursor at
+`~/.taskplan/rotation-state.json` (configurable with
+`[loop].rotation_state_file`). When a stale or temporarily unusable task project
+must be bypassed, it can still advance that cursor explicitly:
+
+```bash
 python -m taskplan skip --role tasksolver --project "<path>"
 ```
 
@@ -221,7 +240,8 @@ The work sweep is not considered empty until all reachable candidates have been
 checked. This is a prompt contract over the existing project cursor, not a new
 task-state or retry engine.
 
-New tasks remain the responsibility of the TASKWRITER/TASKSOLVER flow.
+New tasks remain the responsibility of the TASKWRITER/TASKSOLVER flow. Project
+review rows never change `created_by`, `assigned_to`, or any task status.
 
 ### Who created it, who works on it
 

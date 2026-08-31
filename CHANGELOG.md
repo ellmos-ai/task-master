@@ -3,6 +3,17 @@
 ## Unreleased
 
 ### Added
+- **Hostlokaler Siegel- und Wiedervorlagepool für TASKWRITER/MAINTAINER**
+  (`T-20260830-202718995`): additive Tabellen
+  `taskplan_project_reviews`/`taskplan_project_review_events`, deterministischer
+  versionierter Projekt-Hash mit Cache-/Build-/Git-/Lock-Ausschlüssen, getrennte
+  Zustände je `(Rolle, Projekt)` und kontrollierbare Intervalle. `next` persistiert
+  vor der Lieferung nur eine kurze Präsentationslease; erst `review complete` mit
+  passendem Token schreibt Hash, Ergebnis, Prüfzeit und `next_due_at`. `review
+  defer`/`skip --presentation-id` ist kein Erfolg und öffnet bei Hashänderung oder
+  Retry-Ablauf. Diagnosegründe unterscheiden nie vorgelegt, Hashbruch, fällig,
+  manuell entsiegelt, deferiert, unverändert versiegelt, Lease, Lock und Hashfehler.
+  TASKSOLVER-Revolver, Task-Herkunft und Zuweisung bleiben unverändert.
 - **`origin_host`-Spalte in `rinnsal_tasks`** (Nutzerentscheidung 2B,
   T-20260830-167536816): `add()` setzt sie deterministisch aus dem
   LIVE-Hostnamen (`socket.gethostname()`) — nicht aus Config oder

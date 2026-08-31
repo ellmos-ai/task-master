@@ -25,13 +25,20 @@ from .config import (
     lock_config,
     model_for,
     prompt_language,
+    review_pool_config,
     rotation_state_file,
     selector_config,
     traversal_config,
 )
 from .locks import CREATE, MODIFY, READ, build_lock_view
 from .rotation import deferred_tasks, last_project, remember_project
-from .selector import next_bundle
+from .selector import (
+    Bundle,
+    DEEP,
+    next_bundle,
+    review_project_candidates,
+    taskwriter_unclassified_bundle,
+)
 
 # All project-oriented roles can explicitly advance their own cursor.  The
 # solver normally advances by completing tasks; ``taskplan skip`` is the
@@ -176,9 +183,47 @@ def next_work(role: str = "tasksolver") -> dict:
                 })
                 return result
 
-    bundle = next_bundle(config, store, view, role=role,
-                        after_project=previous_project,
-                        deferred_task_ids=deferred_ids)
+    review_result = None
+    if config.review_pool_enabled and role in ("taskwriter", "maintainer"):
+        # Unklassifizierte Tasks bleiben die dringendste Writer-Arbeit. Erst
+        # wenn diese Taskebene leer ist, entscheidet der Projekt-Reviewpool.
+        bundle = (
+            taskwriter_unclassified_bundle(config, store, view)
+            if role == "taskwriter" else None
+        )
+        if bundle is None:
+            from .review_pool import ReviewPool
+
+            candidates = review_project_candidates(config, store, role)
+            pool = ReviewPool(store, policy=review_pool_config())
+            review_result = pool.present_next(
+                role,
+                candidates,
+                locked=lambda path: not view.allows_selection(path),
+            )
+            presentation = review_result["presentation"]
+            if presentation is not None:
+                bundle = Bundle(
+                    mode=DEEP,
+                    effort=presentation["effort"],
+                    root_id=presentation["root_id"],
+                    project_path=presentation["project_path"],
+                    tasks=[],
+                )
+    else:
+        bundle = next_bundle(config, store, view, role=role,
+                            after_project=previous_project,
+                            deferred_task_ids=deferred_ids)
+
+    if review_result is not None:
+        presentation = review_result["presentation"] or {}
+        # Interne State-Zeilen gehören nicht in den öffentlichen JSON-Vertrag;
+        # alle fachlichen Gründe und Zeitpunkte bleiben sichtbar.
+        diagnostics = [
+            {key: value for key, value in decision.items() if key != "state"}
+            for decision in review_result["decisions"]
+        ]
+        result["review"] = {**presentation, "diagnostics": diagnostics}
 
     # Fremde Lock-Regeln gehen als TEXT weiter — nicht ausgewertet, sondern
     # dem LLM zum Lesen gegeben.
@@ -187,7 +232,20 @@ def next_work(role: str = "tasksolver") -> dict:
 
     if bundle is None:
         result["bundle"] = None
-        if role == "taskwriter":
+        if review_result is not None:
+            counts = {}
+            for decision in review_result["decisions"]:
+                reason = decision["reason"]
+                counts[reason] = counts.get(reason, 0) + 1
+            summary = ", ".join(
+                f"{reason}={count}" for reason, count in sorted(counts.items())
+            ) or "keine entdeckten Projekte"
+            result["reason"] = (
+                "Kein fälliges lokales Projekt-Review. Unveränderte Siegel, "
+                "aktive Leases, Deferierungen und Locks erzeugen keine "
+                f"Ersatzarbeit ({summary}). Ehrlicher lokaler Leerlauf."
+            )
+        elif role == "taskwriter":
             result["reason"] = (
                 "Nichts zu erfassen: Es gibt keine unklassifizierten Aufgaben mehr, "
                 "und jedes erreichbare Projekt hat bereits Aufgaben. Das ist ein "
@@ -224,6 +282,7 @@ def next_work(role: str = "tasksolver") -> dict:
         role in PROJECT_ROTATION_ROLES
         and rotation_path is not None
         and not bundle.tasks
+        and not result.get("review", {}).get("presentation_id")
     ):
         persisted = remember_project(rotation_path, role, bundle.project_path)
         rotation = result.setdefault("rotation", {})
@@ -329,6 +388,17 @@ def run(role: str = "tasksolver", as_json: bool = False) -> int:
     print(f"  Aufwand   : {bundle['effort']}")
     print(f"  Root      : {bundle['root_id']}")
     print(f"  Projekt   : {bundle['project_path'] or '(Wurzel)'}")
+    review = work.get("review")
+    if review and review.get("presentation_id"):
+        print(f"  Review    : {review['reason']}")
+        print(f"  Token     : {review['presentation_id']}")
+        print(f"  Lease bis : {review['presentation_lease_until']}")
+        print()
+        print("  Nach bestätigtem Abschluss:")
+        print(f"    python -m taskplan review complete --role {role} ")
+        print(f"      --project {bundle['project_path']!r} ")
+        print(f"      --presentation-id {review['presentation_id']!r} --result <ERGEBNIS>")
+        print("  Bei Blocker/Abbruch: review defer mit demselben Token.")
     print()
     print("  Aufgaben:")
     for task in bundle["tasks"]:

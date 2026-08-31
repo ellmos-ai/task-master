@@ -226,6 +226,11 @@ class TaskClient:
             conn.executescript(TASK_SCHEMA_SQL)
             self._migrate_to_v2(conn)
             self._migrate_to_v3(conn)
+            # Separater, rein additiver Projekt-Review-Zustand. Er liegt in
+            # derselben hostlokalen DB, aber absichtlich NICHT in Taskzeilen:
+            # Präsentation/Siegel sind weder Claim noch Herkunft.
+            from .review_pool import ensure_review_schema
+            ensure_review_schema(conn)
             conn.commit()
         finally:
             if not self._is_memory:
