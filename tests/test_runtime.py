@@ -2,6 +2,7 @@
 """Provider-, Goal- und Timeout-Vertrag der nutzerneutralen Worker-Runtime."""
 import io
 import subprocess
+import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -220,35 +221,40 @@ class TestDiscoveryTimeout(unittest.TestCase):
         self.assertIn("[NO_WORK]", output.getvalue())
 
     def test_timeout_uses_last_known_good_instead_of_exit_three(self):
+        from taskplan.client import TaskClient
         from taskplan.discovery import DiscoveryResult
-        from taskplan.selector import Bundle
+        from taskplan.review_pool import ReviewPolicy
         from taskplan.traversal import Project
 
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        project_path = Path(temporary.name) / "project"
+        project_path.mkdir()
+        (project_path / "project.txt").write_text("fallback", encoding="utf-8")
+        client = TaskClient(Path(temporary.name) / "taskplan.db")
         fallback = DiscoveryResult(
-            projects=[Project(Path("C:/project"), "root")],
+            projects=[Project(project_path, "root")],
             source="stale_cache",
             degraded=True,
         )
-        bundle = Bundle(
-            mode="deep", effort="", root_id="root",
-            project_path="C:/project", tasks=[],
-        )
         with mock.patch.object(runner, "active_roles", return_value={
                 "taskwriter": True, "tasksolver": True, "maintainer": True}), \
+                mock.patch.object(runner, "TaskClient", return_value=client), \
                 mock.patch.object(runner, "_lock_view",
                                   return_value=(mock.Mock(
                                       extra_rules=[],
-                                      allows=lambda *_: True), "lockmaster")), \
+                                      allows=lambda *_: True,
+                                      allows_selection=lambda *_: True), "lockmaster")), \
                 mock.patch.object(runner, "_discover_projects_bounded",
                                   side_effect=runner.ProjectDiscoveryTimeout()), \
                 mock.patch("taskplan.discovery.fallback_after_failure",
                            return_value=fallback), \
-                mock.patch.object(runner, "next_bundle", return_value=bundle), \
+                mock.patch.object(runner, "review_pool_config", return_value=ReviewPolicy()), \
                 mock.patch.object(runner, "remember_project", return_value=True), \
                 mock.patch.object(runner, "last_project", return_value=""):
             work = runner.next_work("maintainer")
         self.assertNotIn("retryable", work)
-        self.assertEqual(work["bundle"]["project_path"], "C:/project")
+        self.assertEqual(Path(work["bundle"]["project_path"]), project_path)
         self.assertEqual(work["discovery"]["source"], "stale_cache")
         self.assertEqual(
             work["discovery"]["trigger_error"], "project_discovery_timeout"

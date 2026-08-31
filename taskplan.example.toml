@@ -53,6 +53,24 @@ easy_first_globally = true  # easy ueber ALLE Roots erschoepfen, DANN erst mediu
 projects_per_dive = 1
 
 # ---------------------------------------------------------------------------
+# PROJEKT-REVIEWS — hostlokale Siegel und Wiedervorlage
+# ---------------------------------------------------------------------------
+# TASKWRITER und MAINTAINER führen getrennte Zustände je Projekt in derselben
+# lokalen SQLite-DB. Präsentation ist nur eine kurze Lease; ausschließlich
+# `taskplan review complete` schreibt ein Erfolgssiegel. Keine Host-Synchronisation.
+[review_pool]
+enabled = true
+review_interval_seconds = 604800      # 7 Tage bis reguläre Wiedervorlage
+retry_interval_seconds = 3600         # Blocker nach 1 Stunde erneut prüfen
+presentation_lease_seconds = 900      # Crash-Schutz, kein Erfolgstempel
+default_effort = "easy"               # easy | medium
+exclude = [
+  # Ergänzt die eingebauten Ausschlüsse (.git, Caches, Builds, eigene Locks).
+  # Muster mit / gelten für relative POSIX-Pfade, sonst für jedes Segment.
+  # "generated/**",
+]
+
+# ---------------------------------------------------------------------------
 # ROLLEN — einzeln abschaltbar, optional zusammengelegt
 # ---------------------------------------------------------------------------
 [roles]

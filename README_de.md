@@ -9,7 +9,7 @@
 [![Organisation: ellmos-ai](https://img.shields.io/badge/org-ellmos--ai-6366f1.svg)](https://github.com/ellmos-ai)
 [![Dachorganisation: open-bricks](https://img.shields.io/badge/umbrella-open--bricks-0ea5e9.svg)](https://github.com/open-bricks)
 [![Keine Abhängigkeiten](https://img.shields.io/badge/Abh%C3%A4ngigkeiten-keine%20(stdlib)-success.svg)](pyproject.toml)
-[![Tests](https://img.shields.io/badge/tests-357%20bestanden-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-391%20bestanden-brightgreen.svg)](tests/)
 [![llms.txt](https://img.shields.io/badge/llms.txt-verf%C3%BCgbar-orange.svg)](llms.txt)
 
 **Deterministische Aufgabenauswahl für LLM-Agenten.** Keine Abhängigkeiten, nur
@@ -60,15 +60,15 @@ flowchart TD
         EffortGate -->|large / special| NonAuto["Nicht-Autonomes Gate<br/>(Menschliche Entscheidung)"]
     end
 
-    subgraph Execution["3. Rollen-Ausführung & Rotation"]
+    subgraph Execution["3. Rollen-Ausführung & Kontinuität"]
         GlobalEasy --> Roles{"Aktive Rolle"}
         MediumPass --> Roles
         Roles -->|TASKWRITER| TW["TASKWRITER<br/>Aufgaben formalisieren & einstufen"]
         Roles -->|TASKSOLVER| TS["TASKSOLVER<br/>Projektbündel abarbeiten & prüfen"]
         Roles -->|MAINTAINER| MN["MAINTAINER<br/>Projekt- & Verzeichnishygiene"]
-        TS --> AtomicCursor[("Atomarer Rotations-Cursor<br/>~/.taskplan/rotation-state.json")]
-        TW --> AtomicCursor
-        MN --> AtomicCursor
+        TS --> AtomicCursor[("Task-Revolver / Cursor<br/>~/.taskplan/rotation-state.json")]
+        TW --> ReviewPool[("Lokale Review-Siegel<br/>taskplan_project_reviews")]
+        MN --> ReviewPool
     end
 ```
 
@@ -204,16 +204,36 @@ in `exit.code`, `exit.name` und das lokalisierte Feld `exit.meaning`:
 | `3` | `RETRYABLE_SELECTOR_ERROR` | Wiederholbarer Selektor-/Discovery-Fehler |
 
 Reine MAINTAINER-Projektbündel und TASKWRITER-Erfassungsläufe enthalten
-absichtlich keine Task-IDs. Der Selektor speichert für jede Rolle einen getrennten
-Cursor atomar unter `~/.taskplan/rotation-state.json` (konfigurierbar über
-`[loop].rotation_state_file`) und liefert beim nächsten Lauf den nächsten
-Kandidaten. Der TASKSOLVER rückt normalerweise durch das Erledigen seines
-Task-Bündels weiter; ein veraltetes oder vorübergehend nicht bearbeitbares Projekt
-kann mit demselben expliziten Cursor übersprungen werden:
+absichtlich keine Task-IDs. Sie verwenden ein getrenntes, hostlokales Siegel je
+`(Rolle, Projekt)` in derselben SQLite-Datenbank. `next` speichert vor der Ausgabe
+eine kurze Präsentationslease und liefert `review.presentation_id`; die Präsentation
+allein ist niemals Erfolg. Erst ein bestätigter Abschluss speichert aktuellen
+deterministischen Projekt-Hash, Ergebnis, Prüfzeit und nächste Fälligkeit. Ein
+Blocker wird ohne Erfolg deferiert:
 
 ```bash
-python -m taskplan skip --role maintainer --project "<pfad>"
-python -m taskplan skip --role taskwriter --project "<pfad>"
+python -m taskplan review complete --role maintainer --project "<pfad>" \
+  --presentation-id "<id>" --result "geprüft"
+python -m taskplan review defer --role taskwriter --project "<pfad>" \
+  --presentation-id "<id>" --reason "blockiert"
+python -m taskplan review unseal --role maintainer --project "<pfad>" \
+  --reason "manuelle Nachprüfung"
+python -m taskplan review status --role maintainer --project "<pfad>" --json
+```
+
+Ein unverändertes Siegel vor `next_due_at` wird nicht erneut vorgelegt. Inhalts-
+Hashänderung, Intervallablauf, manueller Siegelbruch oder eine noch nie erfolgte
+Vorlage öffnen es. Git-Metadaten, Caches, Builds, TASKPLAN-eigene Locks und
+konfigurierte Glob-Ausschlüsse erzeugen keinen Hashlärm. Die Diagnose unterscheidet
+Locks, aktive Leases, deferierte Projekte, unveränderte Siegel, Hashbruch,
+Fälligkeit, manuelle Entsiegelung und Hashfehler.
+
+Der TASKSOLVER behält seinen bestehenden Task-Revolver und Projektcursor unter
+`~/.taskplan/rotation-state.json` (konfigurierbar über
+`[loop].rotation_state_file`). Ein veraltetes oder vorübergehend nicht
+bearbeitbares Task-Projekt kann diesen Cursor weiterhin ausdrücklich weitersetzen:
+
+```bash
 python -m taskplan skip --role tasksolver --project "<pfad>"
 ```
 
@@ -228,6 +248,7 @@ Prompt-Vertrag über den bestehenden Projektcursor, kein neuer Task-Status oder
 Retry-Engine.
 
 Neue Aufgaben bleiben der TASKWRITER-/TASKSOLVER-Rollenstrecke vorbehalten.
+Projekt-Review-Zeilen ändern nie `created_by`, `assigned_to` oder einen Taskstatus.
 
 ### Wer hat es angelegt, wer arbeitet daran
 

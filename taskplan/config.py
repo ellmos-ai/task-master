@@ -81,6 +81,7 @@ def selector_config():
         easy_first_globally=bool(deep.get("easy_first_globally", True)),
         projects_per_dive=int(deep.get("projects_per_dive", 1)),
         max_bundle_size=int(loop.get("max_bundle_size", 3)),
+        review_pool_enabled=review_pool_config().enabled,
     )
 
 
@@ -94,6 +95,52 @@ def rotation_state_file() -> Path:
     loop = load_config().get("loop", {}) or {}
     raw = str(loop.get("rotation_state_file", "~/.taskplan/rotation-state.json"))
     return Path(raw).expanduser()
+
+
+def review_pool_config():
+    """Hostlokale Wiedervorlagepolitik für TASKWRITER und MAINTAINER.
+
+    Kaputte Benutzerwerte degradieren auf dokumentierte sichere Defaults,
+    statt den ganzen Selector-Prozess beim Start unbrauchbar zu machen.
+    """
+    from .review_pool import REVIEW_EFFORTS, ReviewPolicy
+
+    section = load_config().get("review_pool", {}) or {}
+    if not isinstance(section, dict):
+        section = {}
+
+    defaults = {
+        "review_interval_seconds": 7 * 24 * 60 * 60,
+        "retry_interval_seconds": 60 * 60,
+        "presentation_lease_seconds": 15 * 60,
+    }
+
+    def interval(name: str) -> int:
+        try:
+            value = int(section.get(name, defaults[name]))
+        except (TypeError, ValueError):
+            return defaults[name]
+        if name == "presentation_lease_seconds":
+            return value if value > 0 else defaults[name]
+        return value if value >= 0 else defaults[name]
+
+    effort = str(section.get("default_effort", "easy")).strip().lower()
+    if effort not in REVIEW_EFFORTS:
+        effort = "easy"
+    raw_excludes = section.get("exclude", [])
+    excludes = (
+        tuple(str(item) for item in raw_excludes)
+        if isinstance(raw_excludes, list)
+        else ()
+    )
+    return ReviewPolicy(
+        enabled=bool(section.get("enabled", True)),
+        review_interval_seconds=interval("review_interval_seconds"),
+        retry_interval_seconds=interval("retry_interval_seconds"),
+        presentation_lease_seconds=interval("presentation_lease_seconds"),
+        default_effort=effort,
+        exclude=excludes,
+    )
 
 
 def prompt_language() -> str:

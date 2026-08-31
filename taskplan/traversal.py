@@ -115,6 +115,9 @@ class Project:
     """Eine Arbeitseinheit — das, was Rotation, Lock-Scope und `project_path` meinen."""
     path: Path
     root_id: str
+    # Projektrollen dürfen ihren Aufwand unabhängig von Task-Etiketten führen.
+    # Discovery kennt ihn meist nicht; dann gilt der konservative Pool-Default.
+    effort: str = "easy"
 
     @property
     def name(self) -> str:

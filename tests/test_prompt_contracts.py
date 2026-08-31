@@ -99,8 +99,10 @@ class TestWriterClassifies(unittest.TestCase):
     def test_writer_descends_into_projects(self):
         self.assertIn("Steig in die Projekte hinab", TASKWRITER)
 
-    def test_writer_can_advance_project_rotation(self):
-        self.assertIn("skip --role taskwriter", TASKWRITER)
+    def test_writer_confirms_or_defers_presented_review(self):
+        self.assertIn("review complete --role taskwriter", TASKWRITER)
+        self.assertIn("review defer --role taskwriter", TASKWRITER)
+        self.assertIn("noch KEIN Erfolg", TASKWRITER)
 
     def test_writer_backfills_unclassified_tasks(self):
         """Altbestand ohne effort liegt sonst fuer immer still."""

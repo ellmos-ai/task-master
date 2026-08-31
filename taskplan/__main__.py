@@ -201,6 +201,121 @@ def _projects_command(args: list[str]) -> int:
     return 2
 
 
+def _review_command(args: list[str]) -> int:
+    """Bestätigungs- und Diagnosekanal des lokalen Projekt-Reviewpools."""
+    import json
+    from pathlib import Path
+
+    from .client import TaskClient
+    from .config import review_pool_config
+    from .review_pool import (
+        ProjectHashError,
+        ReviewConflict,
+        ReviewInputError,
+        ReviewPool,
+    )
+
+    action = args[0] if args else ""
+    role = _option(args, "--role", "")
+    project = _option(args, "--project", "")
+    as_json = "--json" in args
+    if action not in ("status", "complete", "defer", "unseal", "effort"):
+        print(
+            "Nutzung: python -m taskplan review "
+            "<status|complete|defer|unseal|effort> --role R --project P",
+            file=sys.stderr,
+        )
+        return 2
+    if not role or not project:
+        print(
+            f"Nutzung: python -m taskplan review {action} "
+            "--role <taskwriter|maintainer> --project PFAD",
+            file=sys.stderr,
+        )
+        return 2
+
+    pool = ReviewPool(TaskClient(), policy=review_pool_config())
+    try:
+        if action == "status":
+            from .runner import _lock_view
+
+            view, _provider = _lock_view()
+            payload = pool.status(
+                role, project,
+                locked=not view.allows_selection(Path(project)),
+            )
+        elif action == "complete":
+            token = _option(args, "--presentation-id", "")
+            result = _option(args, "--result", "")
+            if not token or not result:
+                print(
+                    "Nutzung: python -m taskplan review complete --role R "
+                    "--project P --presentation-id ID --result TEXT",
+                    file=sys.stderr,
+                )
+                return 2
+            payload = pool.complete(role, project, token, result)
+        elif action == "defer":
+            token = _option(args, "--presentation-id", "")
+            reason = _option(args, "--reason", "")
+            if not token or not reason:
+                print(
+                    "Nutzung: python -m taskplan review defer --role R "
+                    "--project P --presentation-id ID --reason TEXT",
+                    file=sys.stderr,
+                )
+                return 2
+            payload = pool.defer(role, project, token, reason)
+        elif action == "unseal":
+            reason = _option(args, "--reason", "")
+            if not reason:
+                print(
+                    "Nutzung: python -m taskplan review unseal --role R "
+                    "--project P --reason TEXT",
+                    file=sys.stderr,
+                )
+                return 2
+            payload = pool.unseal(role, project, reason)
+        else:
+            effort = _option(args, "--set", "")
+            if not effort:
+                print(
+                    "Nutzung: python -m taskplan review effort --role R "
+                    "--project P --set <easy|medium>",
+                    file=sys.stderr,
+                )
+                return 2
+            payload = pool.set_effort(role, project, effort)
+    except ReviewInputError as exc:
+        print(f"Ungültiger Review-Aufruf: {exc}", file=sys.stderr)
+        return 2
+    except (ReviewConflict, ProjectHashError) as exc:
+        print(f"Review nicht gebucht: {exc}", file=sys.stderr)
+        return 1
+
+    if as_json:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return 0
+    if action == "status":
+        print(f"[{role.upper()}] {project}")
+        print(f"  Grund     : {payload['reason']}")
+        print(f"  Kandidat  : {'ja' if payload['eligible'] else 'nein'}")
+        if payload.get("current_hash"):
+            print(f"  Hash      : {payload['current_hash']}")
+        if payload.get("error"):
+            print(f"  Fehler    : {payload['error']}")
+    else:
+        print(f"Review-Zustand gebucht: [{role}] {project}")
+        if payload.get("sealed_hash"):
+            print(f"  Siegel    : {payload['sealed_hash']}")
+        if payload.get("deferred_until"):
+            print(f"  Defer bis : {payload['deferred_until']}")
+        if payload.get("manual_unseal_at"):
+            print(f"  Entsiegelt: {payload['manual_unseal_at']}")
+        print(f"  Aufwand   : {payload['effort']}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
     command = args[0] if args else "help"
@@ -221,6 +336,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if command == "projects":
         return _projects_command(rest)
+
+    if command == "review":
+        return _review_command(rest)
 
     if command == "prompt":
         from .workflows import get_workflow_prompt
@@ -350,6 +468,8 @@ def main(argv: list[str] | None = None) -> int:
         role = _option(rest, "--role", "maintainer")
         project = _option(rest, "--project", "")
         task_raw = _option(rest, "--task", "")
+        presentation_id = _option(rest, "--presentation-id", "")
+        reason = _option(rest, "--reason", "")
         undo = "--undo" in rest
         if not project and not task_raw:
             print("Nutzung: python -m taskplan skip "
@@ -361,6 +481,38 @@ def main(argv: list[str] | None = None) -> int:
                   "maintainer, taskwriter oder tasksolver.",
                   file=sys.stderr)
             return 2
+
+        # Projektrollen verwenden im aktiven Reviewpool einen echten
+        # Präsentationstoken. ``skip`` bleibt als verständlicher Alias für
+        # die nicht-erfolgreiche Deferierung erhalten; ohne Token gilt aus
+        # Rückwärtskompatibilität weiter der alte Cursorvertrag.
+        if project and presentation_id:
+            if role not in ("maintainer", "taskwriter") or not reason or task_raw or undo:
+                print(
+                    "Review-Skip: --role taskwriter|maintainer --project P "
+                    "--presentation-id ID --reason TEXT",
+                    file=sys.stderr,
+                )
+                return 2
+            from .client import TaskClient
+            from .config import review_pool_config
+            from .review_pool import (
+                ProjectHashError,
+                ReviewConflict,
+                ReviewPool,
+            )
+            try:
+                state = ReviewPool(
+                    TaskClient(), policy=review_pool_config()
+                ).defer(role, project, presentation_id, reason)
+            except (ReviewConflict, ProjectHashError) as exc:
+                print(f"Projekt konnte nicht deferiert werden: {exc}", file=sys.stderr)
+                return 1
+            print(
+                f"Für die Rolle {role} deferiert bis "
+                f"{state['deferred_until']}: {project}"
+            )
+            return 0
 
         state_file = rotation_state_file()
 
@@ -421,6 +573,11 @@ def main(argv: list[str] | None = None) -> int:
         print("            per Flagdatei als Projekt, 'markers' zeigt die")
         print("            aktiven Marker-Regeln.")
         print()
+        print("  review status|complete|defer|unseal|effort --role R --project P")
+        print("            Diagnostiziert den lokalen Projektpool, bestätigt einen")
+        print("            Abschluss per Präsentationstoken, deferiert einen Blocker,")
+        print("            bricht ein Siegel manuell oder setzt den Review-Aufwand.")
+        print()
         print("  prompt <ROLLE>")
         print("            Gibt den Rollen-Prompt aus (TASKSOLVER, TASKWRITER,")
         print("            MAINTAINER).")
@@ -447,8 +604,10 @@ def main(argv: list[str] | None = None) -> int:
         print()
         print("  skip --role <maintainer|taskwriter|tasksolver>")
         print("       [--project PFAD] [--task ID [--undo]]")
-        print("            --project setzt den Projekt-Cursor hinter ein Projekt,")
-        print("            damit der nächste Lauf den nächsten Kandidaten nimmt.")
+        print("       [--presentation-id ID --reason TEXT]")
+        print("            --project plus Präsentationstoken deferiert ein Writer-/")
+        print("            Maintainer-Review ohne Erfolg. Ohne Token gilt der alte")
+        print("            Projekt-Cursorvertrag (insbesondere für TASKSOLVER).")
         print("            --task reiht EINE blockierte Aufgabe ans Ende aller")
         print("            Kandidaten (Revolver) — statt sie über ihre Etiketten")
         print("            (effort/priority/status) aus der Auswahl zu drängen.")

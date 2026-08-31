@@ -205,6 +205,55 @@ def count() -> Dict:
     return get_client().count()
 
 
+# === Project Review Operations ===
+
+def get_review_pool():
+    """Pool auf derselben hostlokalen DB wie der globale TaskClient."""
+    from .config import review_pool_config
+    from .review_pool import ReviewPool
+
+    return ReviewPool(get_client(), policy=review_pool_config())
+
+
+def review_status(role: str, project_path: str, *, locked: bool = False) -> Dict:
+    """Aktuelle Eligibility und Diagnose eines Rollen-/Projektpaars."""
+    return get_review_pool().status(role, project_path, locked=locked)
+
+
+def complete_review(
+    role: str,
+    project_path: str,
+    presentation_id: str,
+    result: str,
+) -> Dict:
+    """Versiegelt ausschließlich eine bestätigte, aktive Präsentation."""
+    return get_review_pool().complete(
+        role, project_path, presentation_id, result
+    )
+
+
+def defer_review(
+    role: str,
+    project_path: str,
+    presentation_id: str,
+    reason: str,
+) -> Dict:
+    """Stellt einen präsentierten Blocker temporär zurück, ohne Erfolg."""
+    return get_review_pool().defer(
+        role, project_path, presentation_id, reason
+    )
+
+
+def unseal_review(role: str, project_path: str, reason: str) -> Dict:
+    """Protokollierter manueller Siegelbruch."""
+    return get_review_pool().unseal(role, project_path, reason)
+
+
+def set_review_effort(role: str, project_path: str, effort: str) -> Dict:
+    """Setzt easy/medium für Projekt-Reviews, nicht für Taskzeilen."""
+    return get_review_pool().set_effort(role, project_path, effort)
+
+
 # === Shortcuts ===
 
 def next_task() -> Optional[Dict]:
