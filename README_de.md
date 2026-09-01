@@ -9,7 +9,7 @@
 [![Organisation: ellmos-ai](https://img.shields.io/badge/org-ellmos--ai-6366f1.svg)](https://github.com/ellmos-ai)
 [![Dachorganisation: open-bricks](https://img.shields.io/badge/umbrella-open--bricks-0ea5e9.svg)](https://github.com/open-bricks)
 [![Keine Abhängigkeiten](https://img.shields.io/badge/Abh%C3%A4ngigkeiten-keine%20(stdlib)-success.svg)](pyproject.toml)
-[![Tests](https://img.shields.io/badge/tests-391%20bestanden-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-pytest%20bestanden-brightgreen.svg)](tests/)
 [![llms.txt](https://img.shields.io/badge/llms.txt-verf%C3%BCgbar-orange.svg)](llms.txt)
 
 **Deterministische Aufgabenauswahl für LLM-Agenten.** Keine Abhängigkeiten, nur
@@ -227,6 +227,15 @@ Vorlage öffnen es. Git-Metadaten, Caches, Builds, TASKPLAN-eigene Locks und
 konfigurierte Glob-Ausschlüsse erzeugen keinen Hashlärm. Die Diagnose unterscheidet
 Locks, aktive Leases, deferierte Projekte, unveränderte Siegel, Hashbruch,
 Fälligkeit, manuelle Entsiegelung und Hashfehler.
+
+Die Auswahl sortiert Zustände, deren Zulässigkeit bereits feststeht, zunächst
+ohne jeden Projektbaum zu lesen. Inhalte werden nur gehasht, wenn eine
+Zustandsentscheidung sie benötigt oder ein Kandidat tatsächlich vorgelegt werden
+soll. Jeder tatsächlich versuchte Kandidat wird unmittelbar vor der Transaktion
+unabhängig von einem Vorauswahl-Digest erneut frisch gehasht. Nur dieser Digest
+wird geprüft, gespeichert und ausgegeben. Ein Hashfehler schließt den Kandidaten
+fail-closed aus und die Auswahl fährt fort; wenn kein Hash berechnet wurde, bleibt
+`current_hash` in der Diagnose leer.
 
 Der TASKSOLVER behält seinen bestehenden Task-Revolver und Projektcursor unter
 `~/.taskplan/rotation-state.json` (konfigurierbar über

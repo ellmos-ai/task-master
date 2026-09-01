@@ -387,6 +387,7 @@ class ReviewPool:
         state: Optional[dict[str, Any]] = None,
         digest: Optional[ProjectDigest] = None,
         now: Optional[datetime] = None,
+        lazy_hash: bool = False,
     ) -> dict[str, Any]:
         role = self._validate_role(role)
         path = str(Path(project))
@@ -411,6 +412,17 @@ class ReviewPool:
         }
         if locked:
             base["reason"] = "lock"
+            return base
+        if digest is None and lazy_hash:
+            preliminary = self._hashless_selection(state, now)
+            if preliminary is not None:
+                eligible, reason = preliminary
+                base.update(eligible=eligible, reason=reason)
+                return base
+            # Nur intern in ``present_next``: Dieser Zustand braucht den
+            # aktuellen Inhalt, um Eligibility und Diagnose fail-closed zu
+            # unterscheiden. Der Marker wird nie nach außen geliefert.
+            base["reason"] = "_hash_required"
             return base
         if digest is None:
             try:
@@ -458,6 +470,43 @@ class ReviewPool:
             return base
         base["reason"] = "unchanged_sealed"
         return base
+
+    @staticmethod
+    def _hashless_selection(
+        state: Optional[dict[str, Any]], now: datetime
+    ) -> Optional[tuple[bool, str]]:
+        """Entscheidet nur Zustände, deren Eligibility keinen Digest braucht.
+
+        Der Grund darf bei Hashbruch später präziser werden. Die boolesche
+        Eligibility und der Sortierschlüssel bleiben dabei unverändert.
+        """
+        if not state:
+            return True, "never_presented"
+        lease_until = _parse(state.get("presentation_lease_until"))
+        if state.get("presentation_id") and lease_until and lease_until > now:
+            return False, "presentation_lease"
+        if not state.get("last_presented_at"):
+            return True, "never_presented"
+
+        manual = _parse(state.get("manual_unseal_at"))
+        reviewed = _parse(state.get("last_reviewed_at"))
+        if manual and (reviewed is None or manual >= reviewed):
+            return True, "manual_unseal"
+
+        deferred_until = _parse(state.get("deferred_until"))
+        if deferred_until and deferred_until > now:
+            # Nur ein echter Hash kann einen unveränderten Defer von einem
+            # sofort wieder geöffneten Hashbruch unterscheiden.
+            return None
+        if not state.get("sealed_hash"):
+            return True, "never_sealed"
+
+        due = _parse(state.get("next_due_at"))
+        if due is not None and due <= now:
+            return True, "due"
+        # Ein versiegeltes, nicht fälliges Projekt ist nur bei Hashbruch
+        # eligible; ohne Digest wäre jede Entscheidung geraten.
+        return None
 
     def status(
         self,
@@ -518,10 +567,21 @@ class ReviewPool:
             effort = str(getattr(project, "effort", "") or "")
             is_locked = bool(locked(path)) if locked else False
             state = self.get_state(role, path)
-            decisions.append(self._decision(
+            decision = self._decision(
                 role, path, root_id=root_id, effort=effort,
-                locked=is_locked, state=state,
-            ))
+                locked=is_locked, state=state, lazy_hash=True,
+            )
+            if decision["reason"] == "_hash_required":
+                try:
+                    digest = hash_project(path, exclude=self.policy.exclude)
+                except ProjectHashError as exc:
+                    decision.update(reason="hash_error", error=str(exc))
+                else:
+                    decision = self._decision(
+                        role, path, root_id=root_id, effort=effort,
+                        state=state, digest=digest,
+                    )
+            decisions.append(decision)
 
         eligible = [item for item in decisions if item["eligible"]]
         effort_rank = {"easy": 0, "medium": 1}
@@ -533,6 +593,18 @@ class ReviewPool:
         ))
 
         for candidate in eligible:
+            try:
+                digest = hash_project(
+                    candidate["project_path"], exclude=self.policy.exclude
+                )
+            except ProjectHashError as exc:
+                candidate.update(
+                    eligible=False,
+                    reason="hash_error",
+                    current_hash=None,
+                    error=str(exc),
+                )
+                continue
             now = self._now()
             at = _iso(now)
             token = str(uuid.uuid4())
@@ -549,9 +621,10 @@ class ReviewPool:
                     root_id=candidate["root_id"],
                     effort=candidate["effort"],
                     state=state,
-                    digest=ProjectDigest(candidate["current_hash"], 0, 0),
+                    digest=digest,
                     now=now,
                 )
+                candidate.update(current)
                 if not current["eligible"]:
                     conn.rollback()
                     continue
@@ -572,7 +645,7 @@ class ReviewPool:
                     (
                         role, candidate["project_key"], candidate["project_path"],
                         candidate["root_id"], current["effort"], at, token,
-                        candidate["current_hash"], lease_until, at, at,
+                        digest.value, lease_until, at, at,
                     ),
                 )
                 self._event(
@@ -581,7 +654,7 @@ class ReviewPool:
                     presentation_id=token,
                     detail=json.dumps({
                         "reason": current["reason"],
-                        "hash": candidate["current_hash"],
+                        "hash": digest.value,
                     }, ensure_ascii=False, sort_keys=True),
                 )
                 conn.commit()

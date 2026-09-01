@@ -9,7 +9,7 @@
 [![Organization: ellmos-ai](https://img.shields.io/badge/org-ellmos--ai-6366f1.svg)](https://github.com/ellmos-ai)
 [![Umbrella: open-bricks](https://img.shields.io/badge/umbrella-open--bricks-0ea5e9.svg)](https://github.com/open-bricks)
 [![Zero Dependencies](https://img.shields.io/badge/dependencies-zero%20(stdlib)-success.svg)](pyproject.toml)
-[![Tests](https://img.shields.io/badge/tests-391%20passed-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-pytest%20passing-brightgreen.svg)](tests/)
 [![llms.txt](https://img.shields.io/badge/llms.txt-available-orange.svg)](llms.txt)
 
 **Deterministic task selection for LLM agents.** Zero dependencies, stdlib only,
@@ -221,6 +221,14 @@ due interval, manual unseal, or never-presented project opens it. Git metadata,
 caches, builds, TASKPLAN's own locks, and configured glob exclusions do not churn
 the hash. Diagnostics distinguish locks, active leases, deferred projects,
 unchanged seals, hash breaks, due reviews, manual unseals, and hash errors.
+
+Selection first sorts states whose eligibility is already known without reading
+every project tree. Content is hashed only when a state decision needs it or a
+candidate is about to be presented. Every candidate that is actually attempted is
+hashed again immediately before the transaction, independently of any digest used
+for eligibility. Only that fresh digest is validated, stored, and returned. A hash
+failure excludes the candidate fail-closed and selection continues; diagnostics
+leave `current_hash` empty whenever no hash was computed.
 
 The TASKSOLVER keeps its existing task-level revolver and project cursor at
 `~/.taskplan/rotation-state.json` (configurable with

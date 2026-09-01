@@ -1,6 +1,6 @@
 # task-master
 
-> Last-checked: 2026-08-31
+> Last-checked: 2026-09-01
 
 task-master (ehemals `taskplan`, Repo: `ellmos-ai/task-master`) ist eine Python-Bibliothek (≥ 3.10, zero dependencies, stdlib only) für deterministische Aufgaben- und Rollenauswahl für LLM-Agenten-Frameworks im `ellmos-ai`-Ökosystem.
 
@@ -20,7 +20,9 @@ task-master (ehemals `taskplan`, Repo: `ellmos-ai/task-master`) ist eine Python-
 - `taskplan.client`: Python-Client für SQLite- und Dateien-Backends.
 - `taskplan.review_pool`: hostlokaler, rollenspezifischer Siegel- und
   Wiedervorlagepool mit versioniertem Projekt-Hash, Präsentationsleases und
-  explizit bestätigten Erfolgen.
+  explizit bestätigten Erfolgen; `next` sortiert bekannte Zustände hash-lazy und
+  hasht jeden tatsächlich versuchten Kandidaten unmittelbar vor der Transaktion
+  unabhängig von einem Vorauswahl-Digest erneut.
 - `taskplan.maintenance`: fail-closed MAINTAINER-Planer für Policy-Auflösung,
   Evidenz, Locks, Reversibilität, fünf Befundklassen und Ticket-Deduplizierung;
   führt selbst weder Mutation, Audit noch Ticket-Erstellung aus.
@@ -28,6 +30,6 @@ task-master (ehemals `taskplan`, Repo: `ellmos-ai/task-master`) ist eine Python-
 
 ## Verifikation
 
-- Pytest-Testsuite: 391/391 Tests plus 38/38 Subtests 100% grün (`python -m pytest tests/`).
+- Pytest-Testsuite: vollständiges Gate über `python -m pytest tests/`.
 - Prozess-Benchmark: 200 synthetische Projekte entdeckt, 80/80 SQLite-Schreibvorgänge und genau ein LockMaster-Claim von vier Prozessen gewonnen; siehe `results/benchmark_locking_20260813.json`.
 - Der Benchmark simuliert lokale Prozesse und ist keine Abnahme physischer Mehrmaschinen oder Netzwerk-Dateisysteme.

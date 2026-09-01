@@ -5,10 +5,13 @@ import unittest
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest import mock
 
+import taskplan.review_pool as review_pool_module
 from taskplan.client import TaskClient
 from taskplan.review_pool import (
     ReviewConflict,
+    ProjectHashError,
     ReviewPolicy,
     ReviewPool,
 )
@@ -126,6 +129,178 @@ class TestReviewSchema(ReviewPoolCase):
 
 
 class TestEligibilityAndOrdering(ReviewPoolCase):
+    def test_many_never_presented_projects_hash_only_the_selected_candidate(self):
+        projects = [self.project(f"fresh-{index:03d}") for index in range(40)]
+        expected = min(projects, key=lambda item: str(item.path).casefold())
+        real_hash = review_pool_module.hash_project
+
+        with mock.patch.object(
+            review_pool_module, "hash_project", wraps=real_hash
+        ) as hash_mock:
+            outcome = self.pool.present_next("taskwriter", reversed(projects))
+
+        self.assertEqual(hash_mock.call_count, 1)
+        presented = outcome["presentation"]
+        self.assertIsNotNone(presented)
+        self.assertEqual(Path(presented["project_path"]), expected.path)
+        state = self.pool.get_state("taskwriter", expected.path)
+        self.assertEqual(state["presented_hash"], presented["current_hash"])
+        self.assertEqual(presented["current_hash"], real_hash(expected.path).value)
+        for decision in outcome["decisions"]:
+            if Path(decision["project_path"]) != expected.path:
+                self.assertIsNone(decision["current_hash"])
+                self.assertEqual(decision["reason"], "never_presented")
+
+    def test_first_candidate_hash_error_falls_through_to_next_candidate(self):
+        broken = self.project("a-broken")
+        healthy = self.project("b-healthy")
+        real_hash = review_pool_module.hash_project
+        calls = []
+
+        def controlled_hash(path, *, exclude=()):
+            calls.append(Path(path))
+            if Path(path) == broken.path:
+                raise ProjectHashError("synthetisch nicht lesbar")
+            return real_hash(path, exclude=exclude)
+
+        with mock.patch.object(
+            review_pool_module, "hash_project", side_effect=controlled_hash
+        ):
+            outcome = self.pool.present_next(
+                "taskwriter", [healthy, broken]
+            )
+
+        self.assertEqual(calls, [broken.path, healthy.path])
+        self.assertEqual(Path(outcome["presentation"]["project_path"]), healthy.path)
+        diagnostics = {
+            Path(item["project_path"]): item for item in outcome["decisions"]
+        }
+        self.assertEqual(diagnostics[broken.path]["reason"], "hash_error")
+        self.assertIsNone(diagnostics[broken.path]["current_hash"])
+        self.assertIn("synthetisch nicht lesbar", diagnostics[broken.path]["error"])
+        self.assertIsNone(self.pool.get_state("taskwriter", broken.path))
+        healthy_state = self.pool.get_state("taskwriter", healthy.path)
+        self.assertEqual(
+            healthy_state["presented_hash"],
+            outcome["presentation"]["current_hash"],
+        )
+
+    def test_lock_and_active_lease_do_not_claim_uncomputed_hashes(self):
+        locked = self.project("locked-first")
+        leased = self.project("leased-second")
+        fresh = self.project("fresh-third")
+        self.present("taskwriter", [leased])
+        real_hash = review_pool_module.hash_project
+
+        with mock.patch.object(
+            review_pool_module, "hash_project", wraps=real_hash
+        ) as hash_mock:
+            outcome = self.pool.present_next(
+                "taskwriter",
+                [fresh, leased, locked],
+                locked=lambda path: Path(path) == locked.path,
+            )
+
+        self.assertEqual(hash_mock.call_count, 1)
+        diagnostics = {
+            Path(item["project_path"]): item for item in outcome["decisions"]
+        }
+        self.assertEqual(diagnostics[locked.path]["reason"], "lock")
+        self.assertEqual(diagnostics[leased.path]["reason"], "presentation_lease")
+        self.assertIsNone(diagnostics[locked.path]["current_hash"])
+        self.assertIsNone(diagnostics[leased.path]["current_hash"])
+        self.assertEqual(Path(outcome["presentation"]["project_path"]), fresh.path)
+
+    def test_due_candidate_is_rechecked_with_digest_before_persistence(self):
+        project = self.project("due-and-changed")
+        self.seal("maintainer", project)
+        self.clock.advance(hours=2)
+        (project.path / "project.txt").write_text("changed", encoding="utf-8")
+        real_hash = review_pool_module.hash_project
+
+        with mock.patch.object(
+            review_pool_module, "hash_project", wraps=real_hash
+        ) as hash_mock:
+            outcome = self.pool.present_next("maintainer", [project])
+
+        self.assertEqual(hash_mock.call_count, 1)
+        self.assertEqual(outcome["presentation"]["reason"], "hash_break")
+        state = self.pool.get_state("maintainer", project.path)
+        self.assertEqual(
+            state["presented_hash"], outcome["presentation"]["current_hash"]
+        )
+
+    def test_hash_required_candidate_is_rehashed_before_persistence(self):
+        project = self.project("changes-between-hashes")
+        self.seal("maintainer", project)
+        content = project.path / "project.txt"
+        content.write_text("changed for eligibility", encoding="utf-8")
+        real_hash = review_pool_module.hash_project
+        calls = []
+
+        def mutate_before_second_hash(path, *, exclude=()):
+            calls.append(Path(path))
+            if len(calls) == 2:
+                content.write_text("changed before persistence", encoding="utf-8")
+            return real_hash(path, exclude=exclude)
+
+        with mock.patch.object(
+            review_pool_module,
+            "hash_project",
+            side_effect=mutate_before_second_hash,
+        ):
+            outcome = self.pool.present_next("maintainer", [project])
+
+        self.assertEqual(calls, [project.path, project.path])
+        current_hash = real_hash(project.path).value
+        self.assertEqual(outcome["presentation"]["current_hash"], current_hash)
+        state = self.pool.get_state("maintainer", project.path)
+        self.assertEqual(state["presented_hash"], current_hash)
+        self.assertEqual(outcome["presentation"]["reason"], "hash_break")
+
+    def test_selected_candidate_second_hash_error_falls_through(self):
+        first = self.project("a-first-hash-break")
+        second = self.project("b-second-hash-break")
+        self.seal("maintainer", first)
+        self.clock.advance(minutes=1)
+        self.seal("maintainer", second)
+        (first.path / "project.txt").write_text("first changed", encoding="utf-8")
+        (second.path / "project.txt").write_text("second changed", encoding="utf-8")
+        first_before = self.pool.get_state("maintainer", first.path)
+        real_hash = review_pool_module.hash_project
+        calls = []
+        per_project_calls = {first.path: 0, second.path: 0}
+
+        def fail_first_candidate_refresh(path, *, exclude=()):
+            path = Path(path)
+            calls.append(path)
+            per_project_calls[path] += 1
+            if path == first.path and per_project_calls[path] == 2:
+                raise ProjectHashError("frischer Hash fehlgeschlagen")
+            return real_hash(path, exclude=exclude)
+
+        with mock.patch.object(
+            review_pool_module,
+            "hash_project",
+            side_effect=fail_first_candidate_refresh,
+        ):
+            outcome = self.pool.present_next("maintainer", [first, second])
+
+        self.assertEqual(calls, [first.path, second.path, first.path, second.path])
+        self.assertEqual(Path(outcome["presentation"]["project_path"]), second.path)
+        diagnostics = {
+            Path(item["project_path"]): item for item in outcome["decisions"]
+        }
+        self.assertEqual(diagnostics[first.path]["reason"], "hash_error")
+        self.assertIsNone(diagnostics[first.path]["current_hash"])
+        self.assertIn("frischer Hash fehlgeschlagen", diagnostics[first.path]["error"])
+        first_after = self.pool.get_state("maintainer", first.path)
+        self.assertEqual(first_after["presented_hash"], first_before["presented_hash"])
+        self.assertIsNone(first_after["presentation_id"])
+        self.assertEqual(
+            outcome["presentation"]["current_hash"], real_hash(second.path).value
+        )
+
     def test_never_presented_wins_before_previously_sealed(self):
         old = self.project("old")
         fresh = self.project("fresh")

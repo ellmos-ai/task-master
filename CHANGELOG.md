@@ -47,6 +47,15 @@
   eine MAINTAINER-Sperre getauscht.
 
 ### Fixed
+- Der lokale Review-Pool hasht bei `next` nicht mehr vor der Sortierung jedes
+  noch nie vorgelegte Projekt vollständig. Zustände, deren Zulässigkeit bereits
+  aus Lock, Präsentationslease und Review-Zustand folgt, werden zunächst ohne
+  erfundenen Hash eingeordnet; nur inhaltsabhängige Entscheidungen werden für
+  die Vorauswahl gehasht. Jeder tatsächlich versuchte Kandidat wird unmittelbar
+  vor der Transaktionsentscheidung unabhängig vom Vorauswahl-Hash frisch
+  gehasht. Nur dieser Digest wird geprüft, gespeichert und ausgegeben. Ein
+  Hashfehler sperrt den Kandidaten fail-closed und setzt die Auswahl mit dem
+  nächsten fort.
 - Projekt-Discovery behandelt `auto`/`hybrid` ohne konfigurierte Traversal-Roots
   nicht länger als gesunden `fresh_cache`-Leerlauf. `next` und `projects`
   liefern jetzt den retrybaren Exit 3, ohne auf ein manuelles Teilinventar
