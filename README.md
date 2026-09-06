@@ -427,12 +427,82 @@ exposes the profile to any shell; `python -m taskplan startup-prompt ...` emits 
 provider-specific user request. No user name, home path, or model is hardcoded in
 the launcher.
 
-The wheel includes sixteen user-neutral Windows launchers for
-TASKSOLVER/TASKWRITER/MAINTAINER/OPERATOR × Claude/Codex/Agy/Kimi:
+### Model probe and provider fallback
+
+A model name that no longer exists used to end the start: the CLI aborted and
+the user had no worker, although three other providers were installed. `launch`
+therefore builds a candidate chain and tests each candidate before handing over
+an interactive session.
+
+The chain is: your explicit `--model`/`--effort`, then the provider's own
+configured defaults, then the defaults of every provider in `[execution]
+fallback_providers` (default: the package order minus the one you asked for).
+Candidates whose CLI is not on `PATH`, or which have no model entry, are skipped
+with a visible reason.
+
+Each candidate is probed with one print-mode call that must emit
+`TASKPLAN_PROBE_OK`. **Success is the token appearing in the output stream, not
+the exit code.** Measured on 2026-09-06: agy prints the token and then never
+exits — that run ends in a kill after the timeout — while claude and codex exit
+`1` without a token when the model name is wrong. Judging by the return value
+would reject the working provider and accept none of the broken ones. The probe
+process is terminated together with its children (`taskkill /T /F` on Windows),
+because the provider CLIs are shims with Node children.
+
+```toml
+[execution]
+fallback_providers = ["codex", "claude"]   # order; omit for the package order
+probe = true                               # default
+probe_timeout_seconds = 120                # default
+
+[providers.claude]
+model_choices = ["sonnet", "opus"]         # hint for --interactive only
+```
+
+`--no-probe` starts the first viable candidate directly; `--no-fallback` limits
+the chain to a single candidate. `TASKPLAN_STARTER_PROBE=0` switches the probe
+off for one run without touching the configuration.
+
+### Choosing at start, and external roles
+
+`--model M` and `--effort E` override the configuration for this start only.
+`--interactive` asks for exactly what is not already fixed by a flag — provider,
+model, reasoning, in that order — and `Enter` keeps the shown default. For claude,
+`--name` sets the session display name; it defaults to the role or label in
+capitals.
+
+`--label NAME --prompt-file PATH --request TEXT` runs an **external role**: a
+foreign prompt instead of a TASKPLAN role, with no role gate and no generated
+startup request, but delivered through the same provider-specific mechanism.
+Model and reasoning come from the same provider tables, so a key may contain a
+hyphen:
+
+```toml
+[providers.claude.models]
+ticket-master = "opus"
+```
+
+Kimi runs this in two stages, because its CLI accepts a free startup request only
+headless: boot with `--prompt`, then continue the same conversation with
+`--continue`. TASKPLAN roles keep the existing single-stage contract.
+
+### Packaged launchers
+
+Each platform ships two layers: one provider-neutral starter per role that asks
+at start, and one pinned starter per role/provider pair below `providers/` —
+forty files for TASKSOLVER/TASKWRITER/MAINTAINER/OPERATOR × Claude/Codex/Agy/Kimi.
+
+```
+taskplan/starters/windows/START-OPERATOR.bat
+taskplan/starters/windows/providers/START-OPERATOR-CLAUDE.bat
+taskplan/starters/posix/start-operator.sh
+taskplan/starters/posix/providers/start-operator-claude.sh
+```
 
 ```powershell
-python -m taskplan starters list
+python -m taskplan starters list [--platform windows|posix]
 python -m taskplan starters path --role tasksolver --provider codex
+python -m taskplan starters path --role operator --platform posix
 python -m taskplan launch --role tasksolver --provider codex
 ```
 

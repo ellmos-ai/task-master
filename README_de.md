@@ -443,12 +443,84 @@ beliebige Starter; `python -m taskplan startup-prompt ...` erzeugt den
 providerspezifischen Nutzerauftrag. Kein Benutzername, Home-Pfad oder Modell wird im
 Starter fest verdrahtet.
 
-Das Wheel enthält sechzehn nutzerneutrale Windows-Starter für
-TASKSOLVER/TASKWRITER/MAINTAINER/OPERATOR × Claude/Codex/Agy/Kimi:
+### Modellsonde und Provider-Fallback
+
+Ein Modellname, den es nicht mehr gibt, beendete bisher den Start: Die CLI brach
+ab, und der Nutzer stand ohne Worker da — obwohl drei weitere Anbieter
+installiert sind. `launch` baut deshalb eine Kandidatenkette und prüft jeden
+Kandidaten, bevor eine interaktive Sitzung übergeben wird.
+
+Die Kette lautet: die ausdrückliche Wahl aus `--model`/`--effort`, danach die
+konfigurierten Defaults desselben Anbieters, danach die Defaults aller Anbieter
+aus `[execution] fallback_providers` (Default: die Paketreihenfolge ohne den
+gewählten). Kandidaten ohne CLI im `PATH` oder ohne Modelleintrag werden mit
+sichtbarem Grund übersprungen.
+
+Jeder Kandidat bekommt eine Sonde: einen einmaligen Print-Modus-Aufruf, der
+`TASKPLAN_PROBE_OK` ausgeben soll. **Erfolgsmerkmal ist der Token im
+Ausgabestrom, nicht der Exit-Code.** Gemessen am 2026-09-06: agy druckt den Token
+und beendet sich danach nie — dieser Lauf endet im Kill nach dem Timeout —,
+während claude und codex bei falschem Modellnamen mit Exit `1` und ohne Token
+enden. Wer nach dem Rückgabewert urteilt, verwirft also den funktionierenden
+Anbieter und akzeptiert keinen der kaputten. Der Sondenprozess wird samt Kindern
+beendet (`taskkill /T /F` unter Windows), denn die Provider-CLIs sind Shims mit
+Node-Kindern.
+
+```toml
+[execution]
+fallback_providers = ["codex", "claude"]   # Reihenfolge; leer = Paketreihenfolge
+probe = true                               # Default
+probe_timeout_seconds = 120                # Default
+
+[providers.claude]
+model_choices = ["sonnet", "opus"]         # nur Anzeigehinweis für --interactive
+```
+
+`--no-probe` startet den ersten brauchbaren Kandidaten direkt, `--no-fallback`
+beschränkt die Kette auf einen einzigen Kandidaten. `TASKPLAN_STARTER_PROBE=0`
+schaltet die Sonde für einen Lauf ab, ohne die Konfiguration anzufassen.
+
+### Wahl beim Start und externe Rollen
+
+`--model M` und `--effort E` überschreiben die Konfiguration nur für diesen
+Start. `--interactive` fragt genau das ab, was nicht schon als Flag feststeht —
+Anbieter, Modell, Reasoning in dieser Reihenfolge —, und `Enter` übernimmt den
+angezeigten Default. Für claude setzt `--name` den Anzeigenamen der Sitzung;
+ohne Angabe steht dort die Rolle bzw. das Label in Großbuchstaben.
+
+`--label NAME --prompt-file PFAD --request TEXT` startet eine **externe Rolle**:
+ein fremder Prompt statt einer TASKPLAN-Rolle, ohne Rollen-Gate und ohne
+erzeugten Startauftrag, aber über denselben providerspezifischen
+Ausliefermechanismus. Modell und Reasoning kommen aus denselben
+Provider-Tabellen; ein Schlüssel darf deshalb Bindestriche tragen:
+
+```toml
+[providers.claude.models]
+ticket-master = "opus"
+```
+
+Kimi läuft dabei zweistufig, weil seine CLI einen freien Startauftrag nur
+headless annimmt: Boot per `--prompt`, danach dieselbe Konversation interaktiv
+per `--continue`. Für TASKPLAN-Rollen bleibt der bisherige einstufige Vertrag.
+
+### Gebündelte Starter
+
+Je Plattform gibt es zwei Schichten: einen anbieterneutralen Starter pro Rolle,
+der beim Start fragt, und darunter in `providers/` je einen gepinnten Starter
+pro Rolle/Provider — vierzig Dateien für
+TASKSOLVER/TASKWRITER/MAINTAINER/OPERATOR × Claude/Codex/Agy/Kimi.
+
+```
+taskplan/starters/windows/START-OPERATOR.bat
+taskplan/starters/windows/providers/START-OPERATOR-CLAUDE.bat
+taskplan/starters/posix/start-operator.sh
+taskplan/starters/posix/providers/start-operator-claude.sh
+```
 
 ```powershell
-python -m taskplan starters list
+python -m taskplan starters list [--platform windows|posix]
 python -m taskplan starters path --role tasksolver --provider codex
+python -m taskplan starters path --role operator --platform posix
 python -m taskplan launch --role tasksolver --provider codex
 ```
 

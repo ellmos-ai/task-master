@@ -92,7 +92,22 @@ operator   = true     # Personalunion: EIN Worker betreibt MAINTAINER ->
 [execution]
 provider = "codex"
 
+# Ersatz-Anbieter, wenn die Sonde des gewaehlten Anbieters scheitert. Weglassen
+# = Paketreihenfolge (claude, codex, agy, kimi) ohne den gewaehlten.
+fallback_providers = ["codex", "claude", "agy", "kimi"]
+
+# Sonde vor dem interaktiven Start: ein einmaliger Print-Modus-Aufruf, der
+# TASKPLAN_PROBE_OK ausgeben soll. Erfolgsmerkmal ist der Token im Ausgabestrom,
+# NICHT der Exit-Code — agy druckt den Token und beendet sich danach nie, waehrend
+# claude/codex bei falschem Modell mit Exit 1 und ohne Token enden.
+# Fuer einen einzelnen Lauf abschaltbar: --no-probe bzw. TASKPLAN_STARTER_PROBE=0.
+probe = true
+probe_timeout_seconds = 120
+
 [providers.codex]
+# Reiner Anzeigehinweis fuer `launch --interactive`; es wird NICHT validiert,
+# weil Modellnamen sich schneller aendern als diese Datei gepflegt wird.
+# model_choices = ["gpt-5.4", "gpt-5.4-mini"]
 continuation = "goal"
 empty_policy = "keep_goal"
 idle_backoff_seconds = 60
@@ -119,6 +134,9 @@ empty_policy = "stop"
 idle_backoff_seconds = 60
 
 [providers.claude.models]
+# Externe Rollen (launch --label NAME --prompt-file ... --request ...) lesen
+# dieselbe Tabelle; ihr Schluessel ist das Label und darf Bindestriche tragen:
+# ticket-master = "opus"
 default    = ""
 taskwriter = ""
 tasksolver = ""
