@@ -397,9 +397,17 @@ def model_choices(provider: str = "") -> tuple:
     Reiner Anzeigewert fuer die interaktive Abfrage — bewusst KEINE Validierung:
     Modellnamen aendern sich schneller als eine Konfigurationsdatei gepflegt wird.
     """
-    values = _provider_section(provider_name(provider)).get("model_choices", [])
+    section = _provider_section(provider_name(provider))
+    values = section.get("model_choices", [])
     if not isinstance(values, list):
         return ()
+    if not values:
+        # Ohne Vorschlagsliste: die je Rolle konfigurierten Modelle, dedupliziert,
+        # damit die Abfrage auch dann Nummern anbietet.
+        models = section.get("models", {})
+        values = list(dict.fromkeys(
+            str(v) for v in (models.values() if isinstance(models, dict) else ())
+            if str(v).strip()))
     return tuple(str(value).strip() for value in values if str(value).strip())
 
 

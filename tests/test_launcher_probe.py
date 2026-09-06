@@ -355,9 +355,9 @@ class TestInteractiveStart(_LauncherFixture):
                 "tasksolver", "", interactive=True, ask=_ask)
         self.assertEqual(code, 0)
         self.assertEqual(len(asked), 3)
-        self.assertIn("[codex]", asked[0])
-        self.assertIn("gemini-flash, gemini-pro", asked[1])
-        self.assertIn("low, medium, high", asked[2])
+        self.assertIn("[Enter = codex]  [1] claude  [2] codex", asked[0])
+        self.assertIn("[1] gemini-flash  [2] gemini-pro", asked[1])
+        self.assertIn("[1] low  [2] medium  [3] high", asked[2])
         started = runner.call_args[0][0]
         self.assertTrue(started[0].endswith("agy.exe"))
         self.assertEqual(started[started.index("--model") + 1], "gemini-flash")
@@ -390,3 +390,21 @@ class TestInteractiveStart(_LauncherFixture):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestAskOneTolerant(unittest.TestCase):
+    """Nummer oder Name; strict fragt bei Unbekanntem neu und faellt dann auf Default."""
+
+    @staticmethod
+    def _ask(*answers):
+        it = iter(answers)
+        return lambda prompt: next(it)
+
+    def test_number_name_retry_and_freetext(self):
+        from taskplan.launcher import _ask_one
+        opts = ("claude", "codex")
+        self.assertEqual(_ask_one(self._ask("2"), "Anbieter", "codex", opts, strict=True), "codex")
+        self.assertEqual(_ask_one(self._ask("Claude"), "Anbieter", "codex", opts, strict=True), "claude")
+        self.assertEqual(_ask_one(self._ask("7", "x", "y"), "Anbieter", "codex", opts, strict=True), "")
+        self.assertEqual(_ask_one(self._ask("mein-modell"), "Modell", "opus", ("opus",)), "mein-modell")
+        self.assertEqual(_ask_one(self._ask(""), "Modell", "opus", ("opus",)), "")

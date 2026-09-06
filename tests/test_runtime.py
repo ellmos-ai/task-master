@@ -342,3 +342,15 @@ class TestOperatorStartup(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestOperatorModeAliases(unittest.TestCase):
+    """Menue-Nummern werden zu Modusnamen; Unbekanntes bleibt ein Fehler."""
+
+    def test_number_and_name_resolve(self):
+        from taskplan.runtime import normalize_operator_mode
+        self.assertEqual(normalize_operator_mode("1"), "rotation")
+        self.assertEqual(normalize_operator_mode("2"), "subagents")
+        self.assertEqual(normalize_operator_mode(" Subagents "), "subagents")
+        with self.assertRaises(ValueError):
+            normalize_operator_mode("3")
