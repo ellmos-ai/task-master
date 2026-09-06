@@ -300,7 +300,9 @@ def active_roles() -> Dict[str, bool]:
         "taskwriter": bool(section.get("taskwriter", True)),
         "tasksolver": bool(section.get("tasksolver", True)),
         "maintainer": bool(section.get("maintainer", True)),
-        "combined": bool(section.get("combined", False)),
+        # Personalunion der drei Rollen; `combined` bleibt als Legacy-Alias
+        # lesbar (frueher reserviert, seit 0.6.0 ist das der OPERATOR).
+        "operator": bool(section.get("operator", section.get("combined", True))),
     }
 
 
@@ -373,6 +375,38 @@ def provider_runtime(role: str, provider: str = "") -> Dict[str, Any]:
         "empty_policy": empty_policy,
         "idle_backoff_seconds": max(0, int(section.get("idle_backoff_seconds", 60))),
     }
+
+
+def label_runtime(label: str, provider: str = "") -> Dict[str, str]:
+    """Modell/Reasoning eines freien Schluessels — einer externen Rolle.
+
+    Externe Rollen wie ``ticket-master`` haben kein TASKPLAN-Laufzeitprofil,
+    duerfen aber dieselben Provider-Tabellen benutzen: ``[providers.<p>.models]``
+    kennt Schluessel mit Bindestrich, und ``default`` bleibt der Rueckfall.
+    """
+    section = _provider_section(provider_name(provider))
+    return {
+        "model": _role_value(section, "models", label),
+        "reasoning_effort": _role_value(section, "reasoning_effort", label),
+    }
+
+
+def model_choices(provider: str = "") -> tuple:
+    """Optionale Vorschlagsliste ``[providers.<p>] model_choices``.
+
+    Reiner Anzeigewert fuer die interaktive Abfrage — bewusst KEINE Validierung:
+    Modellnamen aendern sich schneller als eine Konfigurationsdatei gepflegt wird.
+    """
+    values = _provider_section(provider_name(provider)).get("model_choices", [])
+    if not isinstance(values, list):
+        return ()
+    return tuple(str(value).strip() for value in values if str(value).strip())
+
+
+def execution_config() -> Dict[str, Any]:
+    """Rohwerte der Sektion ``[execution]`` (Provider, Sonde, Fallback-Kette)."""
+    section = load_config().get("execution", {}) or {}
+    return section if isinstance(section, dict) else {}
 
 
 def discovery_timeout_seconds() -> float:

@@ -338,7 +338,7 @@ class TestWorkflowPrompts(unittest.TestCase):
 
     def test_workflows_are_imported_from_taskplan(self):
         self.assertEqual(list_workflows(),
-                         ("TASKSOLVER", "TASKWRITER", "MAINTAINER"))
+                         ("TASKSOLVER", "TASKWRITER", "MAINTAINER", "OPERATOR"))
         # Sprachexplizit: die Modul-Konstanten haengen seit der
         # Zweisprachigkeit von der Benutzerkonfiguration ab.
         self.assertIn("ROLLE: Du bist der TASKSOLVER",

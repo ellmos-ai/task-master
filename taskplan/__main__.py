@@ -353,7 +353,7 @@ def main(argv: list[str] | None = None) -> int:
     if command == "prompt":
         from .workflows import get_workflow_prompt
         if not rest:
-            print("Nutzung: python -m taskplan prompt <TASKSOLVER|TASKWRITER|MAINTAINER>",
+            print("Nutzung: python -m taskplan prompt <TASKSOLVER|TASKWRITER|MAINTAINER|OPERATOR>",
                   file=sys.stderr)
             return 2
         try:
@@ -439,36 +439,59 @@ def main(argv: list[str] | None = None) -> int:
 
     if command == "launch":
         from .launcher import launch
-        role = _option(rest, "--role", "tasksolver")
         provider = _option(rest, "--provider", "")
-        if not provider:
-            print("Nutzung: python -m taskplan launch --role R --provider P",
+        interactive = "--interactive" in rest
+        if not provider and not interactive:
+            print("Nutzung: python -m taskplan launch --role R --provider P "
+                  "[--model M] [--effort E] [--name N]\n"
+                  "         [--interactive] [--no-probe] [--no-fallback]\n"
+                  "         python -m taskplan launch --label NAME "
+                  "--prompt-file PFAD --request TEXT --provider P",
                   file=sys.stderr)
             return 2
-        return launch(role, provider)
+        return launch(
+            _option(rest, "--role", "tasksolver"),
+            provider,
+            model=_option(rest, "--model", ""),
+            effort=_option(rest, "--effort", ""),
+            prompt_file=_option(rest, "--prompt-file", ""),
+            request=_option(rest, "--request", ""),
+            label=_option(rest, "--label", ""),
+            interactive=interactive,
+            fallback="--no-fallback" not in rest,
+            use_probe=False if "--no-probe" in rest else None,
+            session_name=_option(rest, "--name", ""),
+        )
 
     if command == "starters":
         from .starters import get_starter_path, list_starters
         action = rest[0] if rest else "list"
+        platform = _option(rest, "--platform", "windows")
         if action == "list":
-            for name in list_starters():
-                print(name)
+            try:
+                for name in list_starters(platform):
+                    print(name)
+            except ValueError as exc:
+                print(exc, file=sys.stderr)
+                return 2
             return 0
         if action == "path":
             role = _option(rest, "--role", "")
             provider = _option(rest, "--provider", "")
-            if not role or not provider:
+            if not role:
                 print("Nutzung: python -m taskplan starters path "
-                      "--role R --provider P", file=sys.stderr)
+                      "--role R [--provider P] [--platform windows|posix]",
+                      file=sys.stderr)
                 return 2
             try:
-                print(get_starter_path(role, provider))
+                print(get_starter_path(role, provider, platform))
             except (ValueError, FileNotFoundError) as exc:
                 print(exc, file=sys.stderr)
                 return 2
             return 0
-        print("Nutzung: python -m taskplan starters list | starters path "
-              "--role R --provider P", file=sys.stderr)
+        print("Nutzung: python -m taskplan starters list [--platform P] | "
+              "starters path --role R [--provider P] [--platform P]",
+              file=sys.stderr)
         return 2
 
     if command == "skip":
@@ -606,11 +629,24 @@ def main(argv: list[str] | None = None) -> int:
         print("  backoff --role R [--provider P]")
         print("            Erzwingt die konfigurierte Wartezeit vor einem Retry.")
         print()
-        print("  launch --role R --provider P")
-        print("            Startet Claude, Codex oder Agy über das Runtime-Profil.")
+        print("  launch --role R --provider P [--model M] [--effort E]")
+        print("         [--name N] [--interactive] [--no-probe] [--no-fallback]")
+        print("  launch --label NAME --prompt-file PFAD --request TEXT --provider P")
+        print("            Startet Claude, Codex, Agy oder Kimi über das")
+        print("            Runtime-Profil. --model/--effort überschreiben die")
+        print("            Konfiguration nur für diesen Start; --interactive fragt")
+        print("            ab, was nicht als Flag feststeht. Vor dem Start prüft")
+        print("            eine Sonde das Modell (Erfolg = Token im Output, NICHT")
+        print("            der Exit-Code); scheitert sie, greift die Fallback-Kette")
+        print("            auf die Provider-Defaults und danach auf die weiteren")
+        print("            Provider. --no-probe/--no-fallback schalten das ab.")
+        print("            --label/--prompt-file/--request startet eine externe")
+        print("            Rolle mit fremdem Prompt statt einer TASKPLAN-Rolle.")
         print()
-        print("  starters list | starters path --role R --provider P")
-        print("            Listet bzw. lokalisiert die gebündelten Windows-Starter.")
+        print("  starters list [--platform windows|posix]")
+        print("  starters path --role R [--provider P] [--platform windows|posix]")
+        print("            Listet bzw. lokalisiert die gebündelten Starter:")
+        print("            anbieterneutral (fragt beim Start) und je Provider.")
         print()
         print("  skip --role <maintainer|taskwriter|tasksolver>")
         print("       [--project PFAD] [--task ID [--undo]]")

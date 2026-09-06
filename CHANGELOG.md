@@ -3,6 +3,47 @@
 ## Unreleased
 
 ### Added
+- **Launcher: Modell-/Effort-Wahl, Sonde, Provider-Fallback, externe Rollen,
+  interaktiver Start, neutrale + POSIX-Starter.** `launch` nimmt `--model`/
+  `--effort` (überschreiben die Konfiguration nur für diesen Start),
+  `--interactive` (fragt genau das ab, was nicht als Flag feststeht; Enter
+  übernimmt den Default), `--no-probe`, `--no-fallback` und für claude `--name`.
+  Vor dem interaktiven Start prüft eine **Sonde** jeden Kandidaten mit einem
+  einmaligen Print-Modus-Aufruf auf `TASKPLAN_PROBE_OK`; **Erfolgsmerkmal ist der
+  Token im Ausgabestrom, nicht der Exit-Code** — agy druckt den Token und beendet
+  sich danach nie (Kill nach Timeout), während claude/codex bei falschem
+  Modellnamen mit Exit 1 und ohne Token enden. Scheitert sie, greift die Kette:
+  erst die Provider-Defaults desselben Anbieters, dann die Defaults der Anbieter
+  aus `[execution] fallback_providers`; Kandidaten ohne CLI oder ohne
+  Modelleintrag werden mit sichtbarem Grund übersprungen. Neue Schlüssel
+  `[execution] probe|probe_timeout_seconds|fallback_providers` und
+  `[providers.<p>] model_choices` (reiner Anzeigehinweis, keine Validierung).
+  Der Sondenprozess wird samt Kindern beendet, weil die Provider-CLIs Shims mit
+  Node-Kindern sind. `--label`/`--prompt-file`/`--request` startet eine **externe
+  Rolle**: fremder Prompt statt TASKPLAN-Rolle, kein Rollen-Gate, kein erzeugter
+  Startauftrag, aber derselbe Ausliefermechanismus je Provider; Modell/Reasoning
+  kommen aus denselben Provider-Tabellen (Label-Schlüssel dürfen Bindestriche
+  tragen), und Kimi läuft dafür zweistufig (`--prompt`, dann `--continue`), weil
+  seine CLI einen freien Startauftrag nur headless annimmt. Die Starter liegen
+  jetzt je Plattform in zwei Schichten: anbieterneutral pro Rolle (fragt beim
+  Start) und in `providers/` je Rolle/Provider gepinnt — 40 Dateien für Windows
+  und POSIX, `starters list|path --platform windows|posix`. Eine `.gitattributes`
+  hält die Zeilenenden fest (`.sh` = LF, `.bat` = CRLF).
+- **Rolle OPERATOR — Personalunion von MAINTAINER, TASKWRITER und TASKSOLVER**
+  (Nutzerauftrag 2026-09-06): neuer Prompt `prompts/<de|en>/OPERATOR.txt`, der die
+  drei Rollen aus EINEM Worker betreibt. Zwei Modi über `TASKPLAN_OPERATOR_MODE`:
+  `rotation` (Default, providerneutral: der Worker nimmt MAINTAINER -> TASKWRITER ->
+  TASKSOLVER selbst nacheinander ein) und `subagents` (der Worker bleibt MAINTAINER
+  und aktiviert abwechselnd je einen Subagenten TASKWRITER/TASKSOLVER mit Fünf-Felder-
+  Vertrag und explizitem Modell aus `taskplan runtime --field model`). Jeder
+  Rollenschritt folgt unverändert dem Prompt der Teilrolle; der OPERATOR-Prompt regelt
+  nur Wechsel, Leerlauf-/Backoff-Vertrag, PingPong (ausschließlich WriteSync, nie ein
+  zweiter Listener) und System-Audit-Anforderung (ausschließlich als dedupliziertes
+  ticket-master-Ticket mit Präfix `system-auditor:`; ohne installierten system-auditor
+  nur Befund). `launch --role operator`, `START-OPERATOR-<PROVIDER>.bat` (16 Starter),
+  `taskplan.OPERATOR`, `[roles] operator` (Default `true`; `combined` bleibt Legacy-Alias
+  statt reservierter Leerstelle). Der Startauftrag nennt Modus und die Pfade der drei
+  Teilrollen-Prompts, weil Subagenten den System-Prompt nicht erben.
 - **Hostlokaler Siegel- und Wiedervorlagepool für TASKWRITER/MAINTAINER**
   (`T-20260830-202718995`): additive Tabellen
   `taskplan_project_reviews`/`taskplan_project_review_events`, deterministischer

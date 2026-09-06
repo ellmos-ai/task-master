@@ -79,9 +79,12 @@ tasksolver = true     # arbeitet sie ab
 maintainer = true     # haelt Dateien und Verzeichnisse sauber
                       # false -> der Starter bricht sauber ab (kein Leerlauf)
 
-combined = false      # Reservierte Konfiguration: wird gelesen und ausgegeben,
-                      # aber noch von keinem Runner/Starter ausgefuehrt.
-                      # true startet daher aktuell keinen 3-in-1-/2-in-1-Worker.
+operator   = true     # Personalunion: EIN Worker betreibt MAINTAINER ->
+                      # TASKWRITER -> TASKSOLVER im Wechsel (Modus "rotation")
+                      # oder bleibt MAINTAINER und aktiviert abwechselnd je einen
+                      # Subagenten TASKWRITER/TASKSOLVER (Modus "subagents",
+                      # ENV TASKPLAN_OPERATOR_MODE). false -> START-OPERATOR-*.bat
+                      # bricht sauber ab. Legacy-Alias: combined
 
 # ---------------------------------------------------------------------------
 # PROVIDER + MODELLE — gehoeren in die Konfiguration, nicht in den Starter
@@ -89,7 +92,22 @@ combined = false      # Reservierte Konfiguration: wird gelesen und ausgegeben,
 [execution]
 provider = "codex"
 
+# Ersatz-Anbieter, wenn die Sonde des gewaehlten Anbieters scheitert. Weglassen
+# = Paketreihenfolge (claude, codex, agy, kimi) ohne den gewaehlten.
+fallback_providers = ["codex", "claude", "agy", "kimi"]
+
+# Sonde vor dem interaktiven Start: ein einmaliger Print-Modus-Aufruf, der
+# TASKPLAN_PROBE_OK ausgeben soll. Erfolgsmerkmal ist der Token im Ausgabestrom,
+# NICHT der Exit-Code — agy druckt den Token und beendet sich danach nie, waehrend
+# claude/codex bei falschem Modell mit Exit 1 und ohne Token enden.
+# Fuer einen einzelnen Lauf abschaltbar: --no-probe bzw. TASKPLAN_STARTER_PROBE=0.
+probe = true
+probe_timeout_seconds = 120
+
 [providers.codex]
+# Reiner Anzeigehinweis fuer `launch --interactive`; es wird NICHT validiert,
+# weil Modellnamen sich schneller aendern als diese Datei gepflegt wird.
+# model_choices = ["gpt-5.4", "gpt-5.4-mini"]
 continuation = "goal"
 empty_policy = "keep_goal"
 idle_backoff_seconds = 60
@@ -100,6 +118,7 @@ default    = ""
 taskwriter = ""
 tasksolver = ""
 maintainer = ""
+operator   = ""
 
 [providers.codex.reasoning_effort]
 # Auch Reasoning ist optional; nichtleere Werte bleiben rollenbezogene Overrides.
@@ -107,6 +126,7 @@ default    = "high"
 taskwriter = "high"
 tasksolver = "xhigh"
 maintainer = "high"
+operator   = "high"
 
 [providers.claude]
 continuation = "one_shot"
@@ -114,16 +134,21 @@ empty_policy = "stop"
 idle_backoff_seconds = 60
 
 [providers.claude.models]
+# Externe Rollen (launch --label NAME --prompt-file ... --request ...) lesen
+# dieselbe Tabelle; ihr Schluessel ist das Label und darf Bindestriche tragen:
+# ticket-master = "opus"
 default    = ""
 taskwriter = ""
 tasksolver = ""
 maintainer = ""
+operator   = ""
 
 [providers.claude.reasoning_effort]
 default    = "high"
 taskwriter = "high"
 tasksolver = "high"
 maintainer = "high"
+operator   = "high"
 
 [providers.agy]
 continuation = "one_shot"
@@ -135,12 +160,14 @@ default    = ""
 taskwriter = ""
 tasksolver = ""
 maintainer = ""
+operator   = ""
 
 [providers.agy.reasoning_effort]
 default    = "high"
 taskwriter = "high"
 tasksolver = "high"
 maintainer = "high"
+operator   = "high"
 
 # Kimi Code CLI: kein interaktiver Startprompt und kein --effort-Flag (Stand
 # 0.29.2) — Worker laufen headless (kimi --prompt); die Reasoning-Stufe kommt
@@ -155,12 +182,14 @@ default    = ""
 taskwriter = ""
 tasksolver = ""
 maintainer = ""
+operator   = ""
 
 [providers.kimi.reasoning_effort]
 default    = "max"
 taskwriter = "max"
 tasksolver = "max"
 maintainer = "max"
+operator   = "max"
 
 # Rueckwaertskompatibilitaet fuer Installationen ohne Provider-Sektionen.
 [models]
@@ -168,6 +197,7 @@ default    = ""
 taskwriter = ""
 tasksolver = ""
 maintainer = ""
+operator   = ""
 
 # ---------------------------------------------------------------------------
 # TRAVERSIERUNG — was ist eine Root, was ein Projekt?

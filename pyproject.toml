@@ -35,6 +35,9 @@ include = ["taskplan*"]
 "taskplan.prompts.de" = ["*.txt"]
 "taskplan.prompts.en" = ["*.txt"]
 "taskplan.starters.windows" = ["*.bat"]
+"taskplan.starters.windows.providers" = ["*.bat"]
+"taskplan.starters.posix" = ["*.sh"]
+"taskplan.starters.posix.providers" = ["*.sh"]
 
 [tool.pytest.ini_options]
 pythonpath = "."

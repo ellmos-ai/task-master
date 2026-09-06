@@ -292,5 +292,53 @@ class TestDiscoveryTimeout(unittest.TestCase):
         )
 
 
+class TestOperatorStartup(unittest.TestCase):
+    ONE_SHOT = {"providers": {"claude": {"continuation": "one_shot"}}}
+
+    def test_rotation_mode_names_mode_subrole_prompts_and_first_step(self):
+        with mock.patch.object(cfg, "load_config", return_value=self.ONE_SHOT):
+            prompt = startup_prompt("operator", "claude", "de",
+                                    operator_mode="rotation")
+        self.assertIn("ROTATION", prompt)
+        self.assertIn("MAINTAINER -> TASKWRITER -> TASKSOLVER", prompt)
+        for name in ("MAINTAINER.txt", "TASKWRITER.txt", "TASKSOLVER.txt"):
+            self.assertIn(name, prompt)
+        self.assertIn("python -m taskplan next --role maintainer --json", prompt)
+        self.assertNotIn("next --role operator", prompt)
+        self.assertNotIn("genau einen TASKPLAN-Durchlauf", prompt)
+        self.assertIn("fortlaufend", prompt)
+
+    def test_subagent_mode_is_spelled_out(self):
+        with mock.patch.object(cfg, "load_config", return_value=self.ONE_SHOT):
+            prompt = startup_prompt("operator", "claude", "en",
+                                    operator_mode="subagents")
+        self.assertIn("SUBAGENTS", prompt)
+        self.assertIn("alternately", prompt)
+
+    def test_default_mode_is_rotation_and_invalid_mode_fails_loudly(self):
+        with mock.patch.object(cfg, "load_config", return_value=self.ONE_SHOT):
+            self.assertIn("ROTATION", startup_prompt("operator", "claude", "de"))
+            with self.assertRaisesRegex(ValueError, "OPERATOR-Modus"):
+                startup_prompt("operator", "claude", "de", operator_mode="chaos")
+
+    def test_codex_goal_covers_exactly_one_role_step(self):
+        data = {"language": {"prompts": "de"}, "providers": {"codex": {
+            "continuation": "goal", "empty_policy": "keep_goal",
+            "idle_backoff_seconds": 60}}}
+        with mock.patch.object(cfg, "load_config", return_value=data):
+            objective = goal_objective("operator", "codex", "de")
+            prompt = startup_prompt("operator", "codex", "de")
+        self.assertIn("genau EINEN Rollenschritt", objective)
+        self.assertIn("Exit 2 aller drei", objective)
+        self.assertIn("backoff --role operator --provider codex", objective)
+        self.assertIn("persistiertes Goal", prompt)
+        self.assertIn("MAINTAINER.txt", prompt)
+
+    def test_operator_is_a_launch_role_but_not_a_selector_role(self):
+        from taskplan.runtime import LAUNCH_ROLES, ROLES
+        self.assertIn("operator", LAUNCH_ROLES)
+        self.assertNotIn("operator", ROLES)
+
+
 if __name__ == "__main__":
     unittest.main()
