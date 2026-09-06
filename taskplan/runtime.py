@@ -30,6 +30,8 @@ def normalize_role(role: str) -> str:
 
 def normalize_operator_mode(mode: str | None) -> str:
     normalized = (mode or DEFAULT_OPERATOR_MODE).strip().lower()
+    if normalized.isdigit() and 1 <= int(normalized) <= len(OPERATOR_MODES):
+        return OPERATOR_MODES[int(normalized) - 1]  # Menue-Nummer statt Name
     if normalized not in OPERATOR_MODES:
         raise ValueError(
             f"Unbekannter OPERATOR-Modus {mode!r}; erlaubt: {', '.join(OPERATOR_MODES)}"

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Fixed (0.6.1)
+- Interaktive Abfragen (Modus, Anbieter, Modell, Reasoning) nehmen Nummern `[1] ...`
+  oder Namen; Unbekanntes wird bis zu dreimal neu gefragt statt mit Traceback
+  abzubrechen. Die OPERATOR-Modusfrage stellt der Launcher selbst (als erste Frage);
+  `TASKPLAN_OPERATOR_MODE` akzeptiert auch `1`/`2`.
+- `model_choices` leitet ohne Vorschlagsliste die je Rolle konfigurierten Modelle ab,
+  damit auch die Modellfrage Nummern anbietet.
+
 ### Added
 - **Launcher: Modell-/Effort-Wahl, Sonde, Provider-Fallback, externe Rollen,
   interaktiver Start, neutrale + POSIX-Starter.** `launch` nimmt `--model`/

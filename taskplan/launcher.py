@@ -22,7 +22,8 @@ from .config import (
 )
 from .doctor import run as doctor
 from .runtime import (
-    LAUNCH_ROLES, OPERATOR, normalize_operator_mode, normalize_role,
+    DEFAULT_OPERATOR_MODE, LAUNCH_ROLES, OPERATOR, OPERATOR_MODES,
+    normalize_operator_mode, normalize_role,
     runtime_profile, startup_prompt,
 )
 from .workflows import get_workflow_prompt_path
@@ -415,17 +416,36 @@ def _candidates(key: str, provider: str, *, model: str, effort: str,
     return chain, skipped
 
 
-def _ask_one(ask, label: str, default: str, choices: Sequence[str]) -> str:
-    """Eine Frage; Enter uebernimmt den Default und liefert den leeren String."""
-    hint = f" (bekannt: {', '.join(choices)})" if choices else ""
-    prompt = f"{label} [{default or '(CLI-Default)'}]{hint}: "
-    try:
-        answer = ask(prompt)
-    except EOFError:
-        # Eine per Pipe gefuetterte Antwortliste darf kuerzer sein als die
-        # Fragenliste — der Rest bleibt beim Default.
-        answer = ""
-    return str(answer or "").strip()
+def _ask_one(ask, label: str, default: str, choices: Sequence[str],
+             *, strict: bool = False) -> str:
+    """Eine Frage; Enter uebernimmt den Default und liefert den leeren String.
+
+    Auswahl per Nummer ([1], [2], ...) oder Name. strict=True: nur Werte aus
+    der Liste; Unbekanntes wird bis zu dreimal neu gefragt, danach gilt der
+    Default. strict=False (Modell): Freitext bleibt erlaubt.
+    """
+    hint = "".join(f"  [{i}] {c}" for i, c in enumerate(choices, 1))
+    prompt = f"{label} [Enter = {default or 'CLI-Default'}]{hint}: "
+    for _ in range(3):
+        try:
+            answer = str(ask(prompt) or "").strip()
+        except EOFError:
+            # Eine per Pipe gefuetterte Antwortliste darf kuerzer sein als die
+            # Fragenliste - der Rest bleibt beim Default.
+            return ""
+        if not answer:
+            return ""
+        if answer.isdigit() and 1 <= int(answer) <= len(choices):
+            return choices[int(answer) - 1]
+        lowered = answer.lower()
+        if lowered in choices:
+            return lowered
+        if not strict:
+            return answer
+        print(f"[EINGABE] {answer!r} unbekannt - Nummer oder Name aus der Liste, "
+              "Enter = Default.")
+    print(f"[EINGABE] Dreimal unbekannt - nehme Default {default or 'CLI-Default'}.")
+    return ""
 
 
 def _first_available_provider() -> str:
@@ -441,7 +461,7 @@ def _ask_runtime(key: str, provider: str, model: str, effort: str,
     if not provider:
         default = provider_name("") or _first_available_provider()
         provider = normalize_provider(
-            _ask_one(ask, "Anbieter", default, PROVIDERS) or default
+            _ask_one(ask, "Anbieter", default, PROVIDERS, strict=True) or default
         )
     else:
         provider = normalize_provider(provider)
@@ -454,7 +474,8 @@ def _ask_runtime(key: str, provider: str, model: str, effort: str,
         )
     if not effort:
         effort = _ask_one(
-            ask, "Reasoning", cfg_effort, EFFORT_CHOICES.get(provider, ())
+            ask, "Reasoning", cfg_effort, EFFORT_CHOICES.get(provider, ()),
+            strict=True,
         )
     return provider, model, effort
 
@@ -506,7 +527,7 @@ def launch(
     mitgegebene Prompt wird aber auf demselben Weg ausgeliefert wie ein
     Rollen-Prompt.
     """
-    actual_env = os.environ if env is None else env
+    actual_env = os.environ if env is None else dict(env)
     external = bool(label or prompt_file or request)
     prompt_path: Path | None = None
 
@@ -540,6 +561,14 @@ def launch(
         return 1
 
     try:
+        operator_mode = ""
+        if key == OPERATOR:
+            if interactive and not actual_env.get(OPERATOR_MODE_ENV, "").strip():
+                actual_env[OPERATOR_MODE_ENV] = _ask_one(
+                    ask, "Modus", DEFAULT_OPERATOR_MODE, OPERATOR_MODES,
+                    strict=True) or DEFAULT_OPERATOR_MODE
+            operator_mode = normalize_operator_mode(
+                actual_env.get(OPERATOR_MODE_ENV, ""))
         if interactive:
             provider, model, effort = _ask_runtime(
                 key, provider, model, effort, ask=ask)
@@ -566,8 +595,7 @@ def launch(
     print()
     print(f"[{key.upper()}] Arbeitsort:{workdir}")
     if key == OPERATOR:
-        print(f"[{key.upper()}] Modus:     "
-              f"{normalize_operator_mode(actual_env.get(OPERATOR_MODE_ENV, ''))}")
+        print(f"[{key.upper()}] Modus:     {operator_mode}")
     for index, candidate in enumerate(chain, start=1):
         print(f"[KETTE] {index}. {candidate.provider} "
               f"{candidate.model or CODEX_DEFAULT_LABEL}/"
