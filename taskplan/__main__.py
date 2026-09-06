@@ -450,25 +450,32 @@ def main(argv: list[str] | None = None) -> int:
     if command == "starters":
         from .starters import get_starter_path, list_starters
         action = rest[0] if rest else "list"
+        platform = _option(rest, "--platform", "windows")
         if action == "list":
-            for name in list_starters():
-                print(name)
+            try:
+                for name in list_starters(platform):
+                    print(name)
+            except ValueError as exc:
+                print(exc, file=sys.stderr)
+                return 2
             return 0
         if action == "path":
             role = _option(rest, "--role", "")
             provider = _option(rest, "--provider", "")
-            if not role or not provider:
+            if not role:
                 print("Nutzung: python -m taskplan starters path "
-                      "--role R --provider P", file=sys.stderr)
+                      "--role R [--provider P] [--platform windows|posix]",
+                      file=sys.stderr)
                 return 2
             try:
-                print(get_starter_path(role, provider))
+                print(get_starter_path(role, provider, platform))
             except (ValueError, FileNotFoundError) as exc:
                 print(exc, file=sys.stderr)
                 return 2
             return 0
-        print("Nutzung: python -m taskplan starters list | starters path "
-              "--role R --provider P", file=sys.stderr)
+        print("Nutzung: python -m taskplan starters list [--platform P] | "
+              "starters path --role R [--provider P] [--platform P]",
+              file=sys.stderr)
         return 2
 
     if command == "skip":
@@ -609,8 +616,10 @@ def main(argv: list[str] | None = None) -> int:
         print("  launch --role R --provider P")
         print("            Startet Claude, Codex oder Agy über das Runtime-Profil.")
         print()
-        print("  starters list | starters path --role R --provider P")
-        print("            Listet bzw. lokalisiert die gebündelten Windows-Starter.")
+        print("  starters list [--platform windows|posix]")
+        print("  starters path --role R [--provider P] [--platform windows|posix]")
+        print("            Listet bzw. lokalisiert die gebündelten Starter:")
+        print("            anbieterneutral (fragt beim Start) und je Provider.")
         print()
         print("  skip --role <maintainer|taskwriter|tasksolver>")
         print("       [--project PFAD] [--task ID [--undo]]")

@@ -1,5 +1,10 @@
 # -*- coding: utf-8 -*-
-"""Packaged, user-neutral Windows launcher resources."""
+"""Packaged, user-neutral launcher resources for Windows and POSIX shells.
+
+Two layers per platform: a provider-neutral starter per role that asks for
+provider, model and reasoning at start, and one pinned starter per
+role/provider pair under ``providers/``.
+"""
 from __future__ import annotations
 
 from importlib import resources
@@ -8,6 +13,17 @@ from pathlib import Path
 
 from taskplan.launcher import PROVIDERS
 from taskplan.runtime import LAUNCH_ROLES, normalize_role
+
+PLATFORMS = ("windows", "posix")
+
+
+def normalize_platform(platform: str) -> str:
+    normalized = (platform or "windows").strip().lower()
+    if normalized not in PLATFORMS:
+        raise ValueError(
+            f"Unbekannte Plattform {platform!r}; erlaubt: {', '.join(PLATFORMS)}"
+        )
+    return normalized
 
 
 def _normalize_provider(provider: str) -> str:
@@ -19,24 +35,45 @@ def _normalize_provider(provider: str) -> str:
     return normalized
 
 
-def starter_name(role: str, provider: str) -> str:
-    return (
-        f"START-{normalize_role(role).upper()}-"
-        f"{_normalize_provider(provider).upper()}.bat"
+def starter_name(role: str, provider: str = "",
+                 platform: str = "windows") -> str:
+    """Dateiname eines Starters; ohne ``provider`` der anbieterneutrale."""
+    role_key = normalize_role(role)
+    if normalize_platform(platform) == "posix":
+        stem = f"start-{role_key}"
+        if provider:
+            stem += f"-{_normalize_provider(provider)}"
+        return f"{stem}.sh"
+    stem = f"START-{role_key.upper()}"
+    if provider:
+        stem += f"-{_normalize_provider(provider).upper()}"
+    return f"{stem}.bat"
+
+
+def list_starters(platform: str = "windows") -> tuple[str, ...]:
+    """Erst die anbieterneutralen Starter, dann die je Provider gepinnten."""
+    chosen = normalize_platform(platform)
+    neutral = tuple(
+        starter_name(role, platform=chosen) for role in LAUNCH_ROLES
     )
-
-
-def list_starters() -> tuple[str, ...]:
-    return tuple(
-        starter_name(role, provider)
+    pinned = tuple(
+        starter_name(role, provider, chosen)
         for role in LAUNCH_ROLES
         for provider in PROVIDERS
     )
+    return neutral + pinned
 
 
-def get_starter_path(role: str, provider: str) -> Path:
-    resource = resources.files("taskplan.starters.windows").joinpath(
-        starter_name(role, provider)
+def _package(platform: str, provider: str) -> str:
+    package = f"taskplan.starters.{platform}"
+    return f"{package}.providers" if provider else package
+
+
+def get_starter_path(role: str, provider: str = "",
+                     platform: str = "windows") -> Path:
+    chosen = normalize_platform(platform)
+    resource = resources.files(_package(chosen, provider)).joinpath(
+        starter_name(role, provider, chosen)
     )
     try:
         path = Path(os.fspath(resource)).resolve()

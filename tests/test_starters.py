@@ -12,41 +12,88 @@ from taskplan.launcher import _provider_command, launch
 from taskplan.starters import get_starter_path, list_starters
 
 
+ROLES = ("tasksolver", "taskwriter", "maintainer", "operator")
+PROVIDERS = ("claude", "codex", "agy", "kimi")
+
+
 class TestPackagedStarterAssets(unittest.TestCase):
-    def test_all_roles_and_providers_are_packaged(self):
+    def test_windows_layout_is_neutral_plus_per_provider(self):
         names = set(list_starters())
-        self.assertEqual(len(names), 16)
-        for role in ("TASKSOLVER", "TASKWRITER", "MAINTAINER", "OPERATOR"):
-            for provider in ("CLAUDE", "CODEX", "AGY", "KIMI"):
-                self.assertIn(f"START-{role}-{provider}.bat", names)
+        self.assertEqual(len(names), 20)
+        for role in ROLES:
+            self.assertIn(f"START-{role.upper()}.bat", names)
+            for provider in PROVIDERS:
+                self.assertIn(
+                    f"START-{role.upper()}-{provider.upper()}.bat", names
+                )
+
+    def test_posix_layout_mirrors_windows(self):
+        names = set(list_starters("posix"))
+        self.assertEqual(len(names), 20)
+        for role in ROLES:
+            self.assertIn(f"start-{role}.sh", names)
+            for provider in PROVIDERS:
+                self.assertIn(f"start-{role}-{provider}.sh", names)
 
     def test_starters_are_user_neutral_thin_wrappers(self):
+        """Kein Nutzername, kein fester Pfad, kein Modellname — auf beiden
+        Plattformen und in beiden Schichten."""
         forbidden = ("C:\\Users\\lukas", "gpt-5.", "claude-opus",
                      "claude-sonnet", "gemini-")
-        for name in list_starters():
-            role, provider = name[6:-4].lower().split("-", 1)
-            path = get_starter_path(role, provider)
-            text = path.read_text(encoding="utf-8")
-            self.assertIn("python -m taskplan launch", text)
-            self.assertIn(f"--role {role}", text)
-            self.assertIn(f"--provider {provider}", text)
-            for needle in forbidden:
-                self.assertNotIn(needle, text)
+        seen = 0
+        for platform in ("windows", "posix"):
+            for role in ROLES:
+                for provider in ("",) + PROVIDERS:
+                    path = get_starter_path(role, provider, platform)
+                    text = path.read_text(encoding="utf-8")
+                    self.assertIn("python", text)
+                    self.assertIn("-m taskplan launch", text)
+                    self.assertIn(f"--role {role}", text)
+                    if provider:
+                        self.assertIn(f"--provider {provider}", text)
+                    else:
+                        self.assertIn("--interactive", text)
+                        self.assertNotIn("--provider", text)
+                    for needle in forbidden:
+                        self.assertNotIn(needle, text)
+                    seen += 1
+        self.assertEqual(seen, 40)
+
+    def test_posix_starters_use_lf_and_a_shebang(self):
+        for role in ROLES:
+            for provider in ("",) + PROVIDERS:
+                raw = get_starter_path(role, provider, "posix").read_bytes()
+                self.assertTrue(raw.startswith(b"#!/usr/bin/env bash"))
+                self.assertNotIn(b"\r\n", raw)
 
     def test_starter_cli_lists_and_resolves_assets(self):
         output = io.StringIO()
         with redirect_stdout(output):
             self.assertEqual(main(["starters", "list"]), 0)
         self.assertIn("START-TASKSOLVER-CODEX.bat", output.getvalue())
+        self.assertIn("START-OPERATOR.bat", output.getvalue())
 
         output = io.StringIO()
         with redirect_stdout(output):
-            code = main([
-                "starters", "path", "--role", "tasksolver",
-                "--provider", "codex",
-            ])
-        self.assertEqual(code, 0)
-        self.assertTrue(Path(output.getvalue().strip()).is_file())
+            self.assertEqual(
+                main(["starters", "list", "--platform", "posix"]), 0
+            )
+        self.assertIn("start-tasksolver-codex.sh", output.getvalue())
+        self.assertIn("start-operator.sh", output.getvalue())
+
+        for argv in (
+            ["starters", "path", "--role", "tasksolver", "--provider", "codex"],
+            ["starters", "path", "--role", "operator"],
+            ["starters", "path", "--role", "operator", "--platform", "posix"],
+        ):
+            output = io.StringIO()
+            with redirect_stdout(output):
+                code = main(argv)
+            self.assertEqual(code, 0)
+            self.assertTrue(Path(output.getvalue().strip()).is_file())
+
+    def test_starter_cli_rejects_unknown_platform(self):
+        self.assertEqual(main(["starters", "list", "--platform", "amiga"]), 2)
 
 
 class TestCentralLauncher(unittest.TestCase):
