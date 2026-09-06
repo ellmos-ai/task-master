@@ -439,13 +439,29 @@ def main(argv: list[str] | None = None) -> int:
 
     if command == "launch":
         from .launcher import launch
-        role = _option(rest, "--role", "tasksolver")
         provider = _option(rest, "--provider", "")
-        if not provider:
-            print("Nutzung: python -m taskplan launch --role R --provider P",
+        interactive = "--interactive" in rest
+        if not provider and not interactive:
+            print("Nutzung: python -m taskplan launch --role R --provider P "
+                  "[--model M] [--effort E] [--name N]\n"
+                  "         [--interactive] [--no-probe] [--no-fallback]\n"
+                  "         python -m taskplan launch --label NAME "
+                  "--prompt-file PFAD --request TEXT --provider P",
                   file=sys.stderr)
             return 2
-        return launch(role, provider)
+        return launch(
+            _option(rest, "--role", "tasksolver"),
+            provider,
+            model=_option(rest, "--model", ""),
+            effort=_option(rest, "--effort", ""),
+            prompt_file=_option(rest, "--prompt-file", ""),
+            request=_option(rest, "--request", ""),
+            label=_option(rest, "--label", ""),
+            interactive=interactive,
+            fallback="--no-fallback" not in rest,
+            use_probe=False if "--no-probe" in rest else None,
+            session_name=_option(rest, "--name", ""),
+        )
 
     if command == "starters":
         from .starters import get_starter_path, list_starters
@@ -613,8 +629,19 @@ def main(argv: list[str] | None = None) -> int:
         print("  backoff --role R [--provider P]")
         print("            Erzwingt die konfigurierte Wartezeit vor einem Retry.")
         print()
-        print("  launch --role R --provider P")
-        print("            Startet Claude, Codex oder Agy über das Runtime-Profil.")
+        print("  launch --role R --provider P [--model M] [--effort E]")
+        print("         [--name N] [--interactive] [--no-probe] [--no-fallback]")
+        print("  launch --label NAME --prompt-file PFAD --request TEXT --provider P")
+        print("            Startet Claude, Codex, Agy oder Kimi über das")
+        print("            Runtime-Profil. --model/--effort überschreiben die")
+        print("            Konfiguration nur für diesen Start; --interactive fragt")
+        print("            ab, was nicht als Flag feststeht. Vor dem Start prüft")
+        print("            eine Sonde das Modell (Erfolg = Token im Output, NICHT")
+        print("            der Exit-Code); scheitert sie, greift die Fallback-Kette")
+        print("            auf die Provider-Defaults und danach auf die weiteren")
+        print("            Provider. --no-probe/--no-fallback schalten das ab.")
+        print("            --label/--prompt-file/--request startet eine externe")
+        print("            Rolle mit fremdem Prompt statt einer TASKPLAN-Rolle.")
         print()
         print("  starters list [--platform windows|posix]")
         print("  starters path --role R [--provider P] [--platform windows|posix]")

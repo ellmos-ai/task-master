@@ -377,6 +377,38 @@ def provider_runtime(role: str, provider: str = "") -> Dict[str, Any]:
     }
 
 
+def label_runtime(label: str, provider: str = "") -> Dict[str, str]:
+    """Modell/Reasoning eines freien Schluessels — einer externen Rolle.
+
+    Externe Rollen wie ``ticket-master`` haben kein TASKPLAN-Laufzeitprofil,
+    duerfen aber dieselben Provider-Tabellen benutzen: ``[providers.<p>.models]``
+    kennt Schluessel mit Bindestrich, und ``default`` bleibt der Rueckfall.
+    """
+    section = _provider_section(provider_name(provider))
+    return {
+        "model": _role_value(section, "models", label),
+        "reasoning_effort": _role_value(section, "reasoning_effort", label),
+    }
+
+
+def model_choices(provider: str = "") -> tuple:
+    """Optionale Vorschlagsliste ``[providers.<p>] model_choices``.
+
+    Reiner Anzeigewert fuer die interaktive Abfrage — bewusst KEINE Validierung:
+    Modellnamen aendern sich schneller als eine Konfigurationsdatei gepflegt wird.
+    """
+    values = _provider_section(provider_name(provider)).get("model_choices", [])
+    if not isinstance(values, list):
+        return ()
+    return tuple(str(value).strip() for value in values if str(value).strip())
+
+
+def execution_config() -> Dict[str, Any]:
+    """Rohwerte der Sektion ``[execution]`` (Provider, Sonde, Fallback-Kette)."""
+    section = load_config().get("execution", {}) or {}
+    return section if isinstance(section, dict) else {}
+
+
 def discovery_timeout_seconds() -> float:
     """Harte Grenze fuer Projekt-Discovery; 0 schaltet sie bewusst aus."""
     section = load_config().get("traversal", {}) or {}
