@@ -113,7 +113,11 @@ Stand: 2026-07-27 — umgesetzt; die Punkte bleiben als Betriebsnachweis erhalte
 - [ ] **Typing-Nit:** `launcher._provider_commands` baut `prompt_kwargs` als `dict[str, int | None]`
   und setzt dann einen `str` (Pyright reportArgumentType). Annotation `dict[str, object]` genuegt.
 - [ ] **Testluecke: fehlschlagendes `doctor()` blockiert externe Rollen, ungetestet.** Befund des PR-#4-Reviews (claude-sonnet, 2026-09-06): `launch()` ruft `doctor()` auch fuer `--label`-Rollen unconditional auf, aber die Fixture in `tests/test_launcher_probe.py` mockt `doctor` global auf Erfolg; die Kombination doctor-scheitert-plus-externe-Rolle hat keinen Test. Vorschlag: ein Test, der `doctor` auf Fehler patcht und fuer `--label ticket-master` Exit != 0 ohne Prozessstart erwartet.
-- [ ] **Ruecktransfer-Richtung (Analyse `~/OneDrive/.USR/OCEAN-RUECKTRANSFER-STARTER_2026-09-06.md`):**
-  Provider-Mechanik (Sonde, Kette, argv je CLI, Starter-Generator) als eigenes stdlib-Modul
-  `agent-launcher` extrahieren, `taskplan launch` als Re-Export behalten; `roles[]` im Modulmanifest
-  deklarieren; Ticket T-20260906-249053451.
+- [ ] **Ruecktransfer-Richtung — KORRIGIERT 2026-09-06 (Nutzerentscheid E01):** KEIN neues
+  Modul `agent-launcher` (existiert bereits: `ellmos-ai/agent-launcher`, Claude-only, benannte
+  Dauerprozesse). Heimat der Provider-Mechanik (argv je CLI, Sonde, Fallback-Kette, Starter-
+  Generator) wird **COMA** (`ellmos-ai/coma`, verifizierte Adapter claude/codex/agy); task-master
+  0.7 konsumiert `coma.adapters`, `taskplan launch` bleibt Fassade. Tickets: T-20260906-463096841
+  (E01, wartet auf Freigabe), T-20260906-737455509 (clutch als waehlbare Fallback-Autoritaet),
+  T-20260906-833934205 (`roles[]` in v2), T-20260906-249053451 (Starter ticket-master/system-auditor).
+  Analyse: `~/OneDrive/.USR/OCEAN-RUECKTRANSFER-STARTER_2026-09-06.md` Abschnitt 6.
