@@ -3,6 +3,21 @@
 ## Unreleased
 
 ### Added
+- **Rolle OPERATOR — Personalunion von MAINTAINER, TASKWRITER und TASKSOLVER**
+  (Nutzerauftrag 2026-09-06): neuer Prompt `prompts/<de|en>/OPERATOR.txt`, der die
+  drei Rollen aus EINEM Worker betreibt. Zwei Modi über `TASKPLAN_OPERATOR_MODE`:
+  `rotation` (Default, providerneutral: der Worker nimmt MAINTAINER -> TASKWRITER ->
+  TASKSOLVER selbst nacheinander ein) und `subagents` (der Worker bleibt MAINTAINER
+  und aktiviert abwechselnd je einen Subagenten TASKWRITER/TASKSOLVER mit Fünf-Felder-
+  Vertrag und explizitem Modell aus `taskplan runtime --field model`). Jeder
+  Rollenschritt folgt unverändert dem Prompt der Teilrolle; der OPERATOR-Prompt regelt
+  nur Wechsel, Leerlauf-/Backoff-Vertrag, PingPong (ausschließlich WriteSync, nie ein
+  zweiter Listener) und System-Audit-Anforderung (ausschließlich als dedupliziertes
+  ticket-master-Ticket mit Präfix `system-auditor:`; ohne installierten system-auditor
+  nur Befund). `launch --role operator`, `START-OPERATOR-<PROVIDER>.bat` (16 Starter),
+  `taskplan.OPERATOR`, `[roles] operator` (Default `true`; `combined` bleibt Legacy-Alias
+  statt reservierter Leerstelle). Der Startauftrag nennt Modus und die Pfade der drei
+  Teilrollen-Prompts, weil Subagenten den System-Prompt nicht erben.
 - **Hostlokaler Siegel- und Wiedervorlagepool für TASKWRITER/MAINTAINER**
   (`T-20260830-202718995`): additive Tabellen
   `taskplan_project_reviews`/`taskplan_project_review_events`, deterministischer

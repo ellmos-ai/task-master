@@ -109,6 +109,12 @@ When nothing is selectable, `next_bundle()` returns `None`. The loop ends as an
 - **TASKSOLVER**: Focused executor with toolbox. Executes exactly ONE project bundle per pass.
 - **TASKWRITER**: Chronicler with pen and list. Classifies tasks with effort/scope (*"an unrated task is invisible"*).
 - **MAINTAINER**: Caretaker with broom. Keeps files and folder structures clean and tidy.
+- **OPERATOR**: Personal union of the three. Runs them in turn from ONE worker — either
+  by rotating itself (`MAINTAINER -> TASKWRITER -> TASKSOLVER`, mode `rotation`, default)
+  or by staying MAINTAINER and alternately activating one TASKWRITER and one TASKSOLVER
+  subagent (mode `subagents`, runtimes with subagents only). Every role step follows the
+  sub-role's own prompt; the OPERATOR prompt only governs the alternation, cross-host
+  PingPong (WriteSync only) and system-audit requests (ticket only, never run itself).
 
 ### Policy-aware maintenance plans
 
@@ -396,9 +402,10 @@ multi-machine behavior. See [`benchmarks/README.md`](benchmarks/README.md).
 ### Roles, models, task sources, depth
 
 All switchable. A disabled role **aborts cleanly on start** instead of silently
-idling. `combined = true` is currently parsed and exposed as configuration, but no
-bundled runner or launcher consumes it yet; it is therefore not a functional
-3-in-1/2-in-1 mode. Model choice belongs in the config, not in the launcher.
+idling. `[roles] operator` (default `true`) switches the 3-in-1 OPERATOR role; the
+formerly reserved `combined` key remains readable as a legacy alias for it. The
+operator's mode comes from `TASKPLAN_OPERATOR_MODE=rotation|subagents` (default
+`rotation`). Model choice belongs in the config, not in the launcher.
 
 ### Provider-neutral runtime and Codex goals
 
@@ -420,8 +427,8 @@ exposes the profile to any shell; `python -m taskplan startup-prompt ...` emits 
 provider-specific user request. No user name, home path, or model is hardcoded in
 the launcher.
 
-The wheel includes twelve user-neutral Windows launchers for
-TASKSOLVER/TASKWRITER/MAINTAINER × Claude/Codex/Agy/Kimi:
+The wheel includes sixteen user-neutral Windows launchers for
+TASKSOLVER/TASKWRITER/MAINTAINER/OPERATOR × Claude/Codex/Agy/Kimi:
 
 ```powershell
 python -m taskplan starters list

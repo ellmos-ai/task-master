@@ -116,6 +116,20 @@ class TestPromiseParityAcrossLanguages(unittest.TestCase):
                     "review complete --role maintainer",
                     "review defer --role maintainer"],
         },
+        "OPERATOR": {
+            "de": ["DU WÄHLST NICHT AUS", "MAINTAINER -> TASKWRITER -> TASKSOLVER",
+                   "MODUS ROTATION", "MODUS SUBAGENTEN", "nie beide gleichzeitig",
+                   "fünf Pflichtfeldern", "WriteSync, nie ListenSync",
+                   "ANFORDERN, NIE SELBST AUSFÜHREN", "system-auditor stale",
+                   "Titelpräfix `system-auditor:`", "KEIN zweites",
+                   "backoff --role operator", "--field model"],
+            "en": ["YOU DO NOT CHOOSE", "MAINTAINER -> TASKWRITER -> TASKSOLVER",
+                   "ROTATION MODE", "SUBAGENT MODE", "never both at once",
+                   "five mandatory fields", "WriteSync, never ListenSync",
+                   "REQUEST IT, NEVER RUN IT", "system-auditor stale",
+                   "title prefix `system-auditor:`", "NO second",
+                   "backoff --role operator", "--field model"],
+        },
     }
 
     def test_every_promise_survives_translation(self):

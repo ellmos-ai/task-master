@@ -300,7 +300,9 @@ def active_roles() -> Dict[str, bool]:
         "taskwriter": bool(section.get("taskwriter", True)),
         "tasksolver": bool(section.get("tasksolver", True)),
         "maintainer": bool(section.get("maintainer", True)),
-        "combined": bool(section.get("combined", False)),
+        # Personalunion der drei Rollen; `combined` bleibt als Legacy-Alias
+        # lesbar (frueher reserviert, seit 0.6.0 ist das der OPERATOR).
+        "operator": bool(section.get("operator", section.get("combined", True))),
     }
 
 

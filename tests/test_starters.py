@@ -13,10 +13,10 @@ from taskplan.starters import get_starter_path, list_starters
 
 
 class TestPackagedStarterAssets(unittest.TestCase):
-    def test_all_three_roles_and_providers_are_packaged(self):
+    def test_all_roles_and_providers_are_packaged(self):
         names = set(list_starters())
-        self.assertEqual(len(names), 12)
-        for role in ("TASKSOLVER", "TASKWRITER", "MAINTAINER"):
+        self.assertEqual(len(names), 16)
+        for role in ("TASKSOLVER", "TASKWRITER", "MAINTAINER", "OPERATOR"):
             for provider in ("CLAUDE", "CODEX", "AGY", "KIMI"):
                 self.assertIn(f"START-{role}-{provider}.bat", names)
 

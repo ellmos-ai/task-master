@@ -18,11 +18,15 @@ from typing import Mapping, Sequence
 
 from .config import active_roles
 from .doctor import run as doctor
-from .runtime import normalize_role, runtime_profile, startup_prompt
+from .runtime import (
+    OPERATOR, normalize_operator_mode, normalize_role, runtime_profile,
+    startup_prompt,
+)
 from .workflows import get_workflow_prompt_path
 
 PROVIDERS = ("claude", "codex", "agy", "kimi")
 TRUST_ENV = "TASKPLAN_TRUSTED_AUTOMATION"
+OPERATOR_MODE_ENV = "TASKPLAN_OPERATOR_MODE"
 WORKDIR_ENV = "TASKPLAN_WORKDIR"
 DRY_RUN_ENV = "TASKPLAN_STARTER_DRY_RUN"
 CLAUDE_MCP_ENV = "TASKPLAN_CLAUDE_MCP_CONFIG"
@@ -88,9 +92,13 @@ def _provider_command(
                 raise ValueError(
                     f"{AGY_SCHEDULE_MINUTES_ENV} muss eine positive Ganzzahl sein"
                 )
-    request = startup_prompt(
-        role, provider, schedule_minutes=schedule_minutes
-    )
+    prompt_kwargs = {"schedule_minutes": schedule_minutes}
+    if role == OPERATOR:
+        # Ungueltiger Modus bricht hier mit ValueError ab - vor dem Start.
+        prompt_kwargs["operator_mode"] = normalize_operator_mode(
+            env.get(OPERATOR_MODE_ENV, "")
+        )
+    request = startup_prompt(role, provider, **prompt_kwargs)
     trusted = _truthy(env.get(TRUST_ENV, ""))
     executable = shutil.which(provider)
     if provider == "agy":
@@ -224,6 +232,9 @@ def launch(
     print(f"[{normalized_role.upper()}] Modell:    {model_display}")
     print(f"[{normalized_role.upper()}] Reasoning: {effort_display}")
     print(f"[{normalized_role.upper()}] Prompt:    {prompt_path}")
+    if normalized_role == OPERATOR:
+        mode = normalize_operator_mode(actual_env.get(OPERATOR_MODE_ENV, ""))
+        print(f"[{normalized_role.upper()}] Modus:     {mode}")
     print(f"[{normalized_role.upper()}] Arbeitsort:{workdir}")
 
     if _truthy(actual_env.get(DRY_RUN_ENV, "")):

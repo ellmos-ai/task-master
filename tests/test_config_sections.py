@@ -84,15 +84,21 @@ class TestRoles(unittest.TestCase):
         self.assertTrue(roles["taskwriter"])
         self.assertTrue(roles["tasksolver"])
         self.assertTrue(roles["maintainer"])
-        self.assertFalse(roles["combined"])
+        self.assertTrue(roles["operator"])
 
-    def test_two_in_one(self):
-        """Die reservierte combined-Einstellung bleibt maschinenlesbar."""
-        with _with_config("[roles]\nmaintainer = false\ncombined = true\n"):
+    def test_operator_can_be_disabled(self):
+        with _with_config("[roles]\nmaintainer = false\noperator = false\n"):
             roles = cfg.active_roles()
         self.assertFalse(roles["maintainer"])
-        self.assertTrue(roles["combined"])
+        self.assertFalse(roles["operator"])
         self.assertTrue(roles["taskwriter"])
+
+    def test_combined_is_a_legacy_alias_for_operator(self):
+        """Die frueher reservierte combined-Einstellung schaltet den OPERATOR."""
+        with _with_config("[roles]\ncombined = false\n"):
+            self.assertFalse(cfg.active_roles()["operator"])
+        with _with_config("[roles]\ncombined = false\noperator = true\n"):
+            self.assertTrue(cfg.active_roles()["operator"])
 
 
 class TestLockProvider(unittest.TestCase):

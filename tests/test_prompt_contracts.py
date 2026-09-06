@@ -22,6 +22,7 @@ from taskplan.workflows import get_workflow_prompt
 TASKSOLVER = get_workflow_prompt("TASKSOLVER", "de")
 TASKWRITER = get_workflow_prompt("TASKWRITER", "de")
 MAINTAINER = get_workflow_prompt("MAINTAINER", "de")
+OPERATOR = get_workflow_prompt("OPERATOR", "de")
 
 
 class TestSolverDefersToSelector(unittest.TestCase):
@@ -192,6 +193,53 @@ class TestRoleSeparation(unittest.TestCase):
         self.assertIn(
             "eng begrenzten TASKPLAN-Systempreflights", _flat(TASKSOLVER)
         )
+
+
+class TestOperatorIsAPersonalUnionNotAFourthRole(unittest.TestCase):
+    """Der OPERATOR betreibt die drei Rollen - er ersetzt keine davon."""
+
+    def test_operator_defers_to_each_subrole_selector(self):
+        flat = _flat(OPERATOR)
+        self.assertIn("DU WÄHLST NICHT AUS", flat)
+        for role in ("maintainer", "taskwriter", "tasksolver"):
+            self.assertIn(f"python -m taskplan next --role {role} --json", flat)
+        self.assertIn("keinen Selektorlauf für die Rolle OPERATOR", flat)
+
+    def test_subrole_prompts_stay_authoritative(self):
+        flat = _flat(OPERATOR)
+        self.assertIn("gilt für den Rollenschritt der Teilrollen-Prompt", flat)
+        self.assertIn("Dieser Prompt hebt keine davon auf", flat)
+
+    def test_rotation_order_is_fixed(self):
+        self.assertIn("MAINTAINER -> TASKWRITER -> TASKSOLVER -> MAINTAINER", _flat(OPERATOR))
+
+    def test_subagent_mode_alternates_and_contracts(self):
+        flat = _flat(OPERATOR)
+        self.assertIn("nie beide gleichzeitig", flat)
+        self.assertIn("fünf Pflichtfeldern", flat)
+        self.assertIn("runtime --role taskwriter --provider <provider> --field model", flat)
+        self.assertIn("fail-closed in MODUS ROTATION", flat)
+
+    def test_loop_contract_survives_idle(self):
+        flat = _flat(OPERATOR)
+        self.assertIn("KEINE Arbeit erfinden", flat)
+        self.assertIn("backoff --role operator", flat)
+        self.assertIn("genau einmal pro Operator-Lauf", flat)
+
+    def test_pingpong_is_writesync_only(self):
+        flat = _flat(OPERATOR)
+        self.assertIn("WriteSync, nie ListenSync", flat)
+        self.assertIn("Du startest keinen ListenSync", flat)
+        self.assertIn("--ticket-kind transfer", flat)
+
+    def test_system_audit_is_requested_via_ticket_only(self):
+        flat = _flat(OPERATOR)
+        self.assertIn("ANFORDERN, NIE SELBST AUSFÜHREN", flat)
+        self.assertIn("system-auditor --version", flat)
+        self.assertIn("system-auditor stale", flat)
+        self.assertIn("Titelpräfix `system-auditor:`", flat)
+        self.assertIn("existiert eines, KEIN zweites", flat)
+        self.assertIn("keine Nachbildung des Audits", flat)
 
 
 if __name__ == "__main__":

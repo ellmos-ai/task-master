@@ -353,7 +353,7 @@ def main(argv: list[str] | None = None) -> int:
     if command == "prompt":
         from .workflows import get_workflow_prompt
         if not rest:
-            print("Nutzung: python -m taskplan prompt <TASKSOLVER|TASKWRITER|MAINTAINER>",
+            print("Nutzung: python -m taskplan prompt <TASKSOLVER|TASKWRITER|MAINTAINER|OPERATOR>",
                   file=sys.stderr)
             return 2
         try:

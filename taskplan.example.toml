@@ -79,9 +79,12 @@ tasksolver = true     # arbeitet sie ab
 maintainer = true     # haelt Dateien und Verzeichnisse sauber
                       # false -> der Starter bricht sauber ab (kein Leerlauf)
 
-combined = false      # Reservierte Konfiguration: wird gelesen und ausgegeben,
-                      # aber noch von keinem Runner/Starter ausgefuehrt.
-                      # true startet daher aktuell keinen 3-in-1-/2-in-1-Worker.
+operator   = true     # Personalunion: EIN Worker betreibt MAINTAINER ->
+                      # TASKWRITER -> TASKSOLVER im Wechsel (Modus "rotation")
+                      # oder bleibt MAINTAINER und aktiviert abwechselnd je einen
+                      # Subagenten TASKWRITER/TASKSOLVER (Modus "subagents",
+                      # ENV TASKPLAN_OPERATOR_MODE). false -> START-OPERATOR-*.bat
+                      # bricht sauber ab. Legacy-Alias: combined
 
 # ---------------------------------------------------------------------------
 # PROVIDER + MODELLE — gehoeren in die Konfiguration, nicht in den Starter
@@ -100,6 +103,7 @@ default    = ""
 taskwriter = ""
 tasksolver = ""
 maintainer = ""
+operator   = ""
 
 [providers.codex.reasoning_effort]
 # Auch Reasoning ist optional; nichtleere Werte bleiben rollenbezogene Overrides.
@@ -107,6 +111,7 @@ default    = "high"
 taskwriter = "high"
 tasksolver = "xhigh"
 maintainer = "high"
+operator   = "high"
 
 [providers.claude]
 continuation = "one_shot"
@@ -118,12 +123,14 @@ default    = ""
 taskwriter = ""
 tasksolver = ""
 maintainer = ""
+operator   = ""
 
 [providers.claude.reasoning_effort]
 default    = "high"
 taskwriter = "high"
 tasksolver = "high"
 maintainer = "high"
+operator   = "high"
 
 [providers.agy]
 continuation = "one_shot"
@@ -135,12 +142,14 @@ default    = ""
 taskwriter = ""
 tasksolver = ""
 maintainer = ""
+operator   = ""
 
 [providers.agy.reasoning_effort]
 default    = "high"
 taskwriter = "high"
 tasksolver = "high"
 maintainer = "high"
+operator   = "high"
 
 # Kimi Code CLI: kein interaktiver Startprompt und kein --effort-Flag (Stand
 # 0.29.2) — Worker laufen headless (kimi --prompt); die Reasoning-Stufe kommt
@@ -155,12 +164,14 @@ default    = ""
 taskwriter = ""
 tasksolver = ""
 maintainer = ""
+operator   = ""
 
 [providers.kimi.reasoning_effort]
 default    = "max"
 taskwriter = "max"
 tasksolver = "max"
 maintainer = "max"
+operator   = "max"
 
 # Rueckwaertskompatibilitaet fuer Installationen ohne Provider-Sektionen.
 [models]
@@ -168,6 +179,7 @@ default    = ""
 taskwriter = ""
 tasksolver = ""
 maintainer = ""
+operator   = ""
 
 # ---------------------------------------------------------------------------
 # TRAVERSIERUNG — was ist eine Root, was ein Projekt?

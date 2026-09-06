@@ -112,6 +112,13 @@ Ist nichts wählbar, gibt `next_bundle()` **`None`** zurück. Der Loop endet als
 - **TASKSOLVER**: Macher mit Werkzeugkasten. Arbeitet genau EIN Projekt-Bündel pro Durchgang ab.
 - **TASKWRITER**: Chronist mit Stift und Liste. Stuft Aufgaben mit effort/scope ein (*„eine uneingestufte Aufgabe ist unsichtbar"*).
 - **MAINTAINER**: Hausmeister mit Besen. Hält Dateien und Ordnerstrukturen sauber und ordentlich.
+- **OPERATOR**: Personalunion der drei. Betreibt sie aus EINEM Worker im Wechsel — entweder
+  durch eigene Rotation (`MAINTAINER -> TASKWRITER -> TASKSOLVER`, Modus `rotation`, Default)
+  oder als dauerhafter MAINTAINER, der abwechselnd je einen Subagenten TASKWRITER und
+  TASKSOLVER aktiviert (Modus `subagents`, nur Runtimes mit Subagenten). Jeder Rollenschritt
+  folgt dem eigenen Prompt der Teilrolle; der OPERATOR-Prompt regelt nur den Wechsel,
+  hostübergreifendes PingPong (nur WriteSync) und System-Audit-Anforderungen (nur per
+  Ticket, nie selbst ausgeführt).
 
 ### Policy-aware Wartungspläne
 
@@ -410,10 +417,10 @@ abgenommen. Siehe [`benchmarks/README.md`](benchmarks/README.md).
 ### Rollen, Modelle, Aufgabenquellen, Tiefe
 
 Alles schaltbar. Eine abgeschaltete Rolle **bricht beim Start sauber ab**, statt still
-leerzulaufen. `combined = true` wird derzeit nur als Konfiguration gelesen und
-ausgegeben; noch kein mitgelieferter Runner oder Starter wertet es aus. Es ist daher
-noch kein funktionsfähiger 3-in-1-/2-in-1-Modus. Die Modellwahl gehört in die
-Konfiguration, nicht in den Starter.
+leerzulaufen. `[roles] operator` (Default `true`) schaltet die 3-in-1-Rolle OPERATOR; der
+früher reservierte Schlüssel `combined` bleibt als Legacy-Alias dafür lesbar. Den Modus
+des Operators setzt `TASKPLAN_OPERATOR_MODE=rotation|subagents` (Default `rotation`).
+Die Modellwahl gehört in die Konfiguration, nicht in den Starter.
 
 ### Nutzerneutrale Provider-Runtime und Codex-Goals
 
@@ -436,8 +443,8 @@ beliebige Starter; `python -m taskplan startup-prompt ...` erzeugt den
 providerspezifischen Nutzerauftrag. Kein Benutzername, Home-Pfad oder Modell wird im
 Starter fest verdrahtet.
 
-Das Wheel enthält zwölf nutzerneutrale Windows-Starter für
-TASKSOLVER/TASKWRITER/MAINTAINER × Claude/Codex/Agy/Kimi:
+Das Wheel enthält sechzehn nutzerneutrale Windows-Starter für
+TASKSOLVER/TASKWRITER/MAINTAINER/OPERATOR × Claude/Codex/Agy/Kimi:
 
 ```powershell
 python -m taskplan starters list

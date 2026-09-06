@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 
 from taskplan.launcher import PROVIDERS
-from taskplan.runtime import ROLES, normalize_role
+from taskplan.runtime import LAUNCH_ROLES, normalize_role
 
 
 def _normalize_provider(provider: str) -> str:
@@ -29,7 +29,7 @@ def starter_name(role: str, provider: str) -> str:
 def list_starters() -> tuple[str, ...]:
     return tuple(
         starter_name(role, provider)
-        for role in ROLES
+        for role in LAUNCH_ROLES
         for provider in PROVIDERS
     )
 
