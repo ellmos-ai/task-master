@@ -112,6 +112,7 @@ Stand: 2026-07-27 — umgesetzt; die Punkte bleiben als Betriebsnachweis erhalte
   `.claude/settings`) in der Sonde dieselben sind wie im Start.
 - [ ] **Typing-Nit:** `launcher._provider_commands` baut `prompt_kwargs` als `dict[str, int | None]`
   und setzt dann einen `str` (Pyright reportArgumentType). Annotation `dict[str, object]` genuegt.
+- [ ] **Testluecke: fehlschlagendes `doctor()` blockiert externe Rollen, ungetestet.** Befund des PR-#4-Reviews (claude-sonnet, 2026-09-06): `launch()` ruft `doctor()` auch fuer `--label`-Rollen unconditional auf, aber die Fixture in `tests/test_launcher_probe.py` mockt `doctor` global auf Erfolg; die Kombination doctor-scheitert-plus-externe-Rolle hat keinen Test. Vorschlag: ein Test, der `doctor` auf Fehler patcht und fuer `--label ticket-master` Exit != 0 ohne Prozessstart erwartet.
 - [ ] **Ruecktransfer-Richtung (Analyse `~/OneDrive/.USR/OCEAN-RUECKTRANSFER-STARTER_2026-09-06.md`):**
   Provider-Mechanik (Sonde, Kette, argv je CLI, Starter-Generator) als eigenes stdlib-Modul
   `agent-launcher` extrahieren, `taskplan launch` als Re-Export behalten; `roles[]` im Modulmanifest
