@@ -95,3 +95,24 @@ Stand: 2026-07-27 — umgesetzt; die Punkte bleiben als Betriebsnachweis erhalte
 - [ ] TaskMaster speichert höchstens Referenzen auf Test-/Commit-/Handoff-Belege.
   Es führt keine Tests aus, erzeugt keine Commits und implementiert keine zweite
   Lock-Engine.
+
+## Offen nach 0.6.0 (Nutzerauftrag OCEAN AGENTS STARTCENTER, 2026-09-06)
+
+- [ ] **`doctor` warnt nicht vor fehlender Provider-Modellkonfiguration.** Genau das brach am
+  2026-09-06 auf ASUS-GEI jeden Claude/Agy/Kimi-Start („Kein Modell konfiguriert"), waehrend
+  `doctor` gruen meldete. Vorschlag: je Provider aus `PROVIDERS` pruefen, ob `[providers.<p>.models]`
+  mindestens `default` traegt (Codex ausgenommen), und als WARNUNG ausgeben — kein Abbruch.
+- [ ] **Gepinnte Starter (`starters/*/providers/`) ohne stillen Anbieterwechsel.** Ein Starter mit
+  `--provider P` meint diesen Anbieter; heute faellt er ueber die Kette auf andere Provider zurueck.
+  Vorschlag: `--no-fallback` in die 32 gepinnten Starter (oder ein `--pinned`, das nur den
+  Default-Zweitversuch desselben Providers erlaubt). Die OneDrive-Starter tragen `--no-fallback`
+  bereits.
+- [ ] **Sonde laeuft im aktuellen Arbeitsverzeichnis, nicht in `TASKPLAN_WORKDIR`** (Auslegung des
+  Workers, Auftrag schwieg). Angleichen, damit CLI-Konfigurationen mit Projektbezug (z. B.
+  `.claude/settings`) in der Sonde dieselben sind wie im Start.
+- [ ] **Typing-Nit:** `launcher._provider_commands` baut `prompt_kwargs` als `dict[str, int | None]`
+  und setzt dann einen `str` (Pyright reportArgumentType). Annotation `dict[str, object]` genuegt.
+- [ ] **Ruecktransfer-Richtung (Analyse `~/OneDrive/.USR/OCEAN-RUECKTRANSFER-STARTER_2026-09-06.md`):**
+  Provider-Mechanik (Sonde, Kette, argv je CLI, Starter-Generator) als eigenes stdlib-Modul
+  `agent-launcher` extrahieren, `taskplan launch` als Re-Export behalten; `roles[]` im Modulmanifest
+  deklarieren; Ticket T-20260906-249053451.
