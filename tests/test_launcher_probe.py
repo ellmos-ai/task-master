@@ -46,6 +46,12 @@ class _LauncherFixture(unittest.TestCase):
         self.prompt.write_text("externe Rollenanweisung", encoding="utf-8")
         self.stack = [
             mock.patch("taskplan.launcher.runtime_profile", _profile),
+            # Externe Rollen duerfen ihr Modell nicht aus der Host-Konfiguration
+            # ziehen — sonst ist gruen nur ein Zufall dieses Rechners.
+            mock.patch("taskplan.launcher.label_runtime",
+                       side_effect=lambda label, provider="": {
+                           "model": MODELS.get(provider, "some-model"),
+                           "reasoning_effort": "high"}),
             mock.patch("taskplan.launcher.startup_prompt",
                        return_value="authorized startup"),
             mock.patch("taskplan.launcher.get_workflow_prompt_path",
