@@ -100,6 +100,9 @@ class TestCentralLauncher(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.workdir = self.tmp.name
+        (Path(self.workdir) / "TASKSOLVER.txt").write_text(
+            "interne Rollenanweisung", encoding="utf-8"
+        )
         self.profile = {
             "provider": "codex",
             "role": "tasksolver",
@@ -307,6 +310,9 @@ class TestKimiProviderCommand(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.workdir = self.tmp.name
+        (Path(self.workdir) / "TASKSOLVER.txt").write_text(
+            "interne Rollenanweisung", encoding="utf-8"
+        )
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -338,11 +344,11 @@ class TestKimiProviderCommand(unittest.TestCase):
     def test_kimi_runs_headless_with_model(self):
         command = self._command(trusted=True)
         self.assertTrue(command[0].endswith("kimi.exe"))
-        self.assertIn("--prompt", command)
+        self.assertIn("-p", command)
         self.assertIn("moonshot-ai/kimi-k3", command)
 
-    def test_kimi_yolo_only_with_trust_opt_in(self):
-        self.assertIn("--yolo", self._command(trusted=True))
+    def test_kimi_headless_boot_never_combines_yolo_with_prompt(self):
+        self.assertNotIn("--yolo", self._command(trusted=True))
         self.assertNotIn("--yolo", self._command(trusted=False))
 
     def test_kimi_never_receives_effort_or_interactive_flags(self):

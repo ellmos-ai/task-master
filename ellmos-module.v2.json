@@ -12,7 +12,9 @@
     "tasks.maintenance"
   ],
   "requires": [],
-  "optional": [],
+  "optional": [
+    "runtime.agent-session"
+  ],
   "conflicts": [],
   "surfaces": [
     "library",
