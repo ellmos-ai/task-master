@@ -1,5 +1,12 @@
 # TODO — robuste Discovery-Fallbacks
 
+## CI-Abnahme — T-20260906-833934205 (2026-09-09)
+
+- [x] Die drei Subprozess-Discovery-Tests konfigurieren eigene temporäre,
+  erlaubte Roots. Fehlende Arbeitsplatzkonfiguration darf einen Test nicht
+  verdeckt vom Entwicklerhost abhängig machen. Die Laufzeitvalidierung bleibt
+  fail-closed; die vollständige Suite besteht mit 448 Tests.
+
 Stand: 2026-07-27 — umgesetzt; die Punkte bleiben als Betriebsnachweis erhalten.
 
 ## Befund
