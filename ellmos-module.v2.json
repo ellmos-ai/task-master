@@ -37,5 +37,66 @@
     "path": ".",
     "repository": "https://github.com/ellmos-ai/task-master"
   },
-  "adapters": []
+  "adapters": [],
+  "roles": [
+    {
+      "id": "tasksolver",
+      "label": "TASKSOLVER",
+      "prompt": "taskplan/prompts/en/TASKSOLVER.txt",
+      "request": "Read and follow the TASKSOLVER role prompt from task-master.",
+      "modes": [],
+      "providers": [
+        "claude",
+        "codex",
+        "agy",
+        "kimi"
+      ],
+      "starter": "taskplan/starters/posix/start-tasksolver.sh"
+    },
+    {
+      "id": "taskwriter",
+      "label": "TASKWRITER",
+      "prompt": "taskplan/prompts/en/TASKWRITER.txt",
+      "request": "Read and follow the TASKWRITER role prompt from task-master.",
+      "modes": [],
+      "providers": [
+        "claude",
+        "codex",
+        "agy",
+        "kimi"
+      ],
+      "starter": "taskplan/starters/posix/start-taskwriter.sh"
+    },
+    {
+      "id": "maintainer",
+      "label": "MAINTAINER",
+      "prompt": "taskplan/prompts/en/MAINTAINER.txt",
+      "request": "Read and follow the MAINTAINER role prompt from task-master.",
+      "modes": [],
+      "providers": [
+        "claude",
+        "codex",
+        "agy",
+        "kimi"
+      ],
+      "starter": "taskplan/starters/posix/start-maintainer.sh"
+    },
+    {
+      "id": "operator",
+      "label": "OPERATOR",
+      "prompt": "taskplan/prompts/en/OPERATOR.txt",
+      "request": "Read and follow the OPERATOR role prompt from task-master.",
+      "modes": [
+        "rotation",
+        "subagents"
+      ],
+      "providers": [
+        "claude",
+        "codex",
+        "agy",
+        "kimi"
+      ],
+      "starter": "taskplan/starters/posix/start-operator.sh"
+    }
+  ]
 }
