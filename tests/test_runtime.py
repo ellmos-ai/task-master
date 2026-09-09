@@ -206,7 +206,11 @@ class TestDiscoveryTimeout(unittest.TestCase):
 
     def test_bounded_discovery_returns_instead_of_hanging(self):
         expired = subprocess.TimeoutExpired(["python", "discovery"], 0.02)
-        with mock.patch.object(runner.subprocess, "run", side_effect=expired):
+        with tempfile.TemporaryDirectory() as temporary, \
+                mock.patch.object(cfg, "load_config", return_value={
+                    "traversal": {"discovery": "hybrid", "roots": [temporary]},
+                }), \
+                mock.patch.object(runner.subprocess, "run", side_effect=expired):
             with self.assertRaises(runner.ProjectDiscoveryTimeout):
                 runner._discover_projects_bounded(0.02)
 

@@ -271,6 +271,16 @@ class TestDiscoveryCache(unittest.TestCase):
 
 
 class TestBoundedSubprocess(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        configuration = mock.patch("taskplan.config.load_config", return_value={
+            "traversal": {"discovery": "hybrid", "roots": [str(self.root)]},
+        })
+        configuration.start()
+        self.addCleanup(configuration.stop)
+
     def test_valid_payload_is_reconstructed(self):
         payload = {"cached": True, "source": "fresh_cache", "projects": [
             {"path": "C:/portable/project", "root_id": "root"}]}
