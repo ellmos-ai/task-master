@@ -12,41 +12,88 @@ from taskplan.launcher import _provider_command, launch
 from taskplan.starters import get_starter_path, list_starters
 
 
+ROLES = ("tasksolver", "taskwriter", "maintainer", "operator")
+PROVIDERS = ("claude", "codex", "agy", "kimi")
+
+
 class TestPackagedStarterAssets(unittest.TestCase):
-    def test_all_three_roles_and_providers_are_packaged(self):
+    def test_windows_layout_is_neutral_plus_per_provider(self):
         names = set(list_starters())
-        self.assertEqual(len(names), 12)
-        for role in ("TASKSOLVER", "TASKWRITER", "MAINTAINER"):
-            for provider in ("CLAUDE", "CODEX", "AGY", "KIMI"):
-                self.assertIn(f"START-{role}-{provider}.bat", names)
+        self.assertEqual(len(names), 20)
+        for role in ROLES:
+            self.assertIn(f"START-{role.upper()}.bat", names)
+            for provider in PROVIDERS:
+                self.assertIn(
+                    f"START-{role.upper()}-{provider.upper()}.bat", names
+                )
+
+    def test_posix_layout_mirrors_windows(self):
+        names = set(list_starters("posix"))
+        self.assertEqual(len(names), 20)
+        for role in ROLES:
+            self.assertIn(f"start-{role}.sh", names)
+            for provider in PROVIDERS:
+                self.assertIn(f"start-{role}-{provider}.sh", names)
 
     def test_starters_are_user_neutral_thin_wrappers(self):
+        """Kein Nutzername, kein fester Pfad, kein Modellname — auf beiden
+        Plattformen und in beiden Schichten."""
         forbidden = ("C:\\Users\\lukas", "gpt-5.", "claude-opus",
                      "claude-sonnet", "gemini-")
-        for name in list_starters():
-            role, provider = name[6:-4].lower().split("-", 1)
-            path = get_starter_path(role, provider)
-            text = path.read_text(encoding="utf-8")
-            self.assertIn("python -m taskplan launch", text)
-            self.assertIn(f"--role {role}", text)
-            self.assertIn(f"--provider {provider}", text)
-            for needle in forbidden:
-                self.assertNotIn(needle, text)
+        seen = 0
+        for platform in ("windows", "posix"):
+            for role in ROLES:
+                for provider in ("",) + PROVIDERS:
+                    path = get_starter_path(role, provider, platform)
+                    text = path.read_text(encoding="utf-8")
+                    self.assertIn("python", text)
+                    self.assertIn("-m taskplan launch", text)
+                    self.assertIn(f"--role {role}", text)
+                    if provider:
+                        self.assertIn(f"--provider {provider}", text)
+                    else:
+                        self.assertIn("--interactive", text)
+                        self.assertNotIn("--provider", text)
+                    for needle in forbidden:
+                        self.assertNotIn(needle, text)
+                    seen += 1
+        self.assertEqual(seen, 40)
+
+    def test_posix_starters_use_lf_and_a_shebang(self):
+        for role in ROLES:
+            for provider in ("",) + PROVIDERS:
+                raw = get_starter_path(role, provider, "posix").read_bytes()
+                self.assertTrue(raw.startswith(b"#!/usr/bin/env bash"))
+                self.assertNotIn(b"\r\n", raw)
 
     def test_starter_cli_lists_and_resolves_assets(self):
         output = io.StringIO()
         with redirect_stdout(output):
             self.assertEqual(main(["starters", "list"]), 0)
         self.assertIn("START-TASKSOLVER-CODEX.bat", output.getvalue())
+        self.assertIn("START-OPERATOR.bat", output.getvalue())
 
         output = io.StringIO()
         with redirect_stdout(output):
-            code = main([
-                "starters", "path", "--role", "tasksolver",
-                "--provider", "codex",
-            ])
-        self.assertEqual(code, 0)
-        self.assertTrue(Path(output.getvalue().strip()).is_file())
+            self.assertEqual(
+                main(["starters", "list", "--platform", "posix"]), 0
+            )
+        self.assertIn("start-tasksolver-codex.sh", output.getvalue())
+        self.assertIn("start-operator.sh", output.getvalue())
+
+        for argv in (
+            ["starters", "path", "--role", "tasksolver", "--provider", "codex"],
+            ["starters", "path", "--role", "operator"],
+            ["starters", "path", "--role", "operator", "--platform", "posix"],
+        ):
+            output = io.StringIO()
+            with redirect_stdout(output):
+                code = main(argv)
+            self.assertEqual(code, 0)
+            self.assertTrue(Path(output.getvalue().strip()).is_file())
+
+    def test_starter_cli_rejects_unknown_platform(self):
+        self.assertEqual(main(["starters", "list", "--platform", "amiga"]), 2)
 
 
 class TestCentralLauncher(unittest.TestCase):
@@ -94,6 +141,72 @@ class TestCentralLauncher(unittest.TestCase):
             self.assertTrue(command[0].endswith(executable))
             self.assertIn("configured-model", command)
 
+    def test_codex_without_taskplan_overrides_uses_cli_defaults(self):
+        profile = dict(self.profile, model="", reasoning_effort="")
+        with mock.patch("taskplan.launcher.runtime_profile",
+                        return_value=profile), \
+                mock.patch("taskplan.launcher.startup_prompt",
+                           return_value="authorized startup"), \
+                mock.patch("taskplan.launcher.get_workflow_prompt_path",
+                           return_value=Path(self.workdir) / "TASKSOLVER.txt"), \
+                mock.patch("taskplan.launcher.shutil.which",
+                           return_value="C:\\bin\\codex.exe"):
+            command, _ = _provider_command(
+                "tasksolver", "codex",
+                env={"TASKPLAN_WORKDIR": self.workdir},
+            )
+        self.assertNotIn("--model", command)
+        self.assertFalse(any(
+            value.startswith("model_reasoning_effort=") for value in command
+        ))
+
+    def test_codex_inherits_provider_default_overrides(self):
+        data = {"providers": {"codex": {
+            "models": {"default": "gpt-inherited"},
+            "reasoning_effort": {"default": "medium"},
+        }}}
+        with mock.patch("taskplan.config.load_config", return_value=data), \
+                mock.patch("taskplan.launcher.get_workflow_prompt_path",
+                           return_value=Path(self.workdir) / "TASKSOLVER.txt"), \
+                mock.patch("taskplan.launcher.shutil.which",
+                           return_value="C:\\bin\\codex.exe"):
+            command, _ = _provider_command(
+                "tasksolver", "codex",
+                env={"TASKPLAN_WORKDIR": self.workdir},
+            )
+        self.assertEqual(command[command.index("--model") + 1], "gpt-inherited")
+        self.assertIn('model_reasoning_effort="medium"', command)
+
+    def test_codex_explicit_role_overrides_are_host_neutral(self):
+        data = {"providers": {"codex": {
+            "models": {"default": "gpt-default", "tasksolver": "gpt-explicit"},
+            "reasoning_effort": {
+                "default": "medium", "tasksolver": "xhigh",
+            },
+        }}}
+        with mock.patch("taskplan.config.load_config", return_value=data), \
+                mock.patch("taskplan.launcher.get_workflow_prompt_path",
+                           return_value=Path(self.workdir) / "TASKSOLVER.txt"), \
+                mock.patch("taskplan.launcher.shutil.which",
+                           return_value="C:\\bin\\codex.exe"):
+            command, _ = _provider_command(
+                "tasksolver", "codex",
+                env={"TASKPLAN_WORKDIR": self.workdir},
+            )
+        self.assertEqual(command[command.index("--model") + 1], "gpt-explicit")
+        self.assertIn('model_reasoning_effort="xhigh"', command)
+        self.assertEqual(command[command.index("--cd") + 1], self.workdir)
+
+    def test_non_codex_provider_still_requires_taskplan_model(self):
+        profile = dict(self.profile, provider="claude", model="")
+        with mock.patch("taskplan.launcher.runtime_profile",
+                        return_value=profile):
+            with self.assertRaisesRegex(ValueError, "Kein Modell konfiguriert"):
+                _provider_command(
+                    "tasksolver", "claude",
+                    env={"TASKPLAN_WORKDIR": self.workdir},
+                )
+
     def test_unattended_permissions_require_explicit_opt_in(self):
         patches = self._patch_common("claude")
         with patches[0], patches[1], patches[2], patches[3]:
@@ -128,6 +241,32 @@ class TestCentralLauncher(unittest.TestCase):
         self.assertEqual(code, 0)
         runner.assert_not_called()
         self.assertIn("[DRY-RUN]", output.getvalue())
+
+    def test_codex_dry_run_without_taskplan_overrides_uses_cli_defaults(self):
+        runner = mock.Mock()
+        profile = dict(self.profile, model="", reasoning_effort="")
+        output = io.StringIO()
+        env = {
+            "TASKPLAN_WORKDIR": self.workdir,
+            "TASKPLAN_STARTER_DRY_RUN": "1",
+        }
+        with mock.patch("taskplan.launcher.active_roles",
+                        return_value={"tasksolver": True}), \
+                mock.patch("taskplan.launcher.doctor", return_value=0), \
+                mock.patch("taskplan.launcher.runtime_profile",
+                           return_value=profile), \
+                mock.patch("taskplan.launcher.startup_prompt",
+                           return_value="authorized startup"), \
+                mock.patch("taskplan.launcher.get_workflow_prompt_path",
+                           return_value=Path(self.workdir) / "TASKSOLVER.txt"), \
+                mock.patch("taskplan.launcher.shutil.which",
+                           return_value="C:\\bin\\codex.exe"), \
+                redirect_stdout(output):
+            code = launch("tasksolver", "codex", env=env, run=runner)
+        self.assertEqual(code, 0)
+        runner.assert_not_called()
+        self.assertIn("Codex-Default", output.getvalue())
+        self.assertNotIn("--model", output.getvalue())
 
     def test_agy_schedule_interval_reaches_startup_prompt(self):
         patches = self._patch_common("agy")

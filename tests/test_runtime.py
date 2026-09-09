@@ -2,6 +2,7 @@
 """Provider-, Goal- und Timeout-Vertrag der nutzerneutralen Worker-Runtime."""
 import io
 import subprocess
+import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -13,6 +14,7 @@ from taskplan.__main__ import main
 from taskplan.runtime import (
     apply_backoff, goal_objective, runtime_profile, startup_prompt,
 )
+from taskplan.traversal import TraversalConfig
 
 
 class TestProviderModels(unittest.TestCase):
@@ -158,6 +160,36 @@ class TestCodexGoalPrompt(unittest.TestCase):
 
 
 class TestDiscoveryTimeout(unittest.TestCase):
+    def test_bounded_discovery_rejects_auto_mode_without_roots(self):
+        empty = TraversalConfig(roots=[])
+        with mock.patch.object(runner, "traversal_config", return_value=empty), \
+                mock.patch("taskplan.config.discovery_mode", return_value="hybrid"), \
+                mock.patch.object(runner.subprocess, "run") as process:
+            with self.assertRaises(runner.DiscoveryConfigurationError):
+                runner._discover_projects_bounded(30)
+        process.assert_not_called()
+
+    def test_configuration_error_is_retryable_without_inventory_fallback(self):
+        store = mock.Mock(db_path=Path("C:/tasks.db"))
+        view = mock.Mock(extra_rules=[])
+        with mock.patch.object(runner, "active_roles", return_value={
+                "taskwriter": True, "tasksolver": True, "maintainer": True}), \
+                mock.patch.object(runner, "TaskClient", return_value=store), \
+                mock.patch.object(runner, "_lock_view", return_value=(view, "lockmaster")), \
+                mock.patch.object(runner, "rotation_state_file", return_value=Path("state")), \
+                mock.patch.object(runner, "last_project", return_value=""), \
+                mock.patch.object(runner, "deferred_tasks", return_value=[]), \
+                mock.patch.object(
+                    runner, "_discover_projects_bounded",
+                    side_effect=runner.DiscoveryConfigurationError("no roots"),
+                ), \
+                mock.patch("taskplan.discovery.fallback_after_failure") as fallback:
+            work = runner.next_work("taskwriter")
+        self.assertTrue(work["retryable"])
+        self.assertEqual(work["error"], "project_discovery_configuration_error")
+        self.assertIsNone(work["bundle"])
+        fallback.assert_not_called()
+
     def test_all_exit_codes_have_stable_names_and_two_languages(self):
         self.assertEqual(
             {code: status["name"] for code, status in runner.EXIT_STATUS.items()},
@@ -220,40 +252,105 @@ class TestDiscoveryTimeout(unittest.TestCase):
         self.assertIn("[NO_WORK]", output.getvalue())
 
     def test_timeout_uses_last_known_good_instead_of_exit_three(self):
+        from taskplan.client import TaskClient
         from taskplan.discovery import DiscoveryResult
-        from taskplan.selector import Bundle
+        from taskplan.review_pool import ReviewPolicy
         from taskplan.traversal import Project
 
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        project_path = Path(temporary.name) / "project"
+        project_path.mkdir()
+        (project_path / "project.txt").write_text("fallback", encoding="utf-8")
+        client = TaskClient(Path(temporary.name) / "taskplan.db")
         fallback = DiscoveryResult(
-            projects=[Project(Path("C:/project"), "root")],
+            projects=[Project(project_path, "root")],
             source="stale_cache",
             degraded=True,
         )
-        bundle = Bundle(
-            mode="deep", effort="", root_id="root",
-            project_path="C:/project", tasks=[],
-        )
         with mock.patch.object(runner, "active_roles", return_value={
                 "taskwriter": True, "tasksolver": True, "maintainer": True}), \
+                mock.patch.object(runner, "TaskClient", return_value=client), \
                 mock.patch.object(runner, "_lock_view",
                                   return_value=(mock.Mock(
                                       extra_rules=[],
-                                      allows=lambda *_: True), "lockmaster")), \
+                                      allows=lambda *_: True,
+                                      allows_selection=lambda *_: True), "lockmaster")), \
                 mock.patch.object(runner, "_discover_projects_bounded",
                                   side_effect=runner.ProjectDiscoveryTimeout()), \
                 mock.patch("taskplan.discovery.fallback_after_failure",
                            return_value=fallback), \
-                mock.patch.object(runner, "next_bundle", return_value=bundle), \
+                mock.patch.object(runner, "review_pool_config", return_value=ReviewPolicy()), \
                 mock.patch.object(runner, "remember_project", return_value=True), \
                 mock.patch.object(runner, "last_project", return_value=""):
             work = runner.next_work("maintainer")
         self.assertNotIn("retryable", work)
-        self.assertEqual(work["bundle"]["project_path"], "C:/project")
+        self.assertEqual(Path(work["bundle"]["project_path"]), project_path)
         self.assertEqual(work["discovery"]["source"], "stale_cache")
         self.assertEqual(
             work["discovery"]["trigger_error"], "project_discovery_timeout"
         )
 
 
+class TestOperatorStartup(unittest.TestCase):
+    ONE_SHOT = {"providers": {"claude": {"continuation": "one_shot"}}}
+
+    def test_rotation_mode_names_mode_subrole_prompts_and_first_step(self):
+        with mock.patch.object(cfg, "load_config", return_value=self.ONE_SHOT):
+            prompt = startup_prompt("operator", "claude", "de",
+                                    operator_mode="rotation")
+        self.assertIn("ROTATION", prompt)
+        self.assertIn("MAINTAINER -> TASKWRITER -> TASKSOLVER", prompt)
+        for name in ("MAINTAINER.txt", "TASKWRITER.txt", "TASKSOLVER.txt"):
+            self.assertIn(name, prompt)
+        self.assertIn("python -m taskplan next --role maintainer --json", prompt)
+        self.assertNotIn("next --role operator", prompt)
+        self.assertNotIn("genau einen TASKPLAN-Durchlauf", prompt)
+        self.assertIn("fortlaufend", prompt)
+
+    def test_subagent_mode_is_spelled_out(self):
+        with mock.patch.object(cfg, "load_config", return_value=self.ONE_SHOT):
+            prompt = startup_prompt("operator", "claude", "en",
+                                    operator_mode="subagents")
+        self.assertIn("SUBAGENTS", prompt)
+        self.assertIn("alternately", prompt)
+
+    def test_default_mode_is_rotation_and_invalid_mode_fails_loudly(self):
+        with mock.patch.object(cfg, "load_config", return_value=self.ONE_SHOT):
+            self.assertIn("ROTATION", startup_prompt("operator", "claude", "de"))
+            with self.assertRaisesRegex(ValueError, "OPERATOR-Modus"):
+                startup_prompt("operator", "claude", "de", operator_mode="chaos")
+
+    def test_codex_goal_covers_exactly_one_role_step(self):
+        data = {"language": {"prompts": "de"}, "providers": {"codex": {
+            "continuation": "goal", "empty_policy": "keep_goal",
+            "idle_backoff_seconds": 60}}}
+        with mock.patch.object(cfg, "load_config", return_value=data):
+            objective = goal_objective("operator", "codex", "de")
+            prompt = startup_prompt("operator", "codex", "de")
+        self.assertIn("genau EINEN Rollenschritt", objective)
+        self.assertIn("Exit 2 aller drei", objective)
+        self.assertIn("backoff --role operator --provider codex", objective)
+        self.assertIn("persistiertes Goal", prompt)
+        self.assertIn("MAINTAINER.txt", prompt)
+
+    def test_operator_is_a_launch_role_but_not_a_selector_role(self):
+        from taskplan.runtime import LAUNCH_ROLES, ROLES
+        self.assertIn("operator", LAUNCH_ROLES)
+        self.assertNotIn("operator", ROLES)
+
+
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestOperatorModeAliases(unittest.TestCase):
+    """Menue-Nummern werden zu Modusnamen; Unbekanntes bleibt ein Fehler."""
+
+    def test_number_and_name_resolve(self):
+        from taskplan.runtime import normalize_operator_mode
+        self.assertEqual(normalize_operator_mode("1"), "rotation")
+        self.assertEqual(normalize_operator_mode("2"), "subagents")
+        self.assertEqual(normalize_operator_mode(" Subagents "), "subagents")
+        with self.assertRaises(ValueError):
+            normalize_operator_mode("3")

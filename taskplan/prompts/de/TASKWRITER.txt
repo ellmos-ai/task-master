@@ -36,12 +36,11 @@ eine überschätzte wartet nur.
 ABLAUF PRO LOOP
 
 1. PROJEKT ÜBERNEHMEN: Nimm ausschließlich das vom Selektor gelieferte Projekt. Ein Projekt ist
-   eine Arbeitseinheit UNTERHALB der Wurzel — nicht die Pipeline selbst. Der Selektor speichert
-   für projektbasierte Writer-Läufe einen Cursor und liefert beim nächsten Aufruf den nächsten
-   unerfassten Kandidaten. Wenn ein Projekt nachweislich keine neue Aufgabe ergibt, erfinde keine;
-   bei Bedarf kannst du den Cursor ausdrücklich weitersetzen:
-
-       python -m taskplan skip --role taskwriter --project "<pfad>"
+   eine Arbeitseinheit UNTERHALB der Wurzel — nicht die Pipeline selbst. Projektbasierte Läufe
+   tragen im Selector-Ergebnis `review.presentation_id`, Grund und kurze Lease. Diese Vorlage ist
+   noch KEIN Erfolg. Unveränderte, nicht fällige Siegel werden gar nicht erneut geliefert.
+   Ein TASK-Bündel zum Nachstufen kann dagegen ohne Review-Token kommen; dafür ist kein
+   Projektsiegel zu buchen.
 
 2. SCHÜTZEN: Lesen und Analysieren ist IMMER erlaubt, auch bei fremdem Lock — ein Lock schützt vor
    Änderung, nicht vor Kenntnisnahme. Für die Schreibphase (Steuerdateien aktualisieren) gilt: nur
@@ -89,9 +88,22 @@ ABLAUF PRO LOOP
     Vergewissere dich, dass keine Aufgabe schon erledigt ist und keine eine unerlaubte externe Aktion
     implizit autorisiert.
 
-12. PROTOKOLL + FREIGEBEN: Register fortschreiben (Zeitpunkt, Projekt, gelesene Steuerdateien,
-    neue/geänderte/zusammengeführte Punkte, offene Nutzerentscheidungen). Eigenen Lock entfernen.
-    Beende den Durchlauf; bearbeite kein zweites Projekt und führe keine der geschriebenen Aufgaben aus.
+12. PROTOKOLL + BESTÄTIGEN: Register fortschreiben (Zeitpunkt, Projekt, gelesene Steuerdateien,
+    neue/geänderte/zusammengeführte Punkte, offene Nutzerentscheidungen) und eigenen Lock entfernen.
+    Nur wenn das Projekt vollständig geprüft und der Lauf erfolgreich ist, verbrauche den gelieferten
+    Token und versiegle den aktuellen Hash:
+
+       python -m taskplan review complete --role taskwriter --project "<pfad>" \
+         --presentation-id "<id>" --result "<kurzes belegtes Ergebnis>"
+
+    Bei einem Blocker oder Abbruch buche KEINEN Erfolg, sondern stelle nur dieses Projekt zurück:
+
+       python -m taskplan review defer --role taskwriter --project "<pfad>" \
+         --presentation-id "<id>" --reason "<konkreter Blocker>"
+
+    Ein Crash ohne Rückmeldung bleibt ebenfalls unversiegelt und wird nach Lease-Ablauf erneut
+    kandidat. Beende den Durchlauf; bearbeite kein zweites Projekt und führe keine der geschriebenen
+    Aufgaben aus.
 
 QUALITÄTSGATES
 - Keine Aufgaben-Ausführung durch den TASKWRITER.

@@ -448,6 +448,19 @@ class TestMaintainerDoesNotCollideWithSolver(unittest.TestCase):
         self.assertIsNotNone(bundle)
         self.assertNotIn("/p/a", bundle.project_path.replace("\\", "/"))
 
+    def test_terminal_assignments_do_not_keep_projects_busy(self):
+        """Ein historischer Claim ist nach Abschluss keine laufende Arbeit."""
+        selected = []
+        for status in ("done", "cancelled"):
+            t = task("Historisch geclaimt", project="/p/a", root=".AI")
+            t.update(status=status, assigned_to="claude")
+            bundle = next_bundle(
+                self.config, FakeStore([t]), self.locks, role="maintainer"
+            )
+            selected.append(Path(bundle.project_path).as_posix())
+
+        self.assertEqual(selected, ["/p/a", "/p/a"])
+
     def test_maintainer_and_solver_never_get_the_same_project(self):
         """Die Kernzusage — als Test festgehalten."""
         t = task("Offen", effort="easy", project="/p/a", root=".AI")

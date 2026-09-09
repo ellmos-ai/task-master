@@ -9,7 +9,7 @@
 [![Organisation: ellmos-ai](https://img.shields.io/badge/org-ellmos--ai-6366f1.svg)](https://github.com/ellmos-ai)
 [![Dachorganisation: open-bricks](https://img.shields.io/badge/umbrella-open--bricks-0ea5e9.svg)](https://github.com/open-bricks)
 [![Keine Abhängigkeiten](https://img.shields.io/badge/Abh%C3%A4ngigkeiten-keine%20(stdlib)-success.svg)](pyproject.toml)
-[![Tests](https://img.shields.io/badge/tests-322%20bestanden-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-pytest%20bestanden-brightgreen.svg)](tests/)
 [![llms.txt](https://img.shields.io/badge/llms.txt-verf%C3%BCgbar-orange.svg)](llms.txt)
 
 **Deterministische Aufgabenauswahl für LLM-Agenten.** Keine Abhängigkeiten, nur
@@ -60,15 +60,15 @@ flowchart TD
         EffortGate -->|large / special| NonAuto["Nicht-Autonomes Gate<br/>(Menschliche Entscheidung)"]
     end
 
-    subgraph Execution["3. Rollen-Ausführung & Rotation"]
+    subgraph Execution["3. Rollen-Ausführung & Kontinuität"]
         GlobalEasy --> Roles{"Aktive Rolle"}
         MediumPass --> Roles
         Roles -->|TASKWRITER| TW["TASKWRITER<br/>Aufgaben formalisieren & einstufen"]
         Roles -->|TASKSOLVER| TS["TASKSOLVER<br/>Projektbündel abarbeiten & prüfen"]
         Roles -->|MAINTAINER| MN["MAINTAINER<br/>Projekt- & Verzeichnishygiene"]
-        TS --> AtomicCursor[("Atomarer Rotations-Cursor<br/>~/.taskplan/rotation-state.json")]
-        TW --> AtomicCursor
-        MN --> AtomicCursor
+        TS --> AtomicCursor[("Task-Revolver / Cursor<br/>~/.taskplan/rotation-state.json")]
+        TW --> ReviewPool[("Lokale Review-Siegel<br/>taskplan_project_reviews")]
+        MN --> ReviewPool
     end
 ```
 
@@ -112,6 +112,13 @@ Ist nichts wählbar, gibt `next_bundle()` **`None`** zurück. Der Loop endet als
 - **TASKSOLVER**: Macher mit Werkzeugkasten. Arbeitet genau EIN Projekt-Bündel pro Durchgang ab.
 - **TASKWRITER**: Chronist mit Stift und Liste. Stuft Aufgaben mit effort/scope ein (*„eine uneingestufte Aufgabe ist unsichtbar"*).
 - **MAINTAINER**: Hausmeister mit Besen. Hält Dateien und Ordnerstrukturen sauber und ordentlich.
+- **OPERATOR**: Personalunion der drei. Betreibt sie aus EINEM Worker im Wechsel — entweder
+  durch eigene Rotation (`MAINTAINER -> TASKWRITER -> TASKSOLVER`, Modus `rotation`, Default)
+  oder als dauerhafter MAINTAINER, der abwechselnd je einen Subagenten TASKWRITER und
+  TASKSOLVER aktiviert (Modus `subagents`, nur Runtimes mit Subagenten). Jeder Rollenschritt
+  folgt dem eigenen Prompt der Teilrolle; der OPERATOR-Prompt regelt nur den Wechsel,
+  hostübergreifendes PingPong (nur WriteSync) und System-Audit-Anforderungen (nur per
+  Ticket, nie selbst ausgeführt).
 
 ### Policy-aware Wartungspläne
 
@@ -204,16 +211,45 @@ in `exit.code`, `exit.name` und das lokalisierte Feld `exit.meaning`:
 | `3` | `RETRYABLE_SELECTOR_ERROR` | Wiederholbarer Selektor-/Discovery-Fehler |
 
 Reine MAINTAINER-Projektbündel und TASKWRITER-Erfassungsläufe enthalten
-absichtlich keine Task-IDs. Der Selektor speichert für jede Rolle einen getrennten
-Cursor atomar unter `~/.taskplan/rotation-state.json` (konfigurierbar über
-`[loop].rotation_state_file`) und liefert beim nächsten Lauf den nächsten
-Kandidaten. Der TASKSOLVER rückt normalerweise durch das Erledigen seines
-Task-Bündels weiter; ein veraltetes oder vorübergehend nicht bearbeitbares Projekt
-kann mit demselben expliziten Cursor übersprungen werden:
+absichtlich keine Task-IDs. Sie verwenden ein getrenntes, hostlokales Siegel je
+`(Rolle, Projekt)` in derselben SQLite-Datenbank. `next` speichert vor der Ausgabe
+eine kurze Präsentationslease und liefert `review.presentation_id`; die Präsentation
+allein ist niemals Erfolg. Erst ein bestätigter Abschluss speichert aktuellen
+deterministischen Projekt-Hash, Ergebnis, Prüfzeit und nächste Fälligkeit. Ein
+Blocker wird ohne Erfolg deferiert:
 
 ```bash
-python -m taskplan skip --role maintainer --project "<pfad>"
-python -m taskplan skip --role taskwriter --project "<pfad>"
+python -m taskplan review complete --role maintainer --project "<pfad>" \
+  --presentation-id "<id>" --result "geprüft"
+python -m taskplan review defer --role taskwriter --project "<pfad>" \
+  --presentation-id "<id>" --reason "blockiert"
+python -m taskplan review unseal --role maintainer --project "<pfad>" \
+  --reason "manuelle Nachprüfung"
+python -m taskplan review status --role maintainer --project "<pfad>" --json
+```
+
+Ein unverändertes Siegel vor `next_due_at` wird nicht erneut vorgelegt. Inhalts-
+Hashänderung, Intervallablauf, manueller Siegelbruch oder eine noch nie erfolgte
+Vorlage öffnen es. Git-Metadaten, Caches, Builds, TASKPLAN-eigene Locks und
+konfigurierte Glob-Ausschlüsse erzeugen keinen Hashlärm. Die Diagnose unterscheidet
+Locks, aktive Leases, deferierte Projekte, unveränderte Siegel, Hashbruch,
+Fälligkeit, manuelle Entsiegelung und Hashfehler.
+
+Die Auswahl sortiert Zustände, deren Zulässigkeit bereits feststeht, zunächst
+ohne jeden Projektbaum zu lesen. Inhalte werden nur gehasht, wenn eine
+Zustandsentscheidung sie benötigt oder ein Kandidat tatsächlich vorgelegt werden
+soll. Jeder tatsächlich versuchte Kandidat wird unmittelbar vor der Transaktion
+unabhängig von einem Vorauswahl-Digest erneut frisch gehasht. Nur dieser Digest
+wird geprüft, gespeichert und ausgegeben. Ein Hashfehler schließt den Kandidaten
+fail-closed aus und die Auswahl fährt fort; wenn kein Hash berechnet wurde, bleibt
+`current_hash` in der Diagnose leer.
+
+Der TASKSOLVER behält seinen bestehenden Task-Revolver und Projektcursor unter
+`~/.taskplan/rotation-state.json` (konfigurierbar über
+`[loop].rotation_state_file`). Ein veraltetes oder vorübergehend nicht
+bearbeitbares Task-Projekt kann diesen Cursor weiterhin ausdrücklich weitersetzen:
+
+```bash
 python -m taskplan skip --role tasksolver --project "<pfad>"
 ```
 
@@ -228,6 +264,7 @@ Prompt-Vertrag über den bestehenden Projektcursor, kein neuer Task-Status oder
 Retry-Engine.
 
 Neue Aufgaben bleiben der TASKWRITER-/TASKSOLVER-Rollenstrecke vorbehalten.
+Projekt-Review-Zeilen ändern nie `created_by`, `assigned_to` oder einen Taskstatus.
 
 ### Wer hat es angelegt, wer arbeitet daran
 
@@ -239,6 +276,11 @@ Aufgabe übernahm. Jetzt sind sie getrennt:
 client.add("…")                      # setzt created_by  (unveränderlich)
 client.assign(task_id, to="claude")  # setzt assigned_to + delegation_status
 ```
+
+`origin_host` speichert den Live-Hostnamen (`socket.gethostname()`) zum Anlage-
+zeitpunkt — einmalig von `add()` gesetzt, von `update()`/`assign()` nie berührt,
+und `NULL` bei Zeilen aus der Zeit vor dieser Spalte (Herkunft ist rückwirkend
+nicht rekonstruierbar).
 
 Wer eine Aufgabe übernimmt, schreibt in `assigned_to` — **niemals** in das Feld, das
 die Herkunft trägt.
@@ -375,17 +417,20 @@ abgenommen. Siehe [`benchmarks/README.md`](benchmarks/README.md).
 ### Rollen, Modelle, Aufgabenquellen, Tiefe
 
 Alles schaltbar. Eine abgeschaltete Rolle **bricht beim Start sauber ab**, statt still
-leerzulaufen. `combined = true` wird derzeit nur als Konfiguration gelesen und
-ausgegeben; noch kein mitgelieferter Runner oder Starter wertet es aus. Es ist daher
-noch kein funktionsfähiger 3-in-1-/2-in-1-Modus. Die Modellwahl gehört in die
-Konfiguration, nicht in den Starter.
+leerzulaufen. `[roles] operator` (Default `true`) schaltet die 3-in-1-Rolle OPERATOR; der
+früher reservierte Schlüssel `combined` bleibt als Legacy-Alias dafür lesbar. Den Modus
+des Operators setzt `TASKPLAN_OPERATOR_MODE=rotation|subagents` (Default `rotation`).
+Die Modellwahl gehört in die Konfiguration, nicht in den Starter.
 
 ### Nutzerneutrale Provider-Runtime und Codex-Goals
 
 Starter bleiben bewusst dünn. `[execution] provider` wählt den Default-Provider;
 `[providers.<name>.models]` und `[providers.<name>.reasoning_effort]` bestimmen Modell
 und Reasoning je Rolle. Die bisherige Sektion `[models]` bleibt als kompatibler
-Fallback erhalten.
+Fallback erhalten. Bei Codex bedeuten leere oder fehlende Werte „kein TASKPLAN-
+Override“: Der Starter lässt die entsprechenden CLI-Flags weg und Codex erbt die
+kanonischen Defaults aus `~/.codex/config.toml`. So ist nicht auf jedem Host eine
+zweite Modellkonfiguration Pflicht; ausdrückliche Rollen-Overrides bleiben erhalten.
 
 Codex nutzt `continuation = "goal"`. TASKPLAN erzeugt einen ausdrücklichen
 Nutzerauftrag, der ein persistiertes Goal autorisiert, pro Fortsetzung genau ein
@@ -398,17 +443,92 @@ beliebige Starter; `python -m taskplan startup-prompt ...` erzeugt den
 providerspezifischen Nutzerauftrag. Kein Benutzername, Home-Pfad oder Modell wird im
 Starter fest verdrahtet.
 
-Das Wheel enthält neun nutzerneutrale Windows-Starter für
-TASKSOLVER/TASKWRITER/MAINTAINER × Claude/Codex/Agy:
+### Modellsonde und Provider-Fallback
+
+Ein Modellname, den es nicht mehr gibt, beendete bisher den Start: Die CLI brach
+ab, und der Nutzer stand ohne Worker da — obwohl drei weitere Anbieter
+installiert sind. `launch` baut deshalb eine Kandidatenkette und prüft jeden
+Kandidaten, bevor eine interaktive Sitzung übergeben wird.
+
+Die Kette lautet: die ausdrückliche Wahl aus `--model`/`--effort`, danach die
+konfigurierten Defaults desselben Anbieters, danach die Defaults aller Anbieter
+aus `[execution] fallback_providers` (Default: die Paketreihenfolge ohne den
+gewählten). Kandidaten ohne CLI im `PATH` oder ohne Modelleintrag werden mit
+sichtbarem Grund übersprungen.
+
+Jeder Kandidat bekommt eine Sonde: einen einmaligen Print-Modus-Aufruf, der
+`TASKPLAN_PROBE_OK` ausgeben soll. **Erfolgsmerkmal ist der Token im
+Ausgabestrom, nicht der Exit-Code.** Gemessen am 2026-09-06: agy druckt den Token
+und beendet sich danach nie — dieser Lauf endet im Kill nach dem Timeout —,
+während claude und codex bei falschem Modellnamen mit Exit `1` und ohne Token
+enden. Wer nach dem Rückgabewert urteilt, verwirft also den funktionierenden
+Anbieter und akzeptiert keinen der kaputten. Der Sondenprozess wird samt Kindern
+beendet (`taskkill /T /F` unter Windows), denn die Provider-CLIs sind Shims mit
+Node-Kindern.
+
+```toml
+[execution]
+fallback_providers = ["codex", "claude"]   # Reihenfolge; leer = Paketreihenfolge
+probe = true                               # Default
+probe_timeout_seconds = 120                # Default
+
+[providers.claude]
+model_choices = ["sonnet", "opus"]         # nur Anzeigehinweis für --interactive
+```
+
+`--no-probe` startet den ersten brauchbaren Kandidaten direkt, `--no-fallback`
+beschränkt die Kette auf einen einzigen Kandidaten. `TASKPLAN_STARTER_PROBE=0`
+schaltet die Sonde für einen Lauf ab, ohne die Konfiguration anzufassen.
+
+### Wahl beim Start und externe Rollen
+
+`--model M` und `--effort E` überschreiben die Konfiguration nur für diesen
+Start. `--interactive` fragt genau das ab, was nicht schon als Flag feststeht —
+Anbieter, Modell, Reasoning in dieser Reihenfolge —, und `Enter` übernimmt den
+angezeigten Default. Für claude setzt `--name` den Anzeigenamen der Sitzung;
+ohne Angabe steht dort die Rolle bzw. das Label in Großbuchstaben.
+
+`--label NAME --prompt-file PFAD --request TEXT` startet eine **externe Rolle**:
+ein fremder Prompt statt einer TASKPLAN-Rolle, ohne Rollen-Gate und ohne
+erzeugten Startauftrag, aber über denselben providerspezifischen
+Ausliefermechanismus. Modell und Reasoning kommen aus denselben
+Provider-Tabellen; ein Schlüssel darf deshalb Bindestriche tragen:
+
+```toml
+[providers.claude.models]
+ticket-master = "opus"
+```
+
+Kimi läuft dabei zweistufig, weil seine CLI einen freien Startauftrag nur
+headless annimmt: Boot per `--prompt`, danach dieselbe Konversation interaktiv
+per `--continue`. Für TASKPLAN-Rollen bleibt der bisherige einstufige Vertrag.
+
+### Gebündelte Starter
+
+Je Plattform gibt es zwei Schichten: einen anbieterneutralen Starter pro Rolle,
+der beim Start fragt, und darunter in `providers/` je einen gepinnten Starter
+pro Rolle/Provider — vierzig Dateien für
+TASKSOLVER/TASKWRITER/MAINTAINER/OPERATOR × Claude/Codex/Agy/Kimi.
+
+```
+taskplan/starters/windows/START-OPERATOR.bat
+taskplan/starters/windows/providers/START-OPERATOR-CLAUDE.bat
+taskplan/starters/posix/start-operator.sh
+taskplan/starters/posix/providers/start-operator-claude.sh
+```
 
 ```powershell
-python -m taskplan starters list
+python -m taskplan starters list [--platform windows|posix]
 python -m taskplan starters path --role tasksolver --provider codex
+python -m taskplan starters path --role operator --platform posix
 python -m taskplan launch --role tasksolver --provider codex
 ```
 
 Modell-Identifier und Reasoning-Level werden in `~/.taskplan/taskplan.toml`
-konfiguriert. `TASKPLAN_WORKDIR` setzt optional das Arbeitsverzeichnis;
+konfiguriert. Für Codex sind diese Einträge optionale rollenspezifische Overrides;
+ohne sie bleibt die Codex-CLI-Konfiguration maßgeblich. Andere Provider benötigen
+weiterhin TASKPLAN-Einträge für Modell und Reasoning. `TASKPLAN_WORKDIR` setzt
+optional das Arbeitsverzeichnis;
 `TASKPLAN_CLAUDE_MCP_CONFIG` optional ein Claude-MCP-Profil. Paket-Starter nutzen
 standardmäßig die normalen Freigabedialoge des Providers. Nur eine vertrauenswürdige
 lokale Automation soll mit `TASKPLAN_TRUSTED_AUTOMATION=1` unbeaufsichtigte

@@ -19,7 +19,16 @@ from .client import (
     count_tasks_in,
     get_default_db_path,
 )
-from .config import find_config_file, config_search_paths
+from .config import (
+    config_search_paths,
+    discovery_mode,
+    find_config_file,
+    traversal_config,
+)
+from .discovery import (
+    DiscoveryConfigurationError,
+    validate_discovery_configuration,
+)
 
 
 def _known_candidates() -> list[Path]:
@@ -62,6 +71,15 @@ def run() -> int:
             print(f"    - {path}")
     print()
 
+    discovery_error = ""
+    try:
+        validate_discovery_configuration(traversal_config(), discovery_mode())
+    except DiscoveryConfigurationError as exc:
+        discovery_error = str(exc)
+        print("Projekt-Discovery:")
+        print(f"  FEHLER: {discovery_error}")
+        print()
+
     print("Andere gefundene Task-Datenbanken:")
     warn = False
     found_other = False
@@ -92,6 +110,7 @@ def run() -> int:
         print("    - Konfigurieren: ~/.taskplan/taskplan.toml")
         print("        [storage]")
         print('        path = "<pfad zur richtigen db>"')
+    if warn or discovery_error:
         return 1
 
     print("OK: Keine widerspruechliche Datenbank gefunden.")

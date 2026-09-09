@@ -2,7 +2,74 @@
 
 ## Unreleased
 
+### Fixed (0.6.1)
+- Interaktive Abfragen (Modus, Anbieter, Modell, Reasoning) nehmen Nummern `[1] ...`
+  oder Namen; Unbekanntes wird bis zu dreimal neu gefragt statt mit Traceback
+  abzubrechen. Die OPERATOR-Modusfrage stellt der Launcher selbst (als erste Frage);
+  `TASKPLAN_OPERATOR_MODE` akzeptiert auch `1`/`2`.
+- `model_choices` leitet ohne Vorschlagsliste die je Rolle konfigurierten Modelle ab,
+  damit auch die Modellfrage Nummern anbietet.
+
 ### Added
+- **Launcher: Modell-/Effort-Wahl, Sonde, Provider-Fallback, externe Rollen,
+  interaktiver Start, neutrale + POSIX-Starter.** `launch` nimmt `--model`/
+  `--effort` (überschreiben die Konfiguration nur für diesen Start),
+  `--interactive` (fragt genau das ab, was nicht als Flag feststeht; Enter
+  übernimmt den Default), `--no-probe`, `--no-fallback` und für claude `--name`.
+  Vor dem interaktiven Start prüft eine **Sonde** jeden Kandidaten mit einem
+  einmaligen Print-Modus-Aufruf auf `TASKPLAN_PROBE_OK`; **Erfolgsmerkmal ist der
+  Token im Ausgabestrom, nicht der Exit-Code** — agy druckt den Token und beendet
+  sich danach nie (Kill nach Timeout), während claude/codex bei falschem
+  Modellnamen mit Exit 1 und ohne Token enden. Scheitert sie, greift die Kette:
+  erst die Provider-Defaults desselben Anbieters, dann die Defaults der Anbieter
+  aus `[execution] fallback_providers`; Kandidaten ohne CLI oder ohne
+  Modelleintrag werden mit sichtbarem Grund übersprungen. Neue Schlüssel
+  `[execution] probe|probe_timeout_seconds|fallback_providers` und
+  `[providers.<p>] model_choices` (reiner Anzeigehinweis, keine Validierung).
+  Der Sondenprozess wird samt Kindern beendet, weil die Provider-CLIs Shims mit
+  Node-Kindern sind. `--label`/`--prompt-file`/`--request` startet eine **externe
+  Rolle**: fremder Prompt statt TASKPLAN-Rolle, kein Rollen-Gate, kein erzeugter
+  Startauftrag, aber derselbe Ausliefermechanismus je Provider; Modell/Reasoning
+  kommen aus denselben Provider-Tabellen (Label-Schlüssel dürfen Bindestriche
+  tragen), und Kimi läuft dafür zweistufig (`--prompt`, dann `--continue`), weil
+  seine CLI einen freien Startauftrag nur headless annimmt. Die Starter liegen
+  jetzt je Plattform in zwei Schichten: anbieterneutral pro Rolle (fragt beim
+  Start) und in `providers/` je Rolle/Provider gepinnt — 40 Dateien für Windows
+  und POSIX, `starters list|path --platform windows|posix`. Eine `.gitattributes`
+  hält die Zeilenenden fest (`.sh` = LF, `.bat` = CRLF).
+- **Rolle OPERATOR — Personalunion von MAINTAINER, TASKWRITER und TASKSOLVER**
+  (Nutzerauftrag 2026-09-06): neuer Prompt `prompts/<de|en>/OPERATOR.txt`, der die
+  drei Rollen aus EINEM Worker betreibt. Zwei Modi über `TASKPLAN_OPERATOR_MODE`:
+  `rotation` (Default, providerneutral: der Worker nimmt MAINTAINER -> TASKWRITER ->
+  TASKSOLVER selbst nacheinander ein) und `subagents` (der Worker bleibt MAINTAINER
+  und aktiviert abwechselnd je einen Subagenten TASKWRITER/TASKSOLVER mit Fünf-Felder-
+  Vertrag und explizitem Modell aus `taskplan runtime --field model`). Jeder
+  Rollenschritt folgt unverändert dem Prompt der Teilrolle; der OPERATOR-Prompt regelt
+  nur Wechsel, Leerlauf-/Backoff-Vertrag, PingPong (ausschließlich WriteSync, nie ein
+  zweiter Listener) und System-Audit-Anforderung (ausschließlich als dedupliziertes
+  ticket-master-Ticket mit Präfix `system-auditor:`; ohne installierten system-auditor
+  nur Befund). `launch --role operator`, `START-OPERATOR-<PROVIDER>.bat` (16 Starter),
+  `taskplan.OPERATOR`, `[roles] operator` (Default `true`; `combined` bleibt Legacy-Alias
+  statt reservierter Leerstelle). Der Startauftrag nennt Modus und die Pfade der drei
+  Teilrollen-Prompts, weil Subagenten den System-Prompt nicht erben.
+- **Hostlokaler Siegel- und Wiedervorlagepool für TASKWRITER/MAINTAINER**
+  (`T-20260830-202718995`): additive Tabellen
+  `taskplan_project_reviews`/`taskplan_project_review_events`, deterministischer
+  versionierter Projekt-Hash mit Cache-/Build-/Git-/Lock-Ausschlüssen, getrennte
+  Zustände je `(Rolle, Projekt)` und kontrollierbare Intervalle. `next` persistiert
+  vor der Lieferung nur eine kurze Präsentationslease; erst `review complete` mit
+  passendem Token schreibt Hash, Ergebnis, Prüfzeit und `next_due_at`. `review
+  defer`/`skip --presentation-id` ist kein Erfolg und öffnet bei Hashänderung oder
+  Retry-Ablauf. Diagnosegründe unterscheiden nie vorgelegt, Hashbruch, fällig,
+  manuell entsiegelt, deferiert, unverändert versiegelt, Lease, Lock und Hashfehler.
+  TASKSOLVER-Revolver, Task-Herkunft und Zuweisung bleiben unverändert.
+- **`origin_host`-Spalte in `rinnsal_tasks`** (Nutzerentscheidung 2B,
+  T-20260830-167536816): `add()` setzt sie deterministisch aus dem
+  LIVE-Hostnamen (`socket.gethostname()`) — nicht aus Config oder
+  Umgebungsvariable. `update()`/`assign()` fassen sie nie an (Herkunft =
+  Ersterzeugung). Bestandszeilen bleiben `NULL`: Herkunft laesst sich
+  rueckwirkend nicht rekonstruieren. Additive, idempotente Migration fuer
+  bestehende DBs.
 - **Aufgaben-Revolver:** `python -m taskplan skip --role R --task <ID> [--undo]`
   stellt eine einzelne Aufgabe ans Ende der Warteschlange. Bis dahin war
   Rotation nur projektweit — blockierte genau eine Aufgabe ein Projekt, stand
@@ -29,6 +96,35 @@
   eine MAINTAINER-Sperre getauscht.
 
 ### Fixed
+- Der lokale Review-Pool hasht bei `next` nicht mehr vor der Sortierung jedes
+  noch nie vorgelegte Projekt vollständig. Zustände, deren Zulässigkeit bereits
+  aus Lock, Präsentationslease und Review-Zustand folgt, werden zunächst ohne
+  erfundenen Hash eingeordnet; nur inhaltsabhängige Entscheidungen werden für
+  die Vorauswahl gehasht. Jeder tatsächlich versuchte Kandidat wird unmittelbar
+  vor der Transaktionsentscheidung unabhängig vom Vorauswahl-Hash frisch
+  gehasht. Nur dieser Digest wird geprüft, gespeichert und ausgegeben. Ein
+  Hashfehler sperrt den Kandidaten fail-closed und setzt die Auswahl mit dem
+  nächsten fort.
+- Projekt-Discovery behandelt `auto`/`hybrid` ohne konfigurierte Traversal-Roots
+  nicht länger als gesunden `fresh_cache`-Leerlauf. `next` und `projects`
+  liefern jetzt den retrybaren Exit 3, ohne auf ein manuelles Teilinventar
+  zurückzufallen; `taskplan doctor` meldet denselben Zustand als Fehler. Der
+  ausdrücklich rootlose Modus `manual` bleibt unverändert zulässig.
+- Der MAINTAINER behandelt ein historisches `assigned_to` an terminalen Tasks
+  (`done`/`cancelled`) nicht länger als laufende Projektbelegung. Ein Claim an
+  einem offenen Task sowie `status=active` bleiben weiterhin busy und schützen
+  das Zeitfenster zwischen `assign()` und dem Projekt-Lock. Es wurden weder
+  Claim-TTL noch Bestandsbereinigung oder neue Sync-Semantik eingeführt.
+- Veralteten Verifikationsstand in `README.md`, `README_de.md` und `llms.txt`
+  mit dem belegten Stand vom 2026-08-30 synchronisiert: 357/357 Tests plus
+  38/38 Subtests bestanden.
+- Codex-Starter scheitern nicht mehr, wenn `~/.taskplan/taskplan.toml` fehlt
+  oder dort kein Codex-Modell bzw. Reasoning hinterlegt ist. Leere Werte sind
+  jetzt bewusst „kein TASKPLAN-Override“: Der zentrale Launcher lässt
+  `--model` bzw. `model_reasoning_effort` weg und übernimmt damit die eine
+  kanonische Codex-CLI-Konfiguration aus `~/.codex/config.toml`. Explizite
+  Rollenwerte und geerbte Provider-Defaults bleiben unverändert vorrangig;
+  andere Provider behalten ihre Pflichtkonfiguration.
 - Der TASKSOLVER-Vertrag begrenzt lokale Bündelfehler jetzt auf drei
   dokumentierte Versuche, protokolliert danach einen SKIP-Grund und setzt die
   Queue-Prüfung fort. `cldflt.sys`, Locks, Fremdzustände und übrige Gates bleiben

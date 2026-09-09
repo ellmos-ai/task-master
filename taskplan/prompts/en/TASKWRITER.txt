@@ -35,11 +35,10 @@ one merely waits.
 PER-LOOP SEQUENCE
 
 1. ACCEPT THE PROJECT: Use only the project delivered by the selector. A project is a work unit
-   BELOW the root—not the pipeline itself. For project-based writer runs, the selector persists a
-   cursor and returns the next unrecorded candidate on the next invocation. If a project yields no
-   evidenced new task, invent none; when needed, you can explicitly advance the cursor:
-
-       python -m taskplan skip --role taskwriter --project "<path>"
+   BELOW the root—not the pipeline itself. Project-based results carry a
+   `review.presentation_id`, reason, and short lease. Presentation is NOT success. Unchanged seals
+   that are not due are not delivered again. A TASK bundle for classification may have no review
+   token; do not write a project seal for such a bundle.
 
 2. PROTECT: Reading and analysing is ALWAYS allowed, even under a foreign lock — a lock protects
    against change, not against knowledge. For the writing phase (updating control files): only
@@ -85,9 +84,20 @@ PER-LOOP SEQUENCE
 11. CHECK: Consistency, unambiguous statuses, internal links, UTF-8. Make sure no task is already
     done and none implicitly authorises a forbidden external action.
 
-12. LOG + RELEASE: Update the register (time, project, control files read, items added/changed/merged,
-    open user decisions). Remove your own lock. End the run; do not process a second project and do
-    not execute any of the tasks you wrote.
+12. LOG + CONFIRM: Update the register (time, project, control files read, items
+    added/changed/merged, open user decisions) and remove your own lock. Only after the project was
+    fully checked and the run succeeded, consume the delivered token and seal the current hash:
+
+       python -m taskplan review complete --role taskwriter --project "<path>" \
+         --presentation-id "<id>" --result "<short evidenced result>"
+
+    On a blocker or abort, do NOT record success; defer only this project:
+
+       python -m taskplan review defer --role taskwriter --project "<path>" \
+         --presentation-id "<id>" --reason "<specific blocker>"
+
+    A crash without feedback remains unsealed and becomes eligible again after lease expiry. End
+    the run; do not process a second project and do not execute any of the tasks you wrote.
 
 QUALITY GATES
 - No task execution by the TASKWRITER.

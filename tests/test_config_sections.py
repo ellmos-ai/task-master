@@ -39,6 +39,44 @@ class TestSelectorConfigFromToml(unittest.TestCase):
         self.assertEqual(selector.allowed_efforts(), ("easy",))
 
 
+class TestReviewPoolConfig(unittest.TestCase):
+    def test_safe_hostlocal_defaults(self):
+        with mock.patch.object(cfg, "load_config", return_value={}):
+            policy = cfg.review_pool_config()
+        self.assertTrue(policy.enabled)
+        self.assertEqual(policy.default_effort, "easy")
+        self.assertEqual(policy.review_interval_seconds, 7 * 24 * 60 * 60)
+        self.assertEqual(policy.retry_interval_seconds, 60 * 60)
+        self.assertEqual(policy.presentation_lease_seconds, 15 * 60)
+
+    def test_review_intervals_effort_and_excludes_are_configurable(self):
+        with _with_config(
+            '[review_pool]\nreview_interval_seconds = 120\n'
+            'retry_interval_seconds = 30\npresentation_lease_seconds = 10\n'
+            'default_effort = "medium"\nexclude = ["generated/**"]\n'
+        ):
+            policy = cfg.review_pool_config()
+        self.assertEqual(policy.review_interval_seconds, 120)
+        self.assertEqual(policy.retry_interval_seconds, 30)
+        self.assertEqual(policy.presentation_lease_seconds, 10)
+        self.assertEqual(policy.default_effort, "medium")
+        self.assertEqual(policy.exclude, ("generated/**",))
+
+    def test_invalid_values_fall_back_to_documented_defaults(self):
+        with _with_config(
+            '[review_pool]\nreview_interval_seconds = -1\n'
+            'retry_interval_seconds = "kaputt"\n'
+            'presentation_lease_seconds = 0\n'
+            'default_effort = "special"\nexclude = "kaputt"\n'
+        ):
+            policy = cfg.review_pool_config()
+        self.assertEqual(policy.review_interval_seconds, 7 * 24 * 60 * 60)
+        self.assertEqual(policy.retry_interval_seconds, 60 * 60)
+        self.assertEqual(policy.presentation_lease_seconds, 15 * 60)
+        self.assertEqual(policy.default_effort, "easy")
+        self.assertEqual(policy.exclude, ())
+
+
 class TestRoles(unittest.TestCase):
     def test_all_active_and_separate_by_default(self):
         with mock.patch.object(cfg, "load_config", return_value={}):
@@ -46,15 +84,21 @@ class TestRoles(unittest.TestCase):
         self.assertTrue(roles["taskwriter"])
         self.assertTrue(roles["tasksolver"])
         self.assertTrue(roles["maintainer"])
-        self.assertFalse(roles["combined"])
+        self.assertTrue(roles["operator"])
 
-    def test_two_in_one(self):
-        """Die reservierte combined-Einstellung bleibt maschinenlesbar."""
-        with _with_config("[roles]\nmaintainer = false\ncombined = true\n"):
+    def test_operator_can_be_disabled(self):
+        with _with_config("[roles]\nmaintainer = false\noperator = false\n"):
             roles = cfg.active_roles()
         self.assertFalse(roles["maintainer"])
-        self.assertTrue(roles["combined"])
+        self.assertFalse(roles["operator"])
         self.assertTrue(roles["taskwriter"])
+
+    def test_combined_is_a_legacy_alias_for_operator(self):
+        """Die frueher reservierte combined-Einstellung schaltet den OPERATOR."""
+        with _with_config("[roles]\ncombined = false\n"):
+            self.assertFalse(cfg.active_roles()["operator"])
+        with _with_config("[roles]\ncombined = false\noperator = true\n"):
+            self.assertTrue(cfg.active_roles()["operator"])
 
 
 class TestLockProvider(unittest.TestCase):

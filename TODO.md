@@ -95,3 +95,29 @@ Stand: 2026-07-27 — umgesetzt; die Punkte bleiben als Betriebsnachweis erhalte
 - [ ] TaskMaster speichert höchstens Referenzen auf Test-/Commit-/Handoff-Belege.
   Es führt keine Tests aus, erzeugt keine Commits und implementiert keine zweite
   Lock-Engine.
+
+## Offen nach 0.6.0 (Nutzerauftrag OCEAN AGENTS STARTCENTER, 2026-09-06)
+
+- [ ] **`doctor` warnt nicht vor fehlender Provider-Modellkonfiguration.** Genau das brach am
+  2026-09-06 auf ASUS-GEI jeden Claude/Agy/Kimi-Start („Kein Modell konfiguriert"), waehrend
+  `doctor` gruen meldete. Vorschlag: je Provider aus `PROVIDERS` pruefen, ob `[providers.<p>.models]`
+  mindestens `default` traegt (Codex ausgenommen), und als WARNUNG ausgeben — kein Abbruch.
+- [ ] **Gepinnte Starter (`starters/*/providers/`) ohne stillen Anbieterwechsel.** Ein Starter mit
+  `--provider P` meint diesen Anbieter; heute faellt er ueber die Kette auf andere Provider zurueck.
+  Vorschlag: `--no-fallback` in die 32 gepinnten Starter (oder ein `--pinned`, das nur den
+  Default-Zweitversuch desselben Providers erlaubt). Die OneDrive-Starter tragen `--no-fallback`
+  bereits.
+- [ ] **Sonde laeuft im aktuellen Arbeitsverzeichnis, nicht in `TASKPLAN_WORKDIR`** (Auslegung des
+  Workers, Auftrag schwieg). Angleichen, damit CLI-Konfigurationen mit Projektbezug (z. B.
+  `.claude/settings`) in der Sonde dieselben sind wie im Start.
+- [ ] **Typing-Nit:** `launcher._provider_commands` baut `prompt_kwargs` als `dict[str, int | None]`
+  und setzt dann einen `str` (Pyright reportArgumentType). Annotation `dict[str, object]` genuegt.
+- [ ] **Testluecke: fehlschlagendes `doctor()` blockiert externe Rollen, ungetestet.** Befund des PR-#4-Reviews (claude-sonnet, 2026-09-06): `launch()` ruft `doctor()` auch fuer `--label`-Rollen unconditional auf, aber die Fixture in `tests/test_launcher_probe.py` mockt `doctor` global auf Erfolg; die Kombination doctor-scheitert-plus-externe-Rolle hat keinen Test. Vorschlag: ein Test, der `doctor` auf Fehler patcht und fuer `--label ticket-master` Exit != 0 ohne Prozessstart erwartet.
+- [ ] **Ruecktransfer-Richtung — KORRIGIERT 2026-09-06 (Nutzerentscheid E01):** KEIN neues
+  Modul `agent-launcher` (existiert bereits: `ellmos-ai/agent-launcher`, Claude-only, benannte
+  Dauerprozesse). Heimat der Provider-Mechanik (argv je CLI, Sonde, Fallback-Kette, Starter-
+  Generator) wird **COMA** (`ellmos-ai/coma`, verifizierte Adapter claude/codex/agy); task-master
+  0.7 konsumiert `coma.adapters`, `taskplan launch` bleibt Fassade. Tickets: T-20260906-463096841
+  (E01, wartet auf Freigabe), T-20260906-737455509 (clutch als waehlbare Fallback-Autoritaet),
+  T-20260906-833934205 (`roles[]` in v2), T-20260906-249053451 (Starter ticket-master/system-auditor).
+  Analyse: `~/OneDrive/.USR/OCEAN-RUECKTRANSFER-STARTER_2026-09-06.md` Abschnitt 6.

@@ -20,6 +20,22 @@ from .traversal import Project, TraversalConfig, discover_projects, find_project
 CACHE_VERSION = 2
 
 
+class DiscoveryConfigurationError(RuntimeError):
+    """Auto-Discovery ist aktiviert, aber es gibt keinen konfigurierten Root."""
+
+
+def validate_discovery_configuration(
+    config: TraversalConfig, mode: str
+) -> None:
+    """Verhindert, dass ein fehlendes Root-Inventar als gesunder Leerlauf gilt."""
+    if mode in ("auto", "hybrid") and not config.roots:
+        raise DiscoveryConfigurationError(
+            "Projekt-Discovery ist auf "
+            f"{mode!r} gestellt, aber es sind keine Traversal-Roots konfiguriert. "
+            "Setze [traversal].roots_file oder [traversal].roots in taskplan.toml."
+        )
+
+
 @dataclass
 class DiscoveryResult:
     projects: list[Project]
@@ -316,6 +332,7 @@ def _due_sectors(
 def discover_snapshot(force: bool = False) -> DiscoveryResult:
     config = traversal_config()
     mode = discovery_mode()
+    validate_discovery_configuration(config, mode)
     registry = registry_file()
     cache_cfg = discovery_cache_config()
     signature = _signature(config, mode, registry)
@@ -405,6 +422,7 @@ def read_last_known_good() -> DiscoveryResult | None:
     """Cache ohne Traversierung/``stat`` lesen, auch wenn er refresh-fällig ist."""
     config = traversal_config()
     mode = discovery_mode()
+    validate_discovery_configuration(config, mode)
     registry = registry_file()
     cache_cfg = discovery_cache_config()
     signature = _signature(config, mode, registry)
@@ -446,6 +464,7 @@ def read_last_known_good() -> DiscoveryResult | None:
 def projects_from_task_store(store) -> DiscoveryResult | None:
     """Letzter lokaler Fallback: bekannte Projektpfade aus der Task-Datenbank."""
     config = traversal_config()
+    validate_discovery_configuration(config, discovery_mode())
     roots = list(config.roots)
     projects: dict[str, Project] = {}
     for task in store.list(limit=None, include_done=True):

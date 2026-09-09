@@ -1,0 +1,5 @@
+# Die Starter sind ausfuehrbare Dateien: ihre Zeilenenden sind Vertrag, nicht
+# Geschmack. Ohne diese Regeln flippt core.autocrlf sie je nach Host — ein .sh
+# mit CRLF scheitert mit "bad interpreter", ein .bat mit LF je nach Shell.
+*.bat text eol=crlf
+*.sh  text eol=lf

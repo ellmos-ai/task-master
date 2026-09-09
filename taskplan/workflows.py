@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 """Importierbare TASKPLAN-Workflow-Prompts — zweisprachig.
 
-Die drei Rollen (TASKSOLVER, TASKWRITER, MAINTAINER) liegen als Paketressourcen
-in `prompts/<lang>/` vor. Sie sind damit sowohl aus Python importierbar als auch
-fuer CLI-/Batch-Starter als reale Dateien aufloesbar.
+Die drei Rollen (TASKSOLVER, TASKWRITER, MAINTAINER) und ihre Personalunion
+OPERATOR liegen als Paketressourcen in `prompts/<lang>/` vor. Sie sind damit
+sowohl aus Python importierbar als auch fuer CLI-/Batch-Starter als reale
+Dateien aufloesbar.
 
 Sprachwahl:
     1. expliziter `lang`-Parameter
@@ -28,6 +29,7 @@ _WORKFLOW_FILES = {
     "TASKSOLVER": "TASKSOLVER.txt",
     "TASKWRITER": "TASKWRITER.txt",
     "MAINTAINER": "MAINTAINER.txt",
+    "OPERATOR": "OPERATOR.txt",
 }
 
 AVAILABLE_LANGS = ("de", "en")
@@ -129,3 +131,4 @@ def get_workflow_prompt_path(name: str, lang: str | None = None) -> Path:
 TASKSOLVER = get_workflow_prompt("TASKSOLVER")
 TASKWRITER = get_workflow_prompt("TASKWRITER")
 MAINTAINER = get_workflow_prompt("MAINTAINER")
+OPERATOR = get_workflow_prompt("OPERATOR")

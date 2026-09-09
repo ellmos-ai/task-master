@@ -13,6 +13,32 @@ from taskplan.traversal import Level, Project, TraversalConfig
 
 
 class TestDiscoveryCache(unittest.TestCase):
+    def test_hybrid_without_roots_is_a_configuration_error(self):
+        config = TraversalConfig(roots=[])
+        with mock.patch.object(discovery, "traversal_config", return_value=config), \
+                mock.patch.object(discovery, "discovery_mode", return_value="hybrid"):
+            with self.assertRaises(discovery.DiscoveryConfigurationError):
+                discovery.discover_snapshot()
+
+    def test_manual_mode_remains_valid_without_roots(self):
+        tmp = Path(tempfile.mkdtemp())
+        project = Project(tmp / "manual", ".MANUAL")
+        project.path.mkdir()
+        config = TraversalConfig(roots=[])
+        with mock.patch.object(discovery, "traversal_config", return_value=config), \
+                mock.patch.object(discovery, "discovery_mode", return_value="manual"), \
+                mock.patch.object(discovery, "registry_file", return_value="registry.json"), \
+                mock.patch.object(discovery, "_manual_projects", return_value=[project]), \
+                mock.patch.object(discovery, "discovery_cache_config", return_value={
+                    "enabled": True,
+                    "path": tmp / "projects-cache.json",
+                    "ttl_seconds": 900,
+                }):
+            result = discovery.discover_snapshot()
+        self.assertEqual(result.projects, [project])
+        self.assertEqual(result.source, "manual_registry")
+        self.assertFalse(result.degraded)
+
     def test_second_scan_comes_from_cache(self):
         tmp = Path(tempfile.mkdtemp())
         root = tmp / "root"
