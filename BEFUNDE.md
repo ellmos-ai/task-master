@@ -100,7 +100,7 @@
 
 ## Befund 6 — Aufgaben zeigen auf nicht registrierte Arbeitsklone
 
-**Beobachtet 2026-08-24, vier belegte Faelle, unbehoben.**
+**Beobachtet 2026-08-24, sechs belegte Faelle, unbehoben.**
 
 > **Nachtrag 2026-08-24, 04:45 — der urspruengliche Befund war zu breit.**
 > Er nannte #2097 und #2098 als "zwei Faelle in Folge". Die Pruefung von #2098
@@ -197,6 +197,45 @@ epos\` liegen **zehn** Klone
   das seit 2026-08-11 viermal geskippt; der Selektor liefert es trotzdem in jeder
   Runde. Nicht bearbeitet, Klaerung als D-20260824-004. Der Befund steht damit auf
   vier Faellen.
+- **Fuenfter Fall — UpToday (2026-08-24, #792/#803/#798), Plan-D-Limbo:** Hier ist
+  der Task-Pfad `.SOFTWARE\ASSISTENT\RDY_FAST_UpToday_SOCIAL` **korrekt und lebt** —
+  er zeigt auf das echte, vollstaendige Projekt. Der Bruch liegt woanders: Das
+  Projekt ist nur halb nach Plan D umgestellt. Das `.git` wurde aus OneDrive
+  entfernt, aber es existiert weder ein Pointer noch ein Arbeitsklon mit Inhalt
+  noch ein Remote; die Registry fuehrt einzig einen **docs-only Evidence-Klon**
+  (`UpToday-tasksolver-792-803-798`: 5 readback-Dateien, kein Remote, kein
+  Projektinhalt). Damit gibt es keinen gueltigen Ort fuer git-getrackte Arbeit:
+  OneDrive-Schreibzugriffe tragen Cloud-Lock-/A7-Risiko (`cldflt.sys` aktiv), und
+  der Evidence-Klon ist leer. Die Facette gegenueber den Vorfaellen: nicht toter
+  Pfad (wie roshambo/VermieterZentrale) und nicht Klon-Vermehrung mit
+  git-in-OneDrive (wie StreamingGuide), sondern ein an sich richtig adressiertes
+  Projekt, das nie sauber migriert wurde und darum ein ganzes
+  store-readiness-Buendel blockiert. Alle drei DoDs sind real offen (Flutter-
+  Ampeln auf `_AmpelStatus.empty`, Store-Icons 44/150/300 fehlen, Lizenz-Generator
+  braucht `pip-licenses` + Klon); #792 zusaetzlich Flutter-blockiert
+  (D-002-Klasse). Codex hat das Buendel vom 2026-08-11 bis 2026-08-13 viermal als
+  `blocked_foreign_state` zurueckgestellt; der Selektor liefert es weiter. Nicht
+  bearbeitet, Klaerung als D-20260824-006. Der Befund steht damit auf fuenf
+  Faellen.
+- **Sechster Fall — FinancialProof (2026-08-24, #612/#613/#614), zweiter
+  FINANCE-Mismatch:** Dasselbe Muster wie der vierte Fall (VermieterZentrale),
+  sogar mit demselben Zielordner. Der Selektorpfad
+  `.SOFTWARE\ASSISTENT\REL-PUB_FinancialProof` **existiert nicht** (Parent
+  ASSISTENT enthaelt kein FinancialProof); die Registry fuehrt nur einen leeren
+  docs-only Evidence-Klon (`FinancialProof-tasksolver-612-613-609`: 4 readback-
+  Dateien, kein Remote). Das echte Projekt liegt im **anderen** Themenordner
+  `.SOFTWARE\FINANCE\REL-PUB_FinancialProof`. Damit ist FINANCE zum **zweiten
+  Mal** der wahre Ort eines ASSISTENT/CASH-adressierten Tasks — das Muster ist
+  nicht mehr Einzelfall, sondern themenordner-systematisch. Verschaerfend
+  gegenueber VermieterZentrale: Die FINANCE-Kopie hat einen **eigenen
+  `.git`-Bestand IN OneDrive** (Plan-D-Verstoss, Korruptionsquelle) plus
+  `data/financial.db` und `data/.key` — eine Finanz-DB und ein Geheimnis unter
+  synchronisiertem git; das ist zusaetzlich Security-/MAINTAINER-relevant (nicht
+  inspiziert, um das Geheimnis nicht anzufassen). Codex hat den Pfad viermal als
+  stale-Discovery zurueckgestellt. Faellt unter dieselbe Owner-Entscheidung wie
+  D-004 (Pfad-Korrektur ASSISTENT->FINANCE + Plan-D-Migration); keine separate
+  Entscheidung, um D-004 nicht zu duplizieren. Der Befund steht damit auf sechs
+  Faellen.
 - **Naechster Schritt:** Owner-Entscheidung, ob (a) der TASKWRITER Pfade beim
   Erfassen gegen `repos.json` aufloest, (b) der Selektor eine Abweichung
   meldet statt sie durchzureichen, oder (c) die verwaisten Suffix-Klone
