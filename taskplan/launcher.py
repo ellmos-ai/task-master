@@ -37,7 +37,7 @@ PROBE_ENV = "TASKPLAN_STARTER_PROBE"
 CLAUDE_MCP_ENV = "TASKPLAN_CLAUDE_MCP_CONFIG"
 AGY_SCHEDULE_MINUTES_ENV = "TASKPLAN_AGY_SCHEDULE_MINUTES"
 
-PROBE_TOKEN = "TASKPLAN_PROBE_OK"
+PROBE_TOKEN = "COMA_SESSION_PROBE_OK"
 PROBE_REQUEST = f"Reply with exactly {PROBE_TOKEN} and nothing else."
 DEFAULT_PROBE_TIMEOUT = 120.0
 
@@ -95,7 +95,7 @@ def _configured_runtime(key: str, provider: str) -> tuple[str, str]:
     return values["model"].strip(), values["reasoning_effort"].strip()
 
 
-def _provider_commands(
+def _builtin_provider_commands(
     role: str,
     provider: str,
     *,
@@ -233,7 +233,9 @@ def _provider_commands(
         if trusted:
             base.append("--yolo")
         base.extend(["--model", model])
-        boot = base + ["--prompt", request_with_path]
+        # Kimi 0.31.0 lehnt -p zusammen mit --yolo/--auto ab. Der Boot bleibt
+        # deshalb ohne Trust-Flag; nur die anschliessende Sitzung erbt --yolo.
+        boot = [executable, "--model", model, "-p", request_with_path]
         if not external:
             return [boot], prompt_path
         # Externe Rolle: nach dem headless-Boot uebernimmt der Mensch dieselbe
@@ -252,14 +254,163 @@ def _provider_commands(
     return [command], prompt_path
 
 
+def _coma_api():
+    """Optionale COMA-Sitzungs-API oder ``None`` fuer den Built-in-Fallback.
+
+    task-master bleibt absichtlich ohne harte Paketabhaengigkeit. Ein altes
+    COMA ohne den E01-Vertrag wird wie ein fehlendes COMA behandelt; fachliche
+    Fehler aus einem vorhandenen aktuellen Vertrag werden nicht verschluckt.
+    """
+    try:
+        from coma import session as api
+    except ImportError:
+        return None
+    required = (
+        "Candidate", "available_candidates", "build_probe_command",
+        "build_session_plan", "ordered_candidates", "probe",
+    )
+    return api if all(hasattr(api, name) for name in required) else None
+
+
+def _coma_provider_commands(
+    role: str,
+    provider: str,
+    *,
+    env: Mapping[str, str],
+    model: str,
+    effort: str,
+    prompt_path: Path,
+    request: str,
+    session_name: str,
+    mode: str,
+) -> tuple[list[list[str]], Path] | None:
+    api = _coma_api()
+    if api is None:
+        return None
+    trusted = _truthy(env.get(TRUST_ENV, ""))
+    executable = shutil.which(provider)
+    if not executable:
+        raise ValueError(f"CLI für Provider {provider!r} wurde nicht gefunden.")
+    try:
+        plan = api.build_session_plan(
+            provider,
+            prompt_file=prompt_path,
+            request=request,
+            mode=mode,
+            model=model,
+            effort=effort,
+            session_name=(session_name or role).strip().upper(),
+            cwd=_workdir(env),
+            trusted=trusted,
+            mcp_config=env.get(CLAUDE_MCP_ENV, "").strip() or None,
+            executable=executable,
+            # task-master besitzt bereits einen getesteten Kimi-Vertrag. COMA
+            # darf ihn bauen; seine Kandidatenauswahl bleibt separat fail-closed.
+            allow_unverified=(provider == "kimi"),
+        )
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"COMA-Sitzungsplan fehlgeschlagen: {exc}") from exc
+    return [list(command) for command in plan.commands], prompt_path
+
+
+def _provider_commands(
+    role: str,
+    provider: str,
+    *,
+    env: Mapping[str, str],
+    model: str = "",
+    effort: str = "",
+    prompt_path: Path | None = None,
+    request: str = "",
+    session_name: str = "",
+) -> tuple[list[list[str]], Path]:
+    """Bevorzugt COMA; die bisherige Implementierung bleibt Notfallback."""
+    if _coma_api() is None:
+        return _builtin_provider_commands(
+            role,
+            provider,
+            env=env,
+            model=model,
+            effort=effort,
+            prompt_path=prompt_path,
+            request=request,
+            session_name=session_name,
+        )
+    external = prompt_path is not None
+    if not model or not effort:
+        cfg_model, cfg_effort = _configured_runtime(role, provider)
+        model = model or cfg_model
+        effort = effort or cfg_effort
+    model, effort = model.strip(), effort.strip()
+    if provider != "codex" and not model:
+        raise ValueError(
+            f"Kein Modell konfiguriert: [providers.{provider}.models] {role} = \"...\""
+        )
+    if provider != "codex" and not effort:
+        raise ValueError(
+            f"Kein Reasoning/Thinking konfiguriert: "
+            f"[providers.{provider}.reasoning_effort] {role} = \"...\""
+        )
+    if external:
+        if not request.strip():
+            raise ValueError("Externe Rolle ohne Nutzerauftrag: --request \"...\" fehlt.")
+        resolved_prompt = prompt_path
+    else:
+        resolved_prompt = get_workflow_prompt_path(role.upper())
+        schedule_minutes = None
+        if provider == "agy":
+            raw_schedule = env.get(AGY_SCHEDULE_MINUTES_ENV, "").strip()
+            if raw_schedule:
+                try:
+                    schedule_minutes = int(raw_schedule)
+                except ValueError as exc:
+                    raise ValueError(
+                        f"{AGY_SCHEDULE_MINUTES_ENV} muss eine positive Ganzzahl sein"
+                    ) from exc
+                if schedule_minutes <= 0:
+                    raise ValueError(
+                        f"{AGY_SCHEDULE_MINUTES_ENV} muss eine positive Ganzzahl sein"
+                    )
+        prompt_kwargs: dict[str, object] = {"schedule_minutes": schedule_minutes}
+        if role == OPERATOR:
+            prompt_kwargs["operator_mode"] = normalize_operator_mode(
+                env.get(OPERATOR_MODE_ENV, "")
+            )
+        request = startup_prompt(role, provider, **prompt_kwargs)
+
+    planned = _coma_provider_commands(
+        role,
+        provider,
+        env=env,
+        model=model,
+        effort=effort,
+        prompt_path=resolved_prompt,
+        request=request,
+        session_name=session_name,
+        mode="interactive" if (provider != "kimi" or external) else "headless",
+    )
+    if planned is not None:
+        return planned
+    return _builtin_provider_commands(
+        role,
+        provider,
+        env=env,
+        model=model,
+        effort=effort,
+        prompt_path=prompt_path,
+        request=request if external else "",
+        session_name=session_name,
+    )
+
+
 def _provider_command(role: str, provider: str, **kwargs) -> tuple[list[str], Path]:
     """Das erste (im Regelfall einzige) Kommando eines Starts."""
     commands, prompt_path = _provider_commands(role, provider, **kwargs)
     return commands[0], prompt_path
 
 
-def _probe_command(provider: str, executable: str, model: str,
-                   effort: str) -> list[str]:
+def _builtin_probe_command(provider: str, executable: str, model: str,
+                           effort: str) -> list[str]:
     """Einmaliger Print-Modus-Aufruf, der nur den Token ausgeben soll."""
     if provider == "claude":
         # Ohne MCP-Server: die Sonde prueft das Modell, nicht das Profil.
@@ -304,8 +455,8 @@ def _terminate(proc: subprocess.Popen) -> None:
         proc.kill()
 
 
-def probe(command: Sequence[str], timeout: float = DEFAULT_PROBE_TIMEOUT,
-          *, cwd: Path | None = None) -> tuple[bool, str]:
+def _builtin_probe(command: Sequence[str], timeout: float = DEFAULT_PROBE_TIMEOUT,
+                   *, cwd: Path | None = None) -> tuple[bool, str]:
     """Erfolgreich, sobald der Token im Ausgabestrom steht.
 
     Der Exit-Code taugt NICHT als Kriterium (gemessen 2026-09-06): agy druckt
@@ -359,6 +510,27 @@ def probe(command: Sequence[str], timeout: float = DEFAULT_PROBE_TIMEOUT,
     return False, f"Exit {proc.returncode} ohne {PROBE_TOKEN}"
 
 
+def _probe_command(provider: str, executable: str, model: str,
+                   effort: str) -> list[str]:
+    api = _coma_api()
+    if api is None:
+        return _builtin_probe_command(provider, executable, model, effort)
+    try:
+        return api.build_probe_command(
+            provider, executable, model=model, effort=effort
+        )
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"COMA-Sonde konnte nicht geplant werden: {exc}") from exc
+
+
+def probe(command: Sequence[str], timeout: float = DEFAULT_PROBE_TIMEOUT,
+          *, cwd: Path | None = None) -> tuple[bool, str]:
+    api = _coma_api()
+    if api is None:
+        return _builtin_probe(command, timeout, cwd=cwd)
+    return api.probe(command, timeout, cwd=cwd)
+
+
 def _fallback_order(provider: str) -> tuple[str, ...]:
     """Reihenfolge der Ersatz-Provider; Default ist die Paketreihenfolge."""
     configured = execution_config().get("fallback_providers")
@@ -376,8 +548,8 @@ def _fallback_order(provider: str) -> tuple[str, ...]:
     return tuple(order)
 
 
-def _candidates(key: str, provider: str, *, model: str, effort: str,
-                fallback: bool) -> tuple[list[Candidate], list[str]]:
+def _builtin_candidates(key: str, provider: str, *, model: str, effort: str,
+                        fallback: bool) -> tuple[list[Candidate], list[str]]:
     """Kandidatenkette und die sichtbaren Gruende der uebersprungenen Eintraege.
 
     Reihenfolge: die ausdrueckliche Wahl, danach die Provider-Defaults
@@ -414,6 +586,47 @@ def _candidates(key: str, provider: str, *, model: str, effort: str,
             continue
         chain.append(candidate)
     return chain, skipped
+
+
+def _candidates(key: str, provider: str, *, model: str, effort: str,
+                fallback: bool) -> tuple[list[Candidate], list[str]]:
+    """Bezieht Reihenfolge und Verfuegbarkeitsfilter bevorzugt aus COMA."""
+    api = _coma_api()
+    if api is None:
+        return _builtin_candidates(
+            key, provider, model=model, effort=effort, fallback=fallback
+        )
+
+    cfg_model, cfg_effort = _configured_runtime(key, provider)
+    primary = api.Candidate(
+        provider, model.strip() or cfg_model, effort.strip() or cfg_effort
+    )
+    provider_default = None
+    if fallback and (model.strip() or effort.strip()):
+        provider_default = api.Candidate(provider, cfg_model, cfg_effort)
+    fallback_candidates = []
+    if fallback:
+        for name in _fallback_order(provider):
+            fallback_model, fallback_effort = _configured_runtime(key, name)
+            fallback_candidates.append(
+                api.Candidate(name, fallback_model, fallback_effort)
+            )
+    ordered = api.ordered_candidates(
+        primary,
+        provider_default=provider_default,
+        fallbacks=fallback_candidates,
+    )
+    available, skipped = api.available_candidates(
+        ordered,
+        which=shutil.which,
+        # task-master besitzt bereits einen eigenen getesteten Kimi-Vertrag;
+        # COMAs allgemeiner Direktstart bleibt trotzdem standardmaessig zu.
+        allow_unverified=True,
+    )
+    return [
+        Candidate(item.provider, item.model, item.effort)
+        for item in available
+    ], list(skipped)
 
 
 def _ask_one(ask, label: str, default: str, choices: Sequence[str],
@@ -560,6 +773,10 @@ def launch(
               file=sys.stderr)
         return 1
 
+    if _coma_api() is None:
+        print("[FALLBACK] COMA-Sitzungs-API fehlt oder ist inkompatibel; "
+              "verwende den eingefrorenen task-master-Built-in.")
+
     try:
         operator_mode = ""
         if key == OPERATOR:
@@ -642,6 +859,7 @@ def launch(
                 _probe_command(candidate.provider, commands[0][0],
                                candidate.model, candidate.effort),
                 timeout,
+                cwd=workdir,
             )
             print(f"[SONDE] {candidate.provider} "
                   f"{candidate.model or CODEX_DEFAULT_LABEL}: {reason}")

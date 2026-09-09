@@ -44,6 +44,9 @@ class _LauncherFixture(unittest.TestCase):
         self.env = {"TASKPLAN_WORKDIR": self.workdir}
         self.prompt = Path(self.workdir) / "EXTERN.txt"
         self.prompt.write_text("externe Rollenanweisung", encoding="utf-8")
+        (Path(self.workdir) / "TASKSOLVER.txt").write_text(
+            "interne Rollenanweisung", encoding="utf-8"
+        )
         self.stack = [
             mock.patch("taskplan.launcher.runtime_profile", _profile),
             # Externe Rollen duerfen ihr Modell nicht aus der Host-Konfiguration
@@ -140,9 +143,10 @@ class TestExternalRole(_LauncherFixture):
     def test_kimi_boots_headless_then_continues_interactively(self):
         commands, _ = self._external("kimi")
         self.assertEqual(len(commands), 2)
-        self.assertIn("--prompt", commands[0])
+        self.assertIn("-p", commands[0])
+        self.assertNotIn("--yolo", commands[0])
         self.assertEqual(commands[1][-1], "--continue")
-        self.assertNotIn("--prompt", commands[1])
+        self.assertNotIn("-p", commands[1])
 
     def test_taskplan_roles_keep_the_single_stage_kimi_contract(self):
         commands, _ = launcher._provider_commands(
@@ -299,7 +303,8 @@ class TestFallbackChain(_LauncherFixture):
             code, text, _runner = self._run("tasksolver", "claude")
         self.assertEqual(code, 0)
         self.assertIn("agy — CLI nicht gefunden", text)
-        self.assertIn("kimi — kein Eintrag in [providers.kimi.models]", text)
+        self.assertIn("kimi — kein", text)
+        self.assertIn("Modell", text)
 
     def test_configured_fallback_order_is_honoured(self):
         with mock.patch("taskplan.launcher.execution_config",

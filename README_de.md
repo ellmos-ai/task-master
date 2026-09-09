@@ -445,6 +445,13 @@ Starter fest verdrahtet.
 
 ### Modellsonde und Provider-Fallback
 
+Wenn COMA seine E01-Sitzungs-API bereitstellt, bezieht TASKPLAN Anbieter-argv,
+Fähigkeitsfilter, Sondenbau und Prozess-Cleanup aus diesem gemeinsamen Vertrag.
+TASKPLAN bleibt für Rollen, Prompts und Host-Konfiguration zuständig. Fehlt COMA
+oder ist die installierte Fassung zu alt, meldet `launch` sichtbar `[FALLBACK]`
+und nutzt den eingefrorenen Built-in. Gemeinsame argv-Vertragstests schützen
+beide Wege vor Drift.
+
 Ein Modellname, den es nicht mehr gibt, beendete bisher den Start: Die CLI brach
 ab, und der Nutzer stand ohne Worker da — obwohl drei weitere Anbieter
 installiert sind. `launch` baut deshalb eine Kandidatenkette und prüft jeden
@@ -457,7 +464,7 @@ gewählten). Kandidaten ohne CLI im `PATH` oder ohne Modelleintrag werden mit
 sichtbarem Grund übersprungen.
 
 Jeder Kandidat bekommt eine Sonde: einen einmaligen Print-Modus-Aufruf, der
-`TASKPLAN_PROBE_OK` ausgeben soll. **Erfolgsmerkmal ist der Token im
+`COMA_SESSION_PROBE_OK` ausgeben soll. **Erfolgsmerkmal ist der Token im
 Ausgabestrom, nicht der Exit-Code.** Gemessen am 2026-09-06: agy druckt den Token
 und beendet sich danach nie — dieser Lauf endet im Kill nach dem Timeout —,
 während claude und codex bei falschem Modellnamen mit Exit `1` und ohne Token
@@ -500,7 +507,7 @@ ticket-master = "opus"
 ```
 
 Kimi läuft dabei zweistufig, weil seine CLI einen freien Startauftrag nur
-headless annimmt: Boot per `--prompt`, danach dieselbe Konversation interaktiv
+headless annimmt: Boot per `-p`, danach dieselbe Konversation interaktiv
 per `--continue`. Für TASKPLAN-Rollen bleibt der bisherige einstufige Vertrag.
 
 ### Gebündelte Starter

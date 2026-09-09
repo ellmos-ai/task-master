@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Added (0.7.0)
+- `taskplan launch` bevorzugt COMAs E01-Sitzungs-API für Anbieter-argv,
+  Fähigkeitsfilter, Sonde und Cleanup. Fehlt die optionale API, bleibt der
+  bisherige Launcher als sichtbar gemeldeter `[FALLBACK]` verfügbar.
+- Ein optionaler Vertragstest vergleicht COMA und den eingefrorenen Built-in für
+  Claude, Codex, Agy und Kimi einschließlich Unicode-Promptpfaden.
+- Kimi startet den Headless-Boot mit dem belegten `-p`; `--yolo` bleibt aus
+  diesem inkompatiblen Bootschritt entfernt.
+
 ### Fixed (0.6.1)
 - Interaktive Abfragen (Modus, Anbieter, Modell, Reasoning) nehmen Nummern `[1] ...`
   oder Namen; Unbekanntes wird bis zu dreimal neu gefragt statt mit Traceback

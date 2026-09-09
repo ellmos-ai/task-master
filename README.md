@@ -429,6 +429,13 @@ the launcher.
 
 ### Model probe and provider fallback
 
+When COMA exposes its E01 session API, TASKPLAN delegates provider argv,
+capability filtering, probe construction and process cleanup to that shared
+contract. TASKPLAN still owns roles, prompts and host configuration. If COMA is
+missing or too old, `launch` prints `[FALLBACK]` and uses the frozen built-in
+implementation; this keeps existing installations startable while the shared
+contract tests protect both argv paths from drift.
+
 A model name that no longer exists used to end the start: the CLI aborted and
 the user had no worker, although three other providers were installed. `launch`
 therefore builds a candidate chain and tests each candidate before handing over
@@ -441,7 +448,7 @@ Candidates whose CLI is not on `PATH`, or which have no model entry, are skipped
 with a visible reason.
 
 Each candidate is probed with one print-mode call that must emit
-`TASKPLAN_PROBE_OK`. **Success is the token appearing in the output stream, not
+`COMA_SESSION_PROBE_OK`. **Success is the token appearing in the output stream, not
 the exit code.** Measured on 2026-09-06: agy prints the token and then never
 exits — that run ends in a kill after the timeout — while claude and codex exit
 `1` without a token when the model name is wrong. Judging by the return value
@@ -483,7 +490,7 @@ ticket-master = "opus"
 ```
 
 Kimi runs this in two stages, because its CLI accepts a free startup request only
-headless: boot with `--prompt`, then continue the same conversation with
+headless: boot with `-p`, then continue the same conversation with
 `--continue`. TASKPLAN roles keep the existing single-stage contract.
 
 ### Packaged launchers
