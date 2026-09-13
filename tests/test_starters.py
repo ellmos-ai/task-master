@@ -238,6 +238,8 @@ class TestCentralLauncher(unittest.TestCase):
         with mock.patch("taskplan.launcher.active_roles",
                         return_value={"tasksolver": True}), \
                 mock.patch("taskplan.launcher.doctor", return_value=0), \
+                mock.patch("taskplan.launcher.ensure_initialised",
+                           return_value=0), \
                 patches[0], patches[1], patches[2], patches[3], \
                 redirect_stdout(output):
             code = launch("tasksolver", "codex", env=env, run=runner)
@@ -256,6 +258,8 @@ class TestCentralLauncher(unittest.TestCase):
         with mock.patch("taskplan.launcher.active_roles",
                         return_value={"tasksolver": True}), \
                 mock.patch("taskplan.launcher.doctor", return_value=0), \
+                mock.patch("taskplan.launcher.ensure_initialised",
+                           return_value=0), \
                 mock.patch("taskplan.launcher.runtime_profile",
                            return_value=profile), \
                 mock.patch("taskplan.launcher.startup_prompt",

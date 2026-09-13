@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+### Added (0.8.0)
+- **Readiness-Gate: `python -m taskplan init`** (T-20260831-555678565,
+  Nutzerentscheid E05=A vom 2026-09-11). Ein eigener, idempotenter
+  Einrichtungsschritt misst einmal alle Projekte, zeigt Fortschritt und schreibt
+  erst bei vollstaendigem Erfolg eine versionsgebundene Bereitschaftsmarke. Bis
+  dahin sind ALLE Rollenstarts fail-closed gesperrt; `next` endet mit dem neuen
+  Exitcode `4 / NOT_INITIALISED` und nennt den exakten Reparaturbefehl. Die
+  mitgelieferten Starter holen den Lauf selbst nach und melden erst danach
+  Erfolg; `pip install` bleibt bewusst ohne Post-Install-Hook. `--rebuild`
+  verwirft den Index, `--skip-unreadable` laesst unlesbare Projekte bewusst aus,
+  `--json` liefert den Bericht maschinenlesbar. `doctor` weist den
+  Bereitschaftsstand aus und wird ohne ihn non-green.
+- **Persistenter Projekt-Index (`taskplan_project_index`).** `init` speichert je
+  Projekt Fingerabdruck und Siegelwert; spaetere Laeufe lesen die Dateiinhalte
+  nur noch, wenn sich Pfad, Groesse oder Zeitstempel geaendert haben. Der
+  Verzeichnislauf findet weiterhin immer statt. Bekannte Grenze, bewusst in Kauf
+  genommen und dokumentiert: eine Aenderung, die Groesse UND mtime exakt
+  erhaelt, wird nicht erkannt (`init --rebuild` wirft den Index weg).
+- `review_pool.scan_project()` und `digest_records()` trennen den billigen
+  Verzeichnislauf vom teuren Lesen. `hash_project()` ist unveraendert deren
+  Komposition; `ReviewPool(hasher=...)` erlaubt Tests am Index vorbei.
+
+### Migration
+- **Bestehende Installationen brauchen einmalig `python -m taskplan init`.**
+  Vorher startet keine Rolle mehr. Der Befehl legt nur additive Tabellen an und
+  fasst weder Tasks noch Review-Siegel, Leases oder Cursor an.
+
 ### Added (0.7.0)
 - `taskplan launch` bevorzugt COMAs E01-Sitzungs-API für Anbieter-argv,
   Fähigkeitsfilter, Sonde und Cleanup. Fehlt die optionale API, bleibt der

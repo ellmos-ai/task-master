@@ -42,3 +42,6 @@ build/
 
 # Interne Umbau-/Planungsdokumente
 UMBAU-KONZEPT.md
+
+# Lock-Dateien der Multi-Agenten-Koordination gehoeren nie ins Repo.
+LOCK*.txt

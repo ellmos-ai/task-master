@@ -194,11 +194,48 @@ tasks.done(1)
 Den Selektor fragen:
 
 ```bash
+python -m taskplan init            # EINMAL PFLICHT: Index wärmen, danach starten Rollen
 python -m taskplan next            # Modus, Aufwand, Projekt, Task-IDs, Rechte
-python -m taskplan doctor          # welche Datenbank benutze ich eigentlich?
+python -m taskplan doctor          # welche Datenbank benutze ich, und bin ich bereit?
 python -m taskplan projects list   # was sieht der Loop?
 python -m taskplan projects markers
 ```
+
+### `init` — der Einrichtungsschritt, den die Rollen voraussetzen
+
+Jeder Rollenstart ist **fail-closed** gesperrt, bis `init` auf diesem System
+einmal vollständig durchgelaufen ist. Der Grund ist nicht, dass die Arbeit
+anfällt, sondern wo: Der Review-Pool braucht je Projekt einen Inhalts-Hash, und
+auf einem cloud-synchronisierten Baum saß der allererste `next` dafür minutenlang
+stumm da.
+
+`init` verlegt diesen Lauf an einen sichtbaren Ort mit Fortschrittsanzeige, legt
+die gemessenen Hashes in `taskplan_project_index` ab und schreibt **erst danach**
+die Bereitschaftsmarke — atomar und nur bei vollständigem Erfolg. Ein abgebrochener
+Lauf hinterlässt deshalb nie eine falsche Marke; der bereits geschriebene Index
+bleibt liegen und macht den Wiederanlauf billig. Wiederholte Läufe sind idempotent
+und messen nur nach, was sich geändert hat.
+
+```bash
+python -m taskplan init --json              # maschinenlesbarer Bericht
+python -m taskplan init --rebuild           # Index verwerfen und neu messen
+python -m taskplan init --skip-unreadable   # unlesbare Projekte bewusst auslassen
+```
+
+`pip install` bekommt bewusst **keinen** Post-Install-Hook: Eine Wheel-Installation
+darf nicht minutenlang auf Cloud-I/O warten und nicht auf halbem Weg abbrechen. Die
+mitgelieferten Starter (`python -m taskplan launch ...`) rufen `init` selbst auf und
+melden erst danach Erfolg.
+
+**Bestehende Installationen** brauchen die einzeilige Migration
+`python -m taskplan init`. Bis dahin endet jede Rolle mit `4 / NOT_INITIALISED`
+und nennt genau diesen Befehl.
+
+Der Index ist ein Beschleuniger, nie Autorität: Der Fingerabdruck einer Datei ist
+`(relativer Pfad, Größe, mtime_ns)`, nicht ihr Inhalt. Eine Änderung, die Größe und
+Zeitstempel exakt erhält, wird nicht erkannt — der bewusste Preis dafür, nicht bei
+jedem `next` erneut jedes Byte zu lesen. Wer ein Siegel anzweifelt, wirft den Index
+mit `init --rebuild` weg.
 
 `next` schreibt dieselbe verständliche Bezeichnung in die Konsole und mit `--json`
 in `exit.code`, `exit.name` und das lokalisierte Feld `exit.meaning`:
@@ -209,6 +246,7 @@ in `exit.code`, `exit.name` und das lokalisierte Feld `exit.meaning`:
 | `1` | `NO_WORK` | Rolle aktiv, aber derzeit kein zulässiges Bündel |
 | `2` | `ROLE_DISABLED` | Rolle ist in der Konfiguration deaktiviert |
 | `3` | `RETRYABLE_SELECTOR_ERROR` | Wiederholbarer Selektor-/Discovery-Fehler |
+| `4` | `NOT_INITIALISED` | TASKPLAN ist nicht initialisiert; `python -m taskplan init` ausführen |
 
 Reine MAINTAINER-Projektbündel und TASKWRITER-Erfassungsläufe enthalten
 absichtlich keine Task-IDs. Sie verwenden ein getrenntes, hostlokales Siegel je

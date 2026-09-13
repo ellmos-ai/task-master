@@ -6,6 +6,7 @@ from unittest import mock
 
 from taskplan import runner
 from taskplan.client import TaskClient
+from taskplan.readiness import initialize
 from taskplan.review_pool import ReviewPolicy, ReviewPool
 from taskplan.selector import SelectorConfig
 from taskplan.traversal import Project
@@ -42,6 +43,10 @@ class TestReviewPoolRunnerIntegration(unittest.TestCase):
             path.mkdir()
             (path / "project.txt").write_text(name, encoding="utf-8")
             self.projects.append(Project(path, ".TEST"))
+        # Rollenstarts sind ohne Initiallauf fail-closed gesperrt
+        # (T-20260831-555678565). Der Test bildet eine eingerichtete
+        # Installation ab, nicht eine frische.
+        initialize(self.client, self.projects, exclude=self.policy.exclude)
 
     def tearDown(self):
         self.tmp.cleanup()

@@ -54,6 +54,8 @@ class TestRotationState(unittest.TestCase):
                  "project_path": "/p/second"},
             ])
             with mock.patch.object(runner, "TaskClient", return_value=store), \
+                    mock.patch.object(runner, "readiness_status",
+                                      return_value={"ready": True, "state": "ready", "reason": "", "repair": ""}), \
                     mock.patch.object(runner, "_lock_view",
                                       return_value=(LockView(), "lockmaster")), \
                     mock.patch.object(runner, "active_roles",
@@ -84,6 +86,8 @@ class TestRotationState(unittest.TestCase):
             ]
             store = _Store([])
             with mock.patch.object(runner, "TaskClient", return_value=store), \
+                    mock.patch.object(runner, "readiness_status",
+                                      return_value={"ready": True, "state": "ready", "reason": "", "repair": ""}), \
                     mock.patch.object(runner, "_lock_view",
                                       return_value=(LockView(), "lockmaster")), \
                     mock.patch.object(runner, "active_roles",
@@ -123,6 +127,8 @@ class TestRotationState(unittest.TestCase):
                  "effort": "easy", "scope": "local"},
             ])
             with mock.patch.object(runner, "TaskClient", return_value=store), \
+                    mock.patch.object(runner, "readiness_status",
+                                      return_value={"ready": True, "state": "ready", "reason": "", "repair": ""}), \
                     mock.patch.object(runner, "_lock_view",
                                       return_value=(LockView(), "lockmaster")), \
                     mock.patch.object(runner, "active_roles",
