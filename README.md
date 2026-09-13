@@ -189,11 +189,46 @@ tasks.done(1)
 Ask the selector what to do next:
 
 ```bash
+python -m taskplan init            # REQUIRED ONCE: warm the index, then roles may start
 python -m taskplan next            # mode, effort, project, task IDs, permissions
-python -m taskplan doctor          # which database am I actually using?
+python -m taskplan doctor          # which database am I actually using, and am I ready?
 python -m taskplan projects list   # what does the loop see?
 python -m taskplan projects markers
 ```
+
+### `init` — the setup step the roles depend on
+
+Every role start is **fail-closed** until `init` has completed successfully once
+on this host. The reason is where the cost falls, not that it exists: the review
+pool needs a content hash per project, and on a cloud-synced tree the very first
+`next` used to sit silently for minutes while doing exactly that work.
+
+`init` moves that run into a visible place with progress output, stores the
+measured hashes in `taskplan_project_index`, and only then writes the readiness
+marker — atomically, and only on full success. An aborted run therefore never
+leaves a false marker; the partial index it did write survives and makes the
+retry cheap. Repeat runs are idempotent and re-measure only what changed.
+
+```bash
+python -m taskplan init --json              # machine-readable report
+python -m taskplan init --rebuild           # discard the index and measure again
+python -m taskplan init --skip-unreadable   # accept projects that cannot be read
+```
+
+`pip install` deliberately has **no** post-install hook: a wheel install must not
+block for minutes on cloud I/O and must not fail halfway. The bundled starters
+(`python -m taskplan launch ...`) run `init` themselves and report success only
+afterwards.
+
+**Existing installations** need the one-line migration `python -m taskplan init`
+once. Until then every role exits `4 / NOT_INITIALISED` and prints that exact
+command.
+
+The index is an accelerator, never authority: a file's fingerprint is
+`(relative path, size, mtime_ns)`, not its content. A change that preserves both
+size and timestamp is not detected — the deliberate price for not reading every
+byte on every `next`. If a seal is ever in doubt, throw the index away with
+`init --rebuild`.
 
 `next` writes the same human-readable designation to the console and, with
 `--json`, to `exit.code`, `exit.name`, and localized `exit.meaning`:
@@ -204,6 +239,7 @@ python -m taskplan projects markers
 | `1` | `NO_WORK` | Role is active, but no eligible bundle is currently available |
 | `2` | `ROLE_DISABLED` | Role is disabled in configuration |
 | `3` | `RETRYABLE_SELECTOR_ERROR` | Retryable selector/discovery error |
+| `4` | `NOT_INITIALISED` | TASKPLAN is not initialised; run `python -m taskplan init` |
 
 Project-only MAINTAINER bundles and TASKWRITER discovery sweeps intentionally
 contain no task IDs. They use a separate, host-local seal per `(role, project)` in

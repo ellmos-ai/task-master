@@ -31,6 +31,7 @@ from .config import (
     traversal_config,
 )
 from .locks import CREATE, MODIFY, READ, build_lock_view
+from .readiness import readiness_status
 from .discovery import (
     DiscoveryConfigurationError,
     validate_discovery_configuration,
@@ -124,6 +125,18 @@ def next_work(role: str = "tasksolver") -> dict:
                 "reason": f"Rolle '{role}' ist in der Konfiguration abgeschaltet."}
 
     store = TaskClient()
+
+    # Fail-closed vor allem anderen: Ohne belegten Initiallauf hat der
+    # Review-Pool keinen Index, und ein Rollenstart wuerde den teuren Erstlauf
+    # in einen Aufruf legen, der schnell sein soll (T-20260831-555678565).
+    gate = readiness_status(store, review_pool_config().exclude)
+    if not gate["ready"]:
+        return {
+            "role": role, "active": False, "not_initialised": True,
+            "readiness_state": gate["state"], "repair": gate["repair"],
+            "reason": gate["reason"], "db": str(store.db_path),
+        }
+
     view, provider = _lock_view()
 
     config = selector_config()
@@ -342,10 +355,17 @@ EXIT_STATUS = {
         "de": "Wiederholbarer Selektor-/Discovery-Fehler",
         "en": "Retryable selector/discovery error",
     },
+    4: {
+        "name": "NOT_INITIALISED",
+        "de": "TASKPLAN ist nicht initialisiert; Rollenstart gesperrt",
+        "en": "TASKPLAN is not initialised; role start is blocked",
+    },
 }
 
 
 def _exit_code(work: dict) -> int:
+    if work.get("not_initialised"):
+        return 4
     if not work.get("active", True):
         return 2
     if work.get("retryable"):
@@ -380,6 +400,9 @@ def run(role: str = "tasksolver", as_json: bool = False) -> int:
     if not work["active"]:
         print(_exit_line(code))
         print(f"[{role.upper()}] {work['reason']}")
+        if work.get("repair"):
+            print()
+            print(f"  Reparatur : {work['repair']}")
         return code
 
     if work.get("retryable"):

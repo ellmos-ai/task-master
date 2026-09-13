@@ -326,6 +326,80 @@ def _review_command(args: list[str]) -> int:
     return 0
 
 
+def _init_command(args: list[str]) -> int:
+    """Der Einrichtungsschritt: einmal messen, danach duerfen die Rollen starten.
+
+    Absichtlich ein eigener Befehl und KEIN Post-Install-Hook des Paketmanagers
+    (Nutzerentscheid 2026-09-11 zu T-20260831-555678565): Ein Wheel-Install darf
+    nicht minutenlang auf Cloud-I/O warten und auch nicht auf halbem Weg
+    abbrechen. `pip install` bleibt seiteneffektfrei; die eigenen Starter rufen
+    diesen Befehl auf.
+    """
+    import json
+    import sys
+
+    from .client import TaskClient
+    from .config import discovery_timeout_seconds, review_pool_config
+    from .readiness import initialize, readiness_status
+    from .runner import ProjectDiscoveryTimeout, _discover_projects_bounded
+
+    as_json = "--json" in args
+    rebuild = "--rebuild" in args
+    skip_unreadable = "--skip-unreadable" in args
+    quiet = "--quiet" in args or as_json
+
+    store = TaskClient()
+    exclude = review_pool_config().exclude
+
+    if not quiet:
+        print(f"[INIT] Datenbank : {store.db_path}")
+        print("[INIT] Discovery laeuft ...")
+    try:
+        projects = _discover_projects_bounded(
+            discovery_timeout_seconds(), force=rebuild
+        )
+    except (ProjectDiscoveryTimeout, RuntimeError) as exc:
+        message = f"Discovery fehlgeschlagen: {exc}"
+        if as_json:
+            print(json.dumps({"ready": False, "reason": message}, ensure_ascii=False,
+                             indent=2))
+        else:
+            print(message, file=sys.stderr)
+        return 3
+
+    def show(event: dict) -> None:
+        if quiet:
+            return
+        print(
+            f"  [{event['position']:>4}/{event['total']}] "
+            f"{event['elapsed_seconds']:>7.1f}s  {event['project_path']}"
+        )
+
+    report = initialize(
+        store, projects, exclude=exclude, rebuild=rebuild,
+        skip_unreadable=skip_unreadable, progress=show,
+    )
+    report["db"] = str(store.db_path)
+    report["status"] = readiness_status(store, exclude)["state"]
+
+    if as_json:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+    else:
+        print()
+        print(f"[INIT] Projekte    : {report['projects_total']}")
+        print(f"[INIT] Indiziert   : {report['projects_indexed']}")
+        print(f"[INIT] Uebersprungen: {report['projects_skipped']}")
+        print(f"[INIT] Dauer       : {report['duration_seconds']}s")
+        for failure in report["failures"]:
+            print(f"  NICHT LESBAR: {failure['project_path']} — {failure['error']}",
+                  file=sys.stderr)
+        if report["ready"]:
+            print("[INIT] BEREIT — die Rollen duerfen starten.")
+        else:
+            print(f"[INIT] NICHT BEREIT — {report['reason']}", file=sys.stderr)
+    return 0 if report["ready"] else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
     command = args[0] if args else "help"
@@ -334,6 +408,9 @@ def main(argv: list[str] | None = None) -> int:
     if command == "doctor":
         from .doctor import run
         return run()
+
+    if command == "init":
+        return _init_command(rest)
 
     if command == "next":
         from .runner import run
@@ -584,6 +661,13 @@ def main(argv: list[str] | None = None) -> int:
         print("taskplan — Aufgabenverwaltung")
         print()
         print("Befehle:")
+        print("  init [--json] [--rebuild] [--skip-unreadable]")
+        print("            EINMAL PFLICHT je System: misst alle Projekte, zeigt")
+        print("            Fortschritt und markiert erst bei vollem Erfolg als")
+        print("            bereit. Vorher ist JEDER Rollenstart gesperrt.")
+        print("            --rebuild verwirft den Index, --skip-unreadable laesst")
+        print("            unlesbare Projekte bewusst aus.")
+        print()
         print("  next [--role R] [--json]")
         print("            Fragt den SELEKTOR: was ist als naechstes dran?")
         print("            Liefert Modus (surface/deep), Aufwand, Root, Projekt,")
@@ -593,8 +677,10 @@ def main(argv: list[str] | None = None) -> int:
         print("            Exit 2 [ROLE_DISABLED] = Rolle deaktiviert")
         print("            Exit 3 [RETRYABLE_SELECTOR_ERROR] = wiederholbarer")
         print("                    Selektor-/Discovery-Fehler")
+        print("            Exit 4 [NOT_INITIALISED] = 'taskplan init' fehlt")
         print()
-        print("  doctor    Zeigt, welche Datenbank benutzt wird, und warnt bei")
+        print("  doctor    Zeigt, welche Datenbank benutzt wird und ob die")
+        print("            Initialisierung vorliegt; warnt bei")
         print("            widerspruechlichen Fundstellen (leere aktive DB,")
         print("            Daten woanders).")
         print()

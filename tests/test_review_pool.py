@@ -18,6 +18,11 @@ from taskplan.review_pool import (
 from taskplan.traversal import Project
 
 
+def _direct_hasher(project, *, exclude=()):
+    """Loest ``hash_project`` erst beim Aufruf auf -- ein Spy darauf wirkt."""
+    return review_pool_module.hash_project(project, exclude=exclude)
+
+
 class FakeClock:
     def __init__(self, value=None):
         self.value = value or datetime(2026, 8, 31, 8, 0, tzinfo=timezone.utc)
@@ -41,7 +46,14 @@ class ReviewPoolCase(unittest.TestCase):
             retry_interval_seconds=300,
             presentation_lease_seconds=60,
         )
-        self.pool = ReviewPool(self.client, policy=self.policy, clock=self.clock)
+        # Der Pool nutzt im Betrieb den persistenten Index aus
+        # ``taskplan.readiness``. Diese Tests messen aber, WIE OFT der teure
+        # Inhalts-Hash laeuft -- deshalb hier bewusst direkt auf
+        # ``hash_project``, spaet aufgeloest, damit ein Spy darauf greift.
+        self.pool = ReviewPool(
+            self.client, policy=self.policy, clock=self.clock,
+            hasher=_direct_hasher,
+        )
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -121,7 +133,8 @@ class TestReviewSchema(ReviewPoolCase):
         sealed = self.seal("taskwriter", project, "persistiert")
 
         reopened = ReviewPool(
-            TaskClient(self.db), policy=self.policy, clock=self.clock
+            TaskClient(self.db), policy=self.policy, clock=self.clock,
+            hasher=_direct_hasher,
         )
         state = reopened.get_state("taskwriter", project.path)
         self.assertEqual(state["sealed_hash"], sealed["sealed_hash"])

@@ -80,6 +80,32 @@ def run() -> int:
         print(f"  FEHLER: {discovery_error}")
         print()
 
+    readiness_error = ""
+    print("Initialisierung (Readiness-Gate):")
+    try:
+        from .client import TaskClient
+        from .config import review_pool_config
+        from .readiness import readiness_status
+
+        status = readiness_status(TaskClient(), review_pool_config().exclude)
+    except Exception as exc:  # pragma: no cover - Diagnose darf nie selbst brechen
+        readiness_error = f"Readiness nicht pruefbar: {exc}"
+        print(f"  FEHLER: {readiness_error}")
+    else:
+        if status["ready"]:
+            row = status["readiness"]
+            print(f"  bereit seit {row['completed_at']} auf {row['host']}")
+            print(
+                f"  -> {row['projects_indexed']}/{row['projects_total']} Projekte "
+                f"indiziert, {row['projects_skipped']} uebersprungen, "
+                f"{row['duration_seconds']}s"
+            )
+        else:
+            readiness_error = status["reason"]
+            print(f"  NICHT BEREIT ({status['state']}): {status['reason']}")
+            print(f"  Reparatur: {status['repair']}")
+    print()
+
     print("Andere gefundene Task-Datenbanken:")
     warn = False
     found_other = False
@@ -110,7 +136,7 @@ def run() -> int:
         print("    - Konfigurieren: ~/.taskplan/taskplan.toml")
         print("        [storage]")
         print('        path = "<pfad zur richtigen db>"')
-    if warn or discovery_error:
+    if warn or discovery_error or readiness_error:
         return 1
 
     print("OK: Keine widerspruechliche Datenbank gefunden.")

@@ -716,6 +716,35 @@ def _probe_timeout() -> float:
     return value if value > 0 else DEFAULT_PROBE_TIMEOUT
 
 
+def ensure_initialised() -> int:
+    """Holt den Initiallauf nach, falls er fehlt. 0 = bereit, 1 = nicht bereit.
+
+    Der Erstlauf gehoert in die Einrichtung, nicht in den ersten `next`-Aufruf
+    einer Rolle (T-20260831-555678565). Ein unterstuetzter Starter holt ihn
+    deshalb selbst nach und meldet erst danach Erfolg -- genau die Rolle, die
+    ein Post-Install-Hook des Paketmanagers nicht zuverlaessig uebernehmen kann.
+    """
+    from .client import TaskClient
+    from .config import review_pool_config
+    from .readiness import readiness_status
+
+    gate = readiness_status(TaskClient(), review_pool_config().exclude)
+    if gate["ready"]:
+        return 0
+    print(f"[SETUP] {gate['reason']}")
+    print(f"[SETUP] Hole den Initiallauf jetzt nach: {gate['repair']}")
+    from .__main__ import _init_command
+
+    if _init_command([]) == 0:
+        return 0
+    print(
+        "[FEHLER] Initialisierung nicht abgeschlossen — die Rolle startet "
+        "nicht. Ursache oben beheben und erneut starten.",
+        file=sys.stderr,
+    )
+    return 1
+
+
 def launch(
     role: str,
     provider: str = "",
@@ -767,6 +796,9 @@ def launch(
                 "abgeschaltet. Nichts zu tun."
             )
             return 0
+
+    if not external and ensure_initialised() != 0:
+        return 1
 
     if doctor() != 0:
         print("[FEHLER] `python -m taskplan doctor` ist fehlgeschlagen.",

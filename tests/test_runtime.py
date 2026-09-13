@@ -175,6 +175,8 @@ class TestDiscoveryTimeout(unittest.TestCase):
         with mock.patch.object(runner, "active_roles", return_value={
                 "taskwriter": True, "tasksolver": True, "maintainer": True}), \
                 mock.patch.object(runner, "TaskClient", return_value=store), \
+                mock.patch.object(runner, "readiness_status",
+                                  return_value={"ready": True, "state": "ready", "reason": "", "repair": ""}), \
                 mock.patch.object(runner, "_lock_view", return_value=(view, "lockmaster")), \
                 mock.patch.object(runner, "rotation_state_file", return_value=Path("state")), \
                 mock.patch.object(runner, "last_project", return_value=""), \
@@ -198,6 +200,7 @@ class TestDiscoveryTimeout(unittest.TestCase):
                 1: "NO_WORK",
                 2: "ROLE_DISABLED",
                 3: "RETRYABLE_SELECTOR_ERROR",
+                4: "NOT_INITIALISED",
             },
         )
         for status in runner.EXIT_STATUS.values():
@@ -275,6 +278,8 @@ class TestDiscoveryTimeout(unittest.TestCase):
         with mock.patch.object(runner, "active_roles", return_value={
                 "taskwriter": True, "tasksolver": True, "maintainer": True}), \
                 mock.patch.object(runner, "TaskClient", return_value=client), \
+                mock.patch.object(runner, "readiness_status",
+                                  return_value={"ready": True, "state": "ready", "reason": "", "repair": ""}), \
                 mock.patch.object(runner, "_lock_view",
                                   return_value=(mock.Mock(
                                       extra_rules=[],

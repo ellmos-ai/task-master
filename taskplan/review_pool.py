@@ -179,16 +179,22 @@ def _feed_record(target, *fields: bytes) -> None:
         target.update(field)
 
 
-def hash_project(
+def scan_project(
     path: str | Path,
     *,
     exclude: Iterable[str] = (),
-) -> ProjectDigest:
-    """Hasht den fachlich relevanten Projektbestand deterministisch.
+) -> list[tuple[str, str, Path, int, int]]:
+    """Laeuft den Projektbaum EINMAL ab und liefert die relevanten Eintraege.
 
-    Reguläre Dateien werden nach relativem POSIX-Pfad sortiert. Symlinks gehen
-    als Linkziel ein und werden nicht verfolgt. Jeder unklare Lesestand bricht
-    fail-closed ab, statt ein scheinbar gültiges Siegel zu erzeugen.
+    Bewusst getrennt vom Hashen: Der Lauf braucht nur ``scandir`` und ``lstat``
+    und ist damit um Groessenordnungen billiger als das Lesen aller Bytes. Wer
+    nur wissen will, OB sich etwas geaendert hat, kommt damit aus
+    (``taskplan/readiness.py``); wer den Siegelwert braucht, haengt
+    :func:`digest_records` an.
+
+    Rueckgabe je Eintrag: ``(relativer Pfad, "file"|"link", absoluter Pfad,
+    Groesse, mtime_ns)``. Sortiert, NFC-eindeutig, fail-closed bei jedem
+    unklaren Lesestand.
     """
     root = Path(os.path.expandvars(os.fspath(path))).expanduser()
     try:
@@ -198,7 +204,7 @@ def hash_project(
         raise ProjectHashError(f"Projektordner nicht lesbar: {root}: {exc}") from exc
 
     patterns = tuple(DEFAULT_EXCLUDED_FILES) + tuple(exclude)
-    records: list[tuple[str, str, Optional[Path]]] = []
+    records: list[tuple[str, str, Path, int, int]] = []
 
     def walk(directory: Path, parts: tuple[str, ...]) -> None:
         try:
@@ -228,30 +234,50 @@ def hash_project(
                 continue
             if _matches_exclude(relative, patterns):
                 continue
-            if is_link:
-                records.append((relative, "link", Path(entry.path)))
-            elif is_file:
-                records.append((relative, "file", Path(entry.path)))
-            else:
+            if not (is_link or is_file):
                 raise ProjectHashError(f"Nicht unterstützter Sonderdateityp: {relative}")
+            try:
+                info = entry.stat(follow_symlinks=False)
+            except OSError as exc:
+                raise ProjectHashError(
+                    f"Datei-Metadaten nicht lesbar: {relative}: {exc}"
+                ) from exc
+            records.append((
+                relative,
+                "link" if is_link else "file",
+                Path(entry.path),
+                int(info.st_size),
+                int(getattr(info, "st_mtime_ns", int(info.st_mtime * 1_000_000_000))),
+            ))
 
     walk(root, ())
     records.sort(key=lambda row: row[0].encode("utf-8"))
     normalized_paths: set[str] = set()
-    for relative, _kind, _target in records:
+    for row in records:
+        relative = row[0]
         if relative in normalized_paths:
             raise ProjectHashError(
                 "Mehrdeutiger Projektpfad nach NFC-Normalisierung: "
                 f"{relative}"
             )
         normalized_paths.add(relative)
+    return records
 
+
+def digest_records(records: Iterable[tuple[str, str, Path, int, int]]) -> ProjectDigest:
+    """Bildet aus den Eintraegen von :func:`scan_project` das Siegel.
+
+    Das ist der teure Teil: Er liest jede Datei vollstaendig. Die Stat-Werte
+    aus dem Lauf werden hier bewusst NICHT wiederverwendet -- vor und nach dem
+    Lesen wird erneut gemessen, damit eine Datei, die sich waehrend des Lesens
+    aendert, fail-closed auffliegt.
+    """
+    records = list(records)
     digest = hashlib.sha256()
     digest.update(b"taskplan-project-sha256-v1\0")
     byte_count = 0
-    for relative, kind, target in records:
+    for relative, kind, target, _size, _mtime_ns in records:
         relative_bytes = relative.encode("utf-8")
-        assert target is not None
         if kind == "link":
             try:
                 link_target = os.readlink(target)
@@ -304,6 +330,20 @@ def hash_project(
     )
 
 
+def hash_project(
+    path: str | Path,
+    *,
+    exclude: Iterable[str] = (),
+) -> ProjectDigest:
+    """Hasht den fachlich relevanten Projektbestand deterministisch.
+
+    Reguläre Dateien werden nach relativem POSIX-Pfad sortiert. Symlinks gehen
+    als Linkziel ein und werden nicht verfolgt. Jeder unklare Lesestand bricht
+    fail-closed ab, statt ein scheinbar gültiges Siegel zu erzeugen.
+    """
+    return digest_records(scan_project(path, exclude=exclude))
+
+
 def _utc(value: datetime) -> datetime:
     if value.tzinfo is None:
         value = value.replace(tzinfo=timezone.utc)
@@ -339,16 +379,30 @@ class ReviewPool:
         *,
         policy: Optional[ReviewPolicy] = None,
         clock: Optional[Callable[[], datetime]] = None,
+        hasher: Optional[Callable[..., ProjectDigest]] = None,
     ) -> None:
         self.store = store
         self.policy = policy or ReviewPolicy()
         self.clock = clock or (lambda: datetime.now(timezone.utc))
+        self._hasher = hasher
         conn = self.store._get_conn()
         try:
             ensure_review_schema(conn)
             conn.commit()
         finally:
             self.store._close_conn(conn)
+
+    def _digest(self, project: str | Path) -> ProjectDigest:
+        """Siegelwert holen -- ueber den persistenten Index, wenn moeglich.
+
+        Der Index wird von ``taskplan init`` gefuellt und hier
+        weiterverwendet; ohne ihn liest jeder Lauf erneut jedes Byte. Tests
+        koennen mit ``hasher=`` daran vorbei.
+        """
+        if self._hasher is not None:
+            return self._hasher(project, exclude=self.policy.exclude)
+        from .readiness import cached_digest
+        return cached_digest(self.store, project, self.policy.exclude)
 
     @staticmethod
     def _validate_role(role: str) -> str:
@@ -426,7 +480,7 @@ class ReviewPool:
             return base
         if digest is None:
             try:
-                digest = hash_project(project, exclude=self.policy.exclude)
+                digest = self._digest(project)
             except ProjectHashError as exc:
                 base["reason"] = "hash_error"
                 base["error"] = str(exc)
@@ -573,7 +627,7 @@ class ReviewPool:
             )
             if decision["reason"] == "_hash_required":
                 try:
-                    digest = hash_project(path, exclude=self.policy.exclude)
+                    digest = self._digest(path)
                 except ProjectHashError as exc:
                     decision.update(reason="hash_error", error=str(exc))
                 else:
@@ -594,9 +648,7 @@ class ReviewPool:
 
         for candidate in eligible:
             try:
-                digest = hash_project(
-                    candidate["project_path"], exclude=self.policy.exclude
-                )
+                digest = self._digest(candidate["project_path"])
             except ProjectHashError as exc:
                 candidate.update(
                     eligible=False,
@@ -687,7 +739,7 @@ class ReviewPool:
         role = self._validate_role(role)
         if not str(result).strip():
             raise ReviewInputError("Ein bestätigter Abschluss braucht ein Ergebnis")
-        digest = hash_project(project, exclude=self.policy.exclude)
+        digest = self._digest(project)
         key = project_key(project)
         now = self._now()
         at = _iso(now)
@@ -739,7 +791,7 @@ class ReviewPool:
         role = self._validate_role(role)
         if not str(reason).strip():
             raise ReviewInputError("Eine Deferierung braucht einen Grund")
-        digest = hash_project(project, exclude=self.policy.exclude)
+        digest = self._digest(project)
         key = project_key(project)
         now = self._now()
         at = _iso(now)
