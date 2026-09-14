@@ -16,6 +16,7 @@ aelteren Versionen bleibt das Modul benutzbar — die Konfiguration wird dann
 ignoriert und es gelten ENV-Variablen und Defaults. Zero dependencies bleibt
 Zero dependencies.
 """
+import math
 import os
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -424,6 +425,22 @@ def discovery_timeout_seconds() -> float:
         return max(0.0, float(section.get("discovery_timeout_seconds", 30)))
     except (TypeError, ValueError):
         return 30.0
+
+
+def readiness_project_timeout_seconds() -> float:
+    """Harte Grenze je Projektmessung während ``taskplan init``.
+
+    Ein ungültiger oder unendlicher Benutzerwert darf die Schutzgrenze nicht
+    aushebeln. Deshalb gibt es hier bewusst keine Option zum Abschalten.
+    """
+    section = load_config().get("readiness", {}) or {}
+    if not isinstance(section, dict):
+        section = {}
+    try:
+        value = float(section.get("project_timeout_seconds", 30.0))
+    except (TypeError, ValueError):
+        return 30.0
+    return value if math.isfinite(value) and value > 0 else 30.0
 
 
 def discovery_cache_config() -> Dict[str, Any]:

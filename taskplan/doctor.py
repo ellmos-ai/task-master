@@ -46,8 +46,14 @@ def _known_candidates() -> list[Path]:
     ]
 
 
-def run() -> int:
-    """Gibt den Auflösungsstand aus. Returns: 0 = ok, 1 = Warnung."""
+def run(*, strict_readiness: bool = True) -> int:
+    """Gibt den Auflösungsstand aus.
+
+    Interne TASKPLAN-Rollen behandeln fehlende Readiness als hartes Gate.
+    Externe Rollen dürfen dagegen starten, wenn lediglich der lokale
+    Projektindex fehlt; dieser Zustand wird sichtbar als Warnung ausgegeben.
+    Andere Doctor-Befunde bleiben auch für externe Rollen fehlerhaft.
+    """
     active = get_default_db_path()
     active_count = count_tasks_in(active)
 
@@ -102,7 +108,8 @@ def run() -> int:
             )
         else:
             readiness_error = status["reason"]
-            print(f"  NICHT BEREIT ({status['state']}): {status['reason']}")
+            label = "NICHT BEREIT" if strict_readiness else "WARNUNG"
+            print(f"  {label} ({status['state']}): {status['reason']}")
             print(f"  Reparatur: {status['repair']}")
     print()
 
@@ -136,8 +143,14 @@ def run() -> int:
         print("    - Konfigurieren: ~/.taskplan/taskplan.toml")
         print("        [storage]")
         print('        path = "<pfad zur richtigen db>"')
-    if warn or discovery_error or readiness_error:
+    if warn or discovery_error or (strict_readiness and readiness_error):
         return 1
 
-    print("OK: Keine widerspruechliche Datenbank gefunden.")
+    if readiness_error and not strict_readiness:
+        print(
+            "OK: Keine blockierenden Doctor-Befunde. "
+            "Die fehlende Readiness bleibt für externe Rollen eine Warnung."
+        )
+    else:
+        print("OK: Keine widerspruechliche Datenbank gefunden.")
     return 0

@@ -339,7 +339,11 @@ def _init_command(args: list[str]) -> int:
     import sys
 
     from .client import TaskClient
-    from .config import discovery_timeout_seconds, review_pool_config
+    from .config import (
+        discovery_timeout_seconds,
+        readiness_project_timeout_seconds,
+        review_pool_config,
+    )
     from .readiness import initialize, readiness_status
     from .runner import ProjectDiscoveryTimeout, _discover_projects_bounded
 
@@ -350,10 +354,16 @@ def _init_command(args: list[str]) -> int:
 
     store = TaskClient()
     exclude = review_pool_config().exclude
+    project_timeout = readiness_project_timeout_seconds()
 
     if not quiet:
+        print(
+            "[INIT] TASKPLAN ist installiert; jetzt wird nur der Projektindex "
+            "initialisiert."
+        )
         print(f"[INIT] Datenbank : {store.db_path}")
-        print("[INIT] Discovery laeuft ...")
+        print("[INIT] Discovery und Projektmessung laufen ...")
+        print(f"[INIT] Zeitlimit je Projekt: {project_timeout:g} Sekunden")
     try:
         projects = _discover_projects_bounded(
             discovery_timeout_seconds(), force=rebuild
@@ -370,14 +380,25 @@ def _init_command(args: list[str]) -> int:
     def show(event: dict) -> None:
         if quiet:
             return
+        state = {
+            "started": "gestartet",
+            "completed": "abgeschlossen",
+            "failed": "fehlgeschlagen",
+        }.get(event.get("state", ""), str(event.get("state", "fortlaufend")))
         print(
             f"  [{event['position']:>4}/{event['total']}] "
-            f"{event['elapsed_seconds']:>7.1f}s  {event['project_path']}"
+            f"{event['elapsed_seconds']:>7.1f}s  {state:<13} "
+            f"{event.get('operation', 'unbekannte Operation'):<20} "
+            f"{event['project_path']}"
         )
+        if event.get("error"):
+            print(f"      Fehler: {event['error']}", file=sys.stderr)
 
     report = initialize(
         store, projects, exclude=exclude, rebuild=rebuild,
-        skip_unreadable=skip_unreadable, progress=show,
+        skip_unreadable=skip_unreadable,
+        project_timeout_seconds=project_timeout,
+        progress=show,
     )
     report["db"] = str(store.db_path)
     report["status"] = readiness_status(store, exclude)["state"]
@@ -388,13 +409,17 @@ def _init_command(args: list[str]) -> int:
         print()
         print(f"[INIT] Projekte    : {report['projects_total']}")
         print(f"[INIT] Indiziert   : {report['projects_indexed']}")
-        print(f"[INIT] Uebersprungen: {report['projects_skipped']}")
+        print(f"[INIT] Übersprungen: {report['projects_skipped']}")
+        print(f"[INIT] Zeitlimit   : {report['project_timeout_seconds']:g}s je Projekt")
         print(f"[INIT] Dauer       : {report['duration_seconds']}s")
         for failure in report["failures"]:
-            print(f"  NICHT LESBAR: {failure['project_path']} — {failure['error']}",
+            print(
+                f"  FEHLER: {failure['project_path']} — "
+                f"Operation {failure.get('operation', 'unbekannt')} — "
+                f"{failure['error']}",
                   file=sys.stderr)
         if report["ready"]:
-            print("[INIT] BEREIT — die Rollen duerfen starten.")
+            print("[INIT] BEREIT — die internen TASKPLAN-Rollen dürfen starten.")
         else:
             print(f"[INIT] NICHT BEREIT — {report['reason']}", file=sys.stderr)
     return 0 if report["ready"] else 1

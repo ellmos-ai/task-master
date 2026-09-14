@@ -30,6 +30,38 @@ class TestDoctorDiscoveryConfiguration(unittest.TestCase):
         self.assertIn("keine Traversal-Roots", text)
         self.assertNotIn("OK:", text)
 
+    def test_external_mode_reports_missing_readiness_as_warning(self):
+        output = io.StringIO()
+        status = {
+            "ready": False,
+            "state": "missing",
+            "reason": "TASKPLAN ist installiert, aber der Projektindex fehlt.",
+            "repair": "python -m taskplan init",
+        }
+        patches = [
+            mock.patch.object(doctor, "get_default_db_path", return_value=Path("tasks.db")),
+            mock.patch.object(doctor, "count_tasks_in", return_value=3),
+            mock.patch.object(doctor, "find_config_file", return_value=None),
+            mock.patch.object(doctor, "config_search_paths", return_value=[]),
+            mock.patch.object(doctor, "_known_candidates", return_value=[]),
+            mock.patch.object(doctor, "traversal_config", return_value=TraversalConfig(roots=[Path(".")])),
+            mock.patch.object(doctor, "discovery_mode", return_value="hybrid"),
+            mock.patch.object(doctor, "validate_discovery_configuration", return_value=None),
+            mock.patch("taskplan.readiness.readiness_status", return_value=status),
+        ]
+        for patcher in patches:
+            patcher.start()
+        self.addCleanup(lambda: [patcher.stop() for patcher in reversed(patches)])
+
+        with redirect_stdout(output):
+            code = doctor.run(strict_readiness=False)
+
+        text = output.getvalue()
+        self.assertEqual(code, 0)
+        self.assertIn("WARNUNG (missing)", text)
+        self.assertNotIn("NICHT BEREIT", text)
+        self.assertIn("Keine blockierenden Doctor-Befunde", text)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -46,6 +46,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
+import multiprocessing
 import platform
 import time
 from datetime import datetime, timezone
@@ -62,6 +64,36 @@ from .review_pool import (
 
 READINESS_SCHEMA = 1
 REPAIR_COMMAND = "python -m taskplan init"
+DEFAULT_PROJECT_TIMEOUT_SECONDS = 30.0
+PROJECT_TERMINATION_GRACE_SECONDS = 1.0
+
+
+class ProjectInitializationTimeout(TimeoutError):
+    """Eine einzelne Projektmessung hat ihr festes Zeitlimit überschritten."""
+
+    def __init__(
+        self, project_path: Path, operation: str, timeout_seconds: float
+    ) -> None:
+        self.project_path = project_path
+        self.operation = operation
+        self.timeout_seconds = timeout_seconds
+        super().__init__(
+            f"Projektmessung für {project_path} bei Operation „{operation}“ "
+            f"nach {timeout_seconds:g} Sekunden abgebrochen"
+        )
+
+
+class ProjectInitializationError(RuntimeError):
+    """Der isolierte Worker konnte keine belastbare Projektmessung liefern."""
+
+    def __init__(self, project_path: Path, operation: str, error: str) -> None:
+        self.project_path = project_path
+        self.operation = operation
+        self.error = error
+        super().__init__(
+            f"Projektmessung für {project_path} bei Operation „{operation}“ "
+            f"fehlgeschlagen: {error}"
+        )
 
 READINESS_SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS taskplan_project_index (
@@ -137,38 +169,27 @@ def _index_row(conn, key: str) -> Optional[dict[str, Any]]:
     }
 
 
-def cached_digest(
-    store,
-    path: str | Path,
-    exclude: Iterable[str] = (),
-) -> ProjectDigest:
-    """Siegelwert eines Projekts -- gemessen, wenn noetig; sonst erinnert.
-
-    Der Verzeichnislauf findet IMMER statt; gespart wird nur das Lesen der
-    Dateiinhalte. Damit bleibt jede Aenderung an Pfad, Groesse oder Zeitstempel
-    zuverlaessig sichtbar.
-    """
-    records = scan_project(path, exclude=exclude)
-    fingerprint = fingerprint_records(records)
-    key = project_key(path)
+def _cached_index_row(store, path: str | Path) -> Optional[dict[str, Any]]:
+    """Liest nur den bisherigen Indexeintrag eines Projekts."""
     conn = store._get_conn()
     try:
         ensure_readiness_schema(conn)
-        row = _index_row(conn, key)
-        if row and row["fingerprint"] == fingerprint:
-            return ProjectDigest(
-                value=row["digest"],
-                file_count=row["file_count"],
-                byte_count=row["byte_count"],
-            )
+        return _index_row(conn, project_key(path))
     finally:
         store._close_conn(conn)
 
-    digest = digest_records(records)
 
+def _write_index(
+    store,
+    path: str | Path,
+    fingerprint: str,
+    digest: ProjectDigest,
+) -> None:
+    """Schreibt genau einen vollständig berechneten Projektindexeintrag."""
     conn = store._get_conn()
     try:
         ensure_readiness_schema(conn)
+        key = project_key(path)
         conn.execute(
             "INSERT INTO taskplan_project_index "
             "(project_key, project_path, fingerprint, digest, file_count, "
@@ -184,6 +205,230 @@ def cached_digest(
         conn.commit()
     finally:
         store._close_conn(conn)
+
+
+def _computed_digest(
+    path: str | Path,
+    exclude: Iterable[str],
+    cached: Optional[dict[str, Any]],
+    notify: Optional[Callable[[str, str], None]] = None,
+) -> dict[str, Any]:
+    """Berechnet Scan/Fingerprint/Hash ohne Datenbankzugriff.
+
+    ``cached`` wird erst nach einem frischen Verzeichnislauf verwendet. So
+    bleibt die bestehende Idempotenz erhalten, ohne den teuren Dateihash bei
+    unveränderten Projekten erneut auszuführen.
+    """
+    operation = "scan_project"
+    if notify:
+        notify(operation, "started")
+    records = scan_project(path, exclude=exclude)
+    if notify:
+        notify(operation, "completed")
+
+    operation = "fingerprint_records"
+    if notify:
+        notify(operation, "started")
+    fingerprint = fingerprint_records(records)
+    if notify:
+        notify(operation, "completed")
+
+    if cached and cached["fingerprint"] == fingerprint:
+        digest = ProjectDigest(
+            value=cached["digest"],
+            file_count=cached["file_count"],
+            byte_count=cached["byte_count"],
+        )
+    else:
+        operation = "digest_records"
+        if notify:
+            notify(operation, "started")
+        digest = digest_records(records)
+        if notify:
+            notify(operation, "completed")
+
+    return {
+        "fingerprint": fingerprint,
+        "digest": digest.value,
+        "file_count": digest.file_count,
+        "byte_count": digest.byte_count,
+    }
+
+
+def _send_worker_message(connection, message: dict[str, Any]) -> None:
+    """Sendet fehlertolerant; der Parent darf einen Timeout bereits beenden."""
+    try:
+        connection.send(message)
+    except (BrokenPipeError, EOFError, OSError):
+        pass
+
+
+def _project_digest_worker(
+    connection,
+    path: str,
+    exclude: tuple[str, ...],
+    cached: Optional[dict[str, Any]],
+) -> None:
+    """Berechnet einen Projektindex in einem eigenen, beendbaren Prozess."""
+    current_operation = "scan_project"
+
+    def notify(operation: str, state: str) -> None:
+        nonlocal current_operation
+        current_operation = operation
+        _send_worker_message(connection, {
+            "kind": "progress",
+            "operation": operation,
+            "state": state,
+            "project_path": path,
+        })
+
+    try:
+        result = _computed_digest(path, exclude, cached, notify)
+        _send_worker_message(connection, {
+            "kind": "result", "ok": True, "result": result,
+        })
+    except Exception as exc:  # der Parent macht daraus einen sichtbaren Fehler
+        _send_worker_message(connection, {
+            "kind": "result",
+            "ok": False,
+            "operation": current_operation,
+            "error": f"{type(exc).__name__}: {exc}",
+        })
+    finally:
+        connection.close()
+
+
+def _stop_project_worker(process) -> None:
+    """Beendet ausschließlich den von ``initialize`` gestarteten Worker."""
+    if process is None:
+        return
+    try:
+        if process.is_alive():
+            process.terminate()
+            process.join(PROJECT_TERMINATION_GRACE_SECONDS)
+        if process.is_alive() and hasattr(process, "kill"):
+            process.kill()
+            process.join(PROJECT_TERMINATION_GRACE_SECONDS)
+    finally:
+        if not process.is_alive():
+            process.close()
+
+
+def _validate_project_timeout(value: float) -> float:
+    try:
+        timeout = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "project_timeout_seconds muss eine endliche positive Zahl sein"
+        ) from exc
+    if not math.isfinite(timeout) or timeout <= 0:
+        raise ValueError(
+            "project_timeout_seconds muss eine endliche positive Zahl sein"
+        )
+    return timeout
+
+
+def _bounded_project_digest(
+    path: str | Path,
+    exclude: Iterable[str],
+    cached: Optional[dict[str, Any]],
+    timeout_seconds: float,
+    progress: Optional[Callable[[dict[str, Any]], None]] = None,
+    worker: Callable[..., None] = _project_digest_worker,
+) -> dict[str, Any]:
+    """Führt eine Projektmessung mit echter Prozessgrenze aus."""
+    timeout = _validate_project_timeout(timeout_seconds)
+    project_path = Path(path)
+    context = multiprocessing.get_context("spawn")
+    receiver, sender = context.Pipe(duplex=False)
+    process = context.Process(
+        target=worker,
+        args=(sender, str(project_path), tuple(exclude), cached),
+        name="taskplan-readiness-project",
+    )
+    started = time.monotonic()
+    operation = "scan_project"
+    started_process = False
+    try:
+        try:
+            process.start()
+            started_process = True
+        except (OSError, RuntimeError) as exc:
+            raise ProjectInitializationError(
+                project_path, operation, f"Worker konnte nicht gestartet werden: {exc}"
+            ) from exc
+        finally:
+            sender.close()
+
+        while True:
+            remaining = started + timeout - time.monotonic()
+            if remaining <= 0:
+                raise ProjectInitializationTimeout(
+                    project_path, operation, timeout
+                )
+            if receiver.poll(min(0.1, remaining)):
+                try:
+                    message = receiver.recv()
+                except EOFError as exc:
+                    raise ProjectInitializationError(
+                        project_path, operation,
+                        "Worker hat die Diagnoseverbindung ohne Ergebnis geschlossen",
+                    ) from exc
+                if message.get("kind") == "progress":
+                    operation = str(message.get("operation") or operation)
+                    if progress:
+                        progress(message)
+                    continue
+                if message.get("kind") == "result":
+                    operation = str(message.get("operation") or operation)
+                    if not message.get("ok"):
+                        raise ProjectInitializationError(
+                            project_path,
+                            operation,
+                            str(message.get("error") or "unbekannter Worker-Fehler"),
+                        )
+                    return dict(message["result"])
+                continue
+
+            if not process.is_alive():
+                if receiver.poll(0):
+                    continue
+                raise ProjectInitializationError(
+                    project_path,
+                    operation,
+                    f"Worker endete ohne Ergebnis (Exitcode {process.exitcode})",
+                )
+    finally:
+        if started_process:
+            _stop_project_worker(process)
+        else:
+            process.close()
+        receiver.close()
+
+
+def cached_digest(
+    store,
+    path: str | Path,
+    exclude: Iterable[str] = (),
+) -> ProjectDigest:
+    """Siegelwert eines Projekts -- gemessen, wenn noetig; sonst erinnert.
+
+    Der Verzeichnislauf findet IMMER statt; gespart wird nur das Lesen der
+    Dateiinhalte. Damit bleibt jede Aenderung an Pfad, Groesse oder Zeitstempel
+    zuverlaessig sichtbar.
+    """
+    records = scan_project(path, exclude=exclude)
+    fingerprint = fingerprint_records(records)
+    row = _cached_index_row(store, path)
+    if row and row["fingerprint"] == fingerprint:
+        return ProjectDigest(
+            value=row["digest"],
+            file_count=row["file_count"],
+            byte_count=row["byte_count"],
+        )
+
+    digest = digest_records(records)
+    _write_index(store, path, fingerprint, digest)
     return digest
 
 
@@ -214,10 +459,11 @@ def readiness_status(store, exclude: Iterable[str] = ()) -> dict[str, Any]:
     row = readiness_row(store)
     if row is None:
         return {
-            "ready": False, "state": "missing", "repair": REPAIR_COMMAND,
+                "ready": False, "state": "missing", "repair": REPAIR_COMMAND,
             "reason": (
-                "TASKPLAN ist auf diesem System noch nicht initialisiert. "
-                f"Einmalig ausfuehren: {REPAIR_COMMAND}"
+                "TASKPLAN ist installiert, aber der Projektindex ist auf diesem "
+                "System noch nicht initialisiert. Einmalig ausführen: "
+                f"{REPAIR_COMMAND}"
             ),
         }
     if int(row["schema_version"]) != READINESS_SCHEMA:
@@ -225,8 +471,9 @@ def readiness_status(store, exclude: Iterable[str] = ()) -> dict[str, Any]:
             "ready": False, "state": "schema-outdated", "repair": REPAIR_COMMAND,
             "readiness": row,
             "reason": (
-                f"Initialisierung stammt aus Schema {row['schema_version']}, "
-                f"erwartet wird {READINESS_SCHEMA}. Erneut ausfuehren: "
+                "Die TASKPLAN-Installation ist vorhanden, aber ihre "
+                f"Initialisierung stammt aus Schema {row['schema_version']}; "
+                f"erwartet wird {READINESS_SCHEMA}. Erneut ausführen: "
                 f"{REPAIR_COMMAND}"
             ),
         }
@@ -236,8 +483,9 @@ def readiness_status(store, exclude: Iterable[str] = ()) -> dict[str, Any]:
             "readiness": row,
             "reason": (
                 "Die Ausschlussmuster des Review-Pools haben sich seit der "
-                "Initialisierung geaendert; gespeicherte Siegel messen etwas "
-                f"anderes. Erneut ausfuehren: {REPAIR_COMMAND}"
+                "Initialisierung geändert; die gespeicherten Siegel messen etwas "
+                f"anderes. Die TASKPLAN-Installation ist vorhanden. Erneut "
+                f"ausführen: {REPAIR_COMMAND}"
             ),
         }
     return {"ready": True, "state": "ready", "readiness": row, "reason": "", "repair": ""}
@@ -262,15 +510,21 @@ def initialize(
     exclude: Iterable[str] = (),
     rebuild: bool = False,
     skip_unreadable: bool = False,
+    project_timeout_seconds: float = DEFAULT_PROJECT_TIMEOUT_SECONDS,
     progress: Optional[Callable[[dict[str, Any]], None]] = None,
 ) -> dict[str, Any]:
-    """Waermt den Index und markiert erst DANACH als bereit.
+    """Wärmt den Index und markiert erst DANACH als bereit.
 
-    Idempotent: Ein zweiter Lauf misst nur, was sich geaendert hat. Bricht der
+    Idempotent: Ein zweiter Lauf misst nur, was sich geändert hat. Bricht der
     Lauf ab, wurde nichts markiert -- der bereits geschriebene Index bleibt als
     Teilfortschritt liegen und macht den Wiederanlauf billig.
+
+    Jede Projektmessung läuft in einem eigenen Prozess mit einem festen
+    Zeitlimit. Der Parent schreibt den Index erst nach einem vollständigen
+    Ergebnis; ein Timeout bleibt deshalb ein sichtbarer Readiness-Fehler.
     """
     exclude = tuple(exclude)
+    timeout = _validate_project_timeout(project_timeout_seconds)
     if rebuild:
         clear_index(store)
 
@@ -281,19 +535,114 @@ def initialize(
     total = len(entries)
     started = time.monotonic()
     indexed = 0
-    failures: list[dict[str, str]] = []
+    failures: list[dict[str, Any]] = []
+    timeouts: list[dict[str, Any]] = []
+
+    def emit(
+        position: int,
+        path: Path,
+        root_id: str,
+        operation: str,
+        state: str,
+        **details: Any,
+    ) -> None:
+        if progress is None:
+            return
+        event = {
+            "phase": "project",
+            "position": position,
+            "total": total,
+            "project_path": str(path),
+            "root_id": root_id,
+            "operation": operation,
+            "state": state,
+            "elapsed_seconds": round(time.monotonic() - started, 1),
+        }
+        event.update(details)
+        progress(event)
 
     for position, (path, root_id) in enumerate(entries, start=1):
-        if progress:
-            progress({
-                "phase": "project", "position": position, "total": total,
-                "project_path": str(path), "root_id": root_id,
-                "elapsed_seconds": round(time.monotonic() - started, 1),
-            })
+        operation = "index_read"
         try:
-            cached_digest(store, path, exclude)
+            emit(position, path, root_id, operation, "started")
+            cached = _cached_index_row(store, path)
+            emit(position, path, root_id, operation, "completed")
+
+            operation = "project_index"
+            emit(position, path, root_id, operation, "started")
+            result = _bounded_project_digest(
+                path,
+                exclude,
+                cached,
+                timeout,
+                progress=lambda event: emit(
+                    position,
+                    path,
+                    root_id,
+                    str(event.get("operation") or operation),
+                    str(event.get("state") or "progress"),
+                ),
+            )
+            digest = ProjectDigest(
+                value=str(result["digest"]),
+                file_count=int(result["file_count"]),
+                byte_count=int(result["byte_count"]),
+            )
+            if not cached or cached["fingerprint"] != result["fingerprint"]:
+                operation = "index_write"
+                emit(position, path, root_id, operation, "started")
+                _write_index(store, path, str(result["fingerprint"]), digest)
+                emit(position, path, root_id, operation, "completed")
+            operation = "project_index"
+            emit(
+                position,
+                path,
+                root_id,
+                operation,
+                "completed",
+                file_count=digest.file_count,
+                byte_count=digest.byte_count,
+            )
+        except ProjectInitializationTimeout as exc:
+            failure = {
+                "project_path": str(path),
+                "operation": exc.operation,
+                "error": str(exc),
+                "timeout_seconds": exc.timeout_seconds,
+            }
+            failures.append(failure)
+            timeouts.append(failure)
+            emit(
+                position, path, root_id, exc.operation, "failed",
+                error=str(exc), timeout_seconds=exc.timeout_seconds,
+            )
+            continue
+        except ProjectInitializationError as exc:
+            failure = {
+                "project_path": str(path),
+                "operation": exc.operation,
+                "error": str(exc),
+            }
+            failures.append(failure)
+            emit(position, path, root_id, exc.operation, "failed", error=str(exc))
+            continue
         except ProjectHashError as exc:
-            failures.append({"project_path": str(path), "error": str(exc)})
+            failure = {
+                "project_path": str(path),
+                "operation": operation,
+                "error": str(exc),
+            }
+            failures.append(failure)
+            emit(position, path, root_id, operation, "failed", error=str(exc))
+            continue
+        except Exception as exc:
+            failure = {
+                "project_path": str(path),
+                "operation": operation,
+                "error": f"{type(exc).__name__}: {exc}",
+            }
+            failures.append(failure)
+            emit(position, path, root_id, operation, "failed", error=failure["error"])
             continue
         indexed += 1
 
@@ -303,17 +652,27 @@ def initialize(
         "projects_indexed": indexed,
         "projects_skipped": len(failures),
         "failures": failures,
+        "timeouts": timeouts,
+        "project_timeout_seconds": timeout,
         "duration_seconds": duration,
         "policy_signature": policy_signature(exclude),
     }
 
-    if failures and not skip_unreadable:
+    if failures and (not skip_unreadable or timeouts):
         report["ready"] = False
-        report["reason"] = (
-            f"{len(failures)} Projekt(e) konnten nicht gelesen werden. Ursache "
-            "beheben und erneut ausfuehren, oder die Projekte mit "
-            "--skip-unreadable bewusst auslassen."
-        )
+        if timeouts:
+            report["reason"] = (
+                f"{len(timeouts)} Projekt(e) überschritten das Zeitlimit von "
+                f"{timeout:g} Sekunden. Die Messung wurde abgebrochen; "
+                "--skip-unreadable überspringt keine Zeitüberschreitungen. "
+                f"Ursache beheben und erneut ausführen: {REPAIR_COMMAND}"
+            )
+        else:
+            report["reason"] = (
+                f"{len(failures)} Projekt(e) konnten nicht gelesen werden. "
+                "Ursache beheben und erneut ausführen, oder die Projekte mit "
+                "--skip-unreadable bewusst auslassen."
+            )
         return report
 
     conn = store._get_conn()

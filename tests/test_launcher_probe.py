@@ -179,6 +179,34 @@ class TestExternalRole(_LauncherFixture):
         self.assertEqual(runner.call_count, 1)
         self.assertIn("[TICKET-MASTER]", text)
 
+    def test_external_role_treats_missing_readiness_as_warning(self):
+        def doctor_for_mode(*, strict_readiness=True):
+            return 1 if strict_readiness else 0
+
+        with mock.patch("taskplan.launcher.doctor", side_effect=doctor_for_mode) as check, \
+                mock.patch("taskplan.launcher.probe", return_value=(True, "ok")):
+            code, text, runner = self._run(
+                "", "claude", label="ticket-master",
+                prompt_file=str(self.prompt), request="Test",
+            )
+
+        self.assertEqual(code, 0)
+        check.assert_called_once_with(strict_readiness=False)
+        runner.assert_called_once()
+        self.assertNotIn("doctor` ist fehlgeschlagen", text)
+
+    def test_internal_role_keeps_readiness_as_hard_gate(self):
+        def doctor_for_mode(*, strict_readiness=True):
+            return 1 if strict_readiness else 0
+
+        with mock.patch("taskplan.launcher.doctor", side_effect=doctor_for_mode) as check:
+            code, text, runner = self._run("tasksolver", "claude")
+
+        self.assertEqual(code, 1)
+        check.assert_called_once_with(strict_readiness=True)
+        runner.assert_not_called()
+        self.assertIn("doctor` ist fehlgeschlagen", text)
+
     def test_external_role_needs_all_three_parts(self):
         code, text, runner = self._run(
             "", "claude", label="ticket-master", request="Test")

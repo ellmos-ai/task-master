@@ -175,5 +175,21 @@ class TestDiscoveryCacheConfig(unittest.TestCase):
         self.assertEqual(cache["ttl_seconds"], 7200)
 
 
+class TestReadinessConfig(unittest.TestCase):
+    def test_default_project_timeout_is_positive(self):
+        with mock.patch.object(cfg, "load_config", return_value={}):
+            self.assertEqual(cfg.readiness_project_timeout_seconds(), 30.0)
+
+    def test_invalid_project_timeout_falls_back(self):
+        with _with_config(
+            '[readiness]\nproject_timeout_seconds = "unendlich"\n'
+        ):
+            self.assertEqual(cfg.readiness_project_timeout_seconds(), 30.0)
+
+    def test_project_timeout_is_configurable(self):
+        with _with_config("[readiness]\nproject_timeout_seconds = 7.5\n"):
+            self.assertEqual(cfg.readiness_project_timeout_seconds(), 7.5)
+
+
 if __name__ == "__main__":
     unittest.main()

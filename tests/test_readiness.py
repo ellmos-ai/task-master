@@ -4,11 +4,14 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from taskplan.client import TaskClient
 from taskplan.readiness import (
     READINESS_SCHEMA,
     REPAIR_COMMAND,
+    ProjectInitializationTimeout,
+    _bounded_project_digest,
     cached_digest,
     clear_index,
     fingerprint_records,
@@ -18,6 +21,11 @@ from taskplan.readiness import (
 )
 from taskplan.review_pool import ProjectHashError, hash_project, scan_project
 from taskplan.traversal import Project
+
+
+def _sleep_project_worker(connection, path, exclude, cached):
+    """Top-level spawn target für den deterministischen Timeout-Test."""
+    time.sleep(2)
 
 
 class ReadinessTests(unittest.TestCase):
@@ -54,6 +62,43 @@ class ReadinessTests(unittest.TestCase):
         row = readiness_row(self.store)
         self.assertEqual(row["schema_version"], READINESS_SCHEMA)
         self.assertEqual(row["projects_total"], 2)
+
+    def test_init_emits_project_progress_and_timeout_policy(self) -> None:
+        events: list[dict] = []
+        report = initialize(self.store, [self.make_project("a")], progress=events.append)
+        self.assertTrue(report["ready"])
+        self.assertEqual(report["project_timeout_seconds"], 30.0)
+        self.assertTrue(any(event["state"] == "started" for event in events))
+        self.assertTrue(any(event["state"] == "completed" for event in events))
+
+    def test_project_measurement_timeout_is_bounded_and_identified(self) -> None:
+        project = self.make_project("slow")
+        started = time.monotonic()
+        with self.assertRaises(ProjectInitializationTimeout) as context:
+            _bounded_project_digest(
+                project.path,
+                (),
+                None,
+                0.1,
+                worker=_sleep_project_worker,
+            )
+        self.assertLess(time.monotonic() - started, 1.5)
+        self.assertEqual(context.exception.project_path, project.path)
+        self.assertEqual(context.exception.operation, "scan_project")
+
+    def test_timeout_stays_blocking_even_with_skip_unreadable(self) -> None:
+        project = self.make_project("slow")
+        timeout = ProjectInitializationTimeout(project.path, "scan_project", 0.1)
+        with mock.patch("taskplan.readiness._bounded_project_digest", side_effect=timeout):
+            report = initialize(
+                self.store,
+                [project],
+                skip_unreadable=True,
+                project_timeout_seconds=0.1,
+            )
+        self.assertFalse(report["ready"])
+        self.assertEqual(len(report["timeouts"]), 1)
+        self.assertIn("Zeitlimit", report["reason"])
 
     def test_changed_exclude_patterns_invalidate_readiness(self) -> None:
         initialize(self.store, [self.make_project("a")], exclude=())

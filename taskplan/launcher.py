@@ -800,7 +800,7 @@ def launch(
     if not external and ensure_initialised() != 0:
         return 1
 
-    if doctor() != 0:
+    if doctor(strict_readiness=not external) != 0:
         print("[FEHLER] `python -m taskplan doctor` ist fehlgeschlagen.",
               file=sys.stderr)
         return 1
