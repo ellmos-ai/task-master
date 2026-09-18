@@ -231,6 +231,8 @@ class TaskClient:
             # Präsentation/Siegel sind weder Claim noch Herkunft.
             from .review_pool import ensure_review_schema
             ensure_review_schema(conn)
+            from .transit.schema import ensure_transit_schema
+            ensure_transit_schema(conn)
             conn.commit()
         finally:
             if not self._is_memory:

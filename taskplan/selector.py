@@ -72,6 +72,7 @@ class SelectorConfig:
     # naechste Projekt, das noch GAR KEINE Aufgaben hat. Ohne diese Liste
     # findet er es nicht — und haette wieder nichts zu tun.
     projects: List = field(default_factory=list)
+    transit_gate: Optional[Any] = None
 
     def allowed_efforts(self) -> tuple[str, ...]:
         ceiling = self.effort_ceiling if self.effort_ceiling in AUTONOMOUS_EFFORTS else "easy"
@@ -160,7 +161,8 @@ def _dependencies_satisfied(task: dict, store: TaskStore) -> bool:
 
 
 def _candidates(store: TaskStore, effort: str, locks: LockView,
-                surface: bool) -> List[dict]:
+                surface: bool,
+                transit_gate: Optional[Any] = None) -> List[dict]:
     """Offene, erreichbare Aufgaben eines Aufwandsgrads.
 
     `surface=True`  -> Aufgaben OHNE project_path (Root-/Wurzelaufgaben)
@@ -178,6 +180,10 @@ def _candidates(store: TaskStore, effort: str, locks: LockView,
             continue
         if not _dependencies_satisfied(task, store):
             continue
+        if transit_gate is not None:
+            selectable, reason = transit_gate.evaluate(task)
+            if not selectable:
+                continue
         out.append(task)
     return out
 
@@ -533,7 +539,9 @@ def next_bundle(config: SelectorConfig, store: TaskStore,
     # dann erst medium. Deshalb die aeussere Schleife ueber den Aufwand.
     for effort in efforts:
         # 1. Oberflaeche zuerst — sie ist billig und entlastet sofort.
-        surface = _candidates(store, effort, locks, surface=True)
+        surface = _candidates(
+            store, effort, locks, surface=True, transit_gate=config.transit_gate
+        )
         # Wurzelaufgaben haben kein Projekt — der Projekt-Cursor greift dort
         # nicht. Fuer sie ist der Revolver der einzige Weg, eine blockierte
         # Aufgabe zurueckzustellen, ohne ihre Etiketten zu verfaelschen.
@@ -544,7 +552,9 @@ def next_bundle(config: SelectorConfig, store: TaskStore,
         # 2. Dann in die Projekte.
         if not config.deep_enabled:
             continue
-        deep = _candidates(store, effort, locks, surface=False)
+        deep = _candidates(
+            store, effort, locks, surface=False, transit_gate=config.transit_gate
+        )
         deep = _apply_task_revolver(deep, deferred_task_ids)
         deep = _rotate_solver_candidates(deep, after_project)
         if deep:
