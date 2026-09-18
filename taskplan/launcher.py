@@ -18,7 +18,8 @@ import threading
 from typing import Mapping, NamedTuple, Sequence
 
 from .config import (
-    active_roles, execution_config, label_runtime, model_choices, provider_name,
+    active_roles, execution_authority, execution_config, is_clutch_enabled,
+    label_runtime, model_choices, provider_name, role_zweck,
 )
 from .doctor import run as doctor
 from .runtime import (
@@ -59,6 +60,7 @@ class Candidate(NamedTuple):
     provider: str
     model: str
     effort: str
+    source: str = "config"
 
 
 def normalize_provider(provider: str) -> str:
@@ -570,7 +572,7 @@ def _builtin_candidates(key: str, provider: str, *, model: str, effort: str,
             continue
         cfg_model, cfg_effort = _configured_runtime(key, name)
         candidate = Candidate(name, want_model or cfg_model,
-                              want_effort or cfg_effort)
+                              want_effort or cfg_effort, source="config")
         if candidate in seen:
             continue
         seen.add(candidate)
@@ -588,9 +590,9 @@ def _builtin_candidates(key: str, provider: str, *, model: str, effort: str,
     return chain, skipped
 
 
-def _candidates(key: str, provider: str, *, model: str, effort: str,
-                fallback: bool) -> tuple[list[Candidate], list[str]]:
-    """Bezieht Reihenfolge und Verfuegbarkeitsfilter bevorzugt aus COMA."""
+def _config_candidates(key: str, provider: str, *, model: str, effort: str,
+                       fallback: bool) -> tuple[list[Candidate], list[str]]:
+    """Bezieht die konfigurierte Kette und Verfuegbarkeitsfilter (COMA oder Built-in)."""
     api = _coma_api()
     if api is None:
         return _builtin_candidates(
@@ -599,17 +601,18 @@ def _candidates(key: str, provider: str, *, model: str, effort: str,
 
     cfg_model, cfg_effort = _configured_runtime(key, provider)
     primary = api.Candidate(
-        provider, model.strip() or cfg_model, effort.strip() or cfg_effort
+        provider, model.strip() or cfg_model, effort.strip() or cfg_effort,
+        source="config",
     )
     provider_default = None
     if fallback and (model.strip() or effort.strip()):
-        provider_default = api.Candidate(provider, cfg_model, cfg_effort)
+        provider_default = api.Candidate(provider, cfg_model, cfg_effort, source="config")
     fallback_candidates = []
     if fallback:
         for name in _fallback_order(provider):
             fallback_model, fallback_effort = _configured_runtime(key, name)
             fallback_candidates.append(
-                api.Candidate(name, fallback_model, fallback_effort)
+                api.Candidate(name, fallback_model, fallback_effort, source="config")
             )
     ordered = api.ordered_candidates(
         primary,
@@ -624,9 +627,89 @@ def _candidates(key: str, provider: str, *, model: str, effort: str,
         allow_unverified=True,
     )
     return [
-        Candidate(item.provider, item.model, item.effort)
+        Candidate(item.provider, item.model, item.effort,
+                  source=getattr(item, "source", "config"))
         for item in available
     ], list(skipped)
+
+
+def _candidates(
+    key: str,
+    provider: str,
+    *,
+    model: str,
+    effort: str,
+    fallback: bool,
+    env: Mapping[str, str] | None = None,
+    no_clutch: bool = False,
+    force_clutch: bool = False,
+    explicit_provider: bool = False,
+    prompt: str = "",
+) -> tuple[list[Candidate], list[str]]:
+    """Bezieht Reihenfolge und Verfuegbarkeitsfilter bevorzugt aus Clutch bzw. COMA."""
+    actual_env = os.environ if env is None else env
+    clutch_on = is_clutch_enabled(
+        key, actual_env, cli_no_clutch=no_clutch, cli_clutch=force_clutch
+    )
+    if explicit_provider:
+        clutch_on = False
+
+    if clutch_on:
+        api = _coma_api()
+        clutch_candidates: tuple[Any, ...] = ()
+        clutch_skipped: tuple[str, ...] = ()
+        if api is not None and hasattr(api, "resolve_clutch_candidates"):
+            clutch_prompt = prompt or f"TASKPLAN {key} worker"
+            zweck = role_zweck(key)
+            eff = effort or (_configured_runtime(key, provider)[1] if provider else "high")
+            clutch_candidates, clutch_skipped = api.resolve_clutch_candidates(
+                clutch_prompt, zweck=zweck, effort=eff, fallback=fallback
+            )
+        else:
+            clutch_skipped = ("COMA clutch API nicht verfuegbar",)
+
+        if not clutch_candidates:
+            err = clutch_skipped[0] if clutch_skipped else "keine Kandidaten"
+            print(
+                f"[FALLBACK] clutch nicht verfuegbar oder fehlerhaft: {err} — "
+                "verwende Konfigurationskette."
+            )
+            fallback_provider = provider or provider_name("") or "codex"
+            return _config_candidates(
+                key, fallback_provider, model=model, effort=effort, fallback=fallback
+            )
+
+        chain = [
+            Candidate(item.provider, item.model, item.effort, source="clutch")
+            for item in clutch_candidates
+        ]
+        if model.strip() or effort.strip():
+            c0 = chain[0]
+            chain[0] = Candidate(
+                c0.provider,
+                model.strip() or c0.model,
+                effort.strip() or c0.effort,
+                source="clutch",
+            )
+
+        if not fallback:
+            return chain[:1], list(clutch_skipped)
+
+        cfg_prov = provider or chain[0].provider
+        cfg_chain, cfg_skip = _config_candidates(
+            key, cfg_prov, model="", effort="", fallback=True
+        )
+        seen = {(c.provider, c.model, c.effort) for c in chain}
+        for c in cfg_chain:
+            k = (c.provider, c.model, c.effort)
+            if k not in seen:
+                seen.add(k)
+                chain.append(c)
+        return chain, list(clutch_skipped) + list(cfg_skip)
+
+    return _config_candidates(
+        key, provider, model=model, effort=effort, fallback=fallback
+    )
 
 
 def _ask_one(ask, label: str, default: str, choices: Sequence[str],
@@ -761,6 +844,8 @@ def launch(
     use_probe: bool | None = None,
     session_name: str = "",
     ask=input,
+    no_clutch: bool = False,
+    clutch: bool = False,
 ) -> int:
     """Validiert die Konfiguration und startet genau einen Worker.
 
@@ -821,15 +906,25 @@ def launch(
         if interactive:
             provider, model, effort = _ask_runtime(
                 key, provider, model, effort, ask=ask)
-        if not provider:
-            raise ValueError(
-                "Kein Provider gewaehlt: --provider P oder --interactive."
-            )
-        normalized_provider = normalize_provider(provider)
+        explicit_provider = bool(provider or actual_env.get("TASKPLAN_PROVIDER", "").strip())
+        clutch_on = is_clutch_enabled(
+            key, actual_env, cli_no_clutch=no_clutch, cli_clutch=clutch
+        )
+        if not provider and not interactive and not clutch_on:
+            cfg_prov = provider_name("")
+            if cfg_prov:
+                provider = cfg_prov
+            else:
+                raise ValueError(
+                    "Kein Provider gewaehlt: --provider P oder --interactive."
+                )
+        normalized_provider = normalize_provider(provider) if provider else ""
         workdir = _workdir(actual_env)
         chain, skipped = _candidates(
             key, normalized_provider, model=model, effort=effort,
-            fallback=fallback,
+            fallback=fallback, env=actual_env, no_clutch=no_clutch,
+            force_clutch=clutch, explicit_provider=explicit_provider,
+            prompt=request,
         )
     except ValueError as exc:
         print(f"[FEHLER] {exc}", file=sys.stderr)
@@ -848,7 +943,7 @@ def launch(
     for index, candidate in enumerate(chain, start=1):
         print(f"[KETTE] {index}. {candidate.provider} "
               f"{candidate.model or CODEX_DEFAULT_LABEL}/"
-              f"{candidate.effort or CODEX_DEFAULT_LABEL}")
+              f"{candidate.effort or CODEX_DEFAULT_LABEL} ({candidate.source})")
 
     def _build(candidate: Candidate) -> tuple[list[list[str]], Path]:
         return _provider_commands(
