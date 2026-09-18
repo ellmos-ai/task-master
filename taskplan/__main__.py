@@ -541,28 +541,38 @@ def main(argv: list[str] | None = None) -> int:
 
     if command == "launch":
         from .launcher import launch
+        from .config import is_clutch_enabled, provider_name
         provider = _option(rest, "--provider", "")
         interactive = "--interactive" in rest
-        if not provider and not interactive:
-            print("Nutzung: python -m taskplan launch --role R --provider P "
+        no_clutch = "--no-clutch" in rest
+        force_clutch = "--clutch" in rest
+        role = _option(rest, "--role", "tasksolver")
+        label = _option(rest, "--label", "")
+        key = label or role
+        clutch_on = is_clutch_enabled(key, cli_no_clutch=no_clutch, cli_clutch=force_clutch)
+        has_cfg_provider = bool(provider_name(""))
+        if not provider and not interactive and not clutch_on and not has_cfg_provider:
+            print("Nutzung: python -m taskplan launch --role R [--provider P] "
                   "[--model M] [--effort E] [--name N]\n"
-                  "         [--interactive] [--no-probe] [--no-fallback]\n"
+                  "         [--interactive] [--no-probe] [--no-fallback] [--no-clutch] [--clutch]\n"
                   "         python -m taskplan launch --label NAME "
-                  "--prompt-file PFAD --request TEXT --provider P",
+                  "--prompt-file PFAD --request TEXT [--provider P]",
                   file=sys.stderr)
             return 2
         return launch(
-            _option(rest, "--role", "tasksolver"),
+            role,
             provider,
             model=_option(rest, "--model", ""),
             effort=_option(rest, "--effort", ""),
             prompt_file=_option(rest, "--prompt-file", ""),
             request=_option(rest, "--request", ""),
-            label=_option(rest, "--label", ""),
+            label=label,
             interactive=interactive,
             fallback="--no-fallback" not in rest,
             use_probe=False if "--no-probe" in rest else None,
             session_name=_option(rest, "--name", ""),
+            no_clutch=no_clutch,
+            clutch=force_clutch,
         )
 
     if command == "starters":

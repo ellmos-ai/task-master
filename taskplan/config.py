@@ -19,7 +19,7 @@ Zero dependencies.
 import math
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Mapping, Optional
 
 try:
     import tomllib  # Python >= 3.11
@@ -416,6 +416,67 @@ def execution_config() -> Dict[str, Any]:
     """Rohwerte der Sektion ``[execution]`` (Provider, Sonde, Fallback-Kette)."""
     section = load_config().get("execution", {}) or {}
     return section if isinstance(section, dict) else {}
+
+
+def execution_authority(role_or_label: str = "") -> str:
+    """Bestimmt die Modellwahl-Autoritaet ('config' oder 'clutch') fuer eine Rolle.
+
+    Default ist 'config' (heutige Kette [execution] fallback_providers).
+    Waehlbar je Rolle/Label via [execution.authority] oder [execution] clutch_roles.
+    """
+    section = execution_config()
+    authority = section.get("authority")
+    if isinstance(authority, dict):
+        if role_or_label and role_or_label in authority:
+            return str(authority[role_or_label]).strip().lower()
+        default_val = authority.get("default", "config")
+        return str(default_val).strip().lower()
+    clutch_roles = section.get("clutch_roles")
+    if isinstance(clutch_roles, list) and role_or_label in clutch_roles:
+        return "clutch"
+    if isinstance(authority, str) and authority.strip():
+        return authority.strip().lower()
+    return "config"
+
+
+def is_clutch_enabled(
+    role_or_label: str = "",
+    env: Mapping[str, str] | None = None,
+    *,
+    cli_no_clutch: bool = False,
+    cli_clutch: bool = False,
+) -> bool:
+    """Prueft, ob Clutch fuer diese Rolle/Label aktiv ist.
+
+    Ueberstimmbar durch CLI-Flags (--no-clutch, --clutch) und TASKPLAN_CLUTCH-ENV.
+    """
+    if cli_no_clutch:
+        return False
+    if cli_clutch:
+        return True
+    actual_env = os.environ if env is None else env
+    raw_env = actual_env.get("TASKPLAN_CLUTCH", "").strip().lower()
+    if raw_env in ("0", "false", "no", "off"):
+        return False
+    if raw_env in ("1", "true", "yes", "on"):
+        return True
+    return execution_authority(role_or_label) == "clutch"
+
+
+def role_zweck(role_or_label: str = "") -> str:
+    """Bestimmt den Zweck/Modalitaet einer Rolle fuer clutch (--zweck)."""
+    section = execution_config()
+    zweck_map = section.get("zweck")
+    if isinstance(zweck_map, dict) and role_or_label in zweck_map:
+        return str(zweck_map[role_or_label]).strip()
+    r = role_or_label.lower()
+    if "solver" in r or "maintainer" in r:
+        return "coding"
+    if "writer" in r:
+        return "creative"
+    if "auditor" in r or "review" in r:
+        return "research"
+    return "general"
 
 
 def discovery_timeout_seconds() -> float:
