@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable, List, Optional
 
-from .markers import MarkerRules
+from .markers import MarkerRules, is_git_worktree
 
 DEFAULT_MARKERS = ("TODO.md", "ROADMAP.md", "AUFGABEN.md", "AUFGABEN.txt",
                    ".git", "pyproject.toml", "package.json")
@@ -86,10 +86,29 @@ class TraversalConfig:
         self.skip_dirs = tuple(self.skip_dirs)
         self.markers = tuple(self.markers)
 
+    def skips(self, directory: Path) -> bool:
+        """Wird dieses Verzeichnis gar nicht erst betreten?
+
+        Zwei Gruende, und beide muessen den ganzen Unterbaum ueberspringen statt
+        nur den Ordner selbst nicht als Projekt zu zaehlen (T-20260920-535056160):
+
+        * `skip_dirs` -- gilt fuer JEDEN Verzeichnisnamen, auch fuer eine Root.
+          Roots kommen hier aus einer fremden Quelle (dem Lock-Root-Inventar);
+          eine Root, die man ausschliessen will, war sonst nicht ausschliessbar.
+        * git-WORKTREES -- ein zweiter Arbeitsbaum desselben Repositories. Wuerde
+          man nur den Wurzelordner auslassen, gaelte ploetzlich sein
+          Unterverzeichnis als Projekt (gemessen: `.../bach-pr7-main/system`).
+        """
+        if directory.name in self.skip_dirs:
+            return True
+        return is_git_worktree(directory)
+
     def is_project(self, directory: Path) -> bool:
         """Ist dieses Verzeichnis ein Projekt?"""
         if self.rules is not None:
             return self.rules.matches(directory)
+        if is_git_worktree(directory):
+            return False
         return _has_marker(directory, self.effective_markers())
 
     @property
@@ -217,14 +236,14 @@ def _find_projects_auto(config: TraversalConfig,
     projects: List[Project] = []
 
     for root in roots:
-        if not root.is_dir():
+        if not root.is_dir() or config.skips(root):
             continue
         frontier = [root]
         for _ in range(max_depth):
             nxt: List[Path] = []
             for parent in frontier:
                 for child in _child_directories(parent):
-                    if child.name in config.skip_dirs:
+                    if config.skips(child):
                         continue
                     if config.is_project(child):
                         projects.append(Project(path=child, root_id=root.name))
@@ -294,7 +313,7 @@ def find_projects(config: TraversalConfig,
     projects: List[Project] = []
 
     for root in roots:
-        if not root.is_dir():
+        if not root.is_dir() or config.skips(root):
             continue
         # Ebene fuer Ebene absteigen — nicht rglob, sonst waere die Ebenenzahl
         # bedeutungslos und ein tief verschachteltes TODO.md wuerde faelschlich
@@ -304,7 +323,7 @@ def find_projects(config: TraversalConfig,
             nxt: List[Path] = []
             for parent in current:
                 for child in _child_directories(parent):
-                    if child.name in config.skip_dirs:
+                    if config.skips(child):
                         continue
                     if depth == work_index:
                         if config.is_project(child):

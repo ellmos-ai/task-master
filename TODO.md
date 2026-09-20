@@ -1,5 +1,21 @@
 # TODO — robuste Discovery-Fallbacks
 
+## Offen: Pipeline-Wurzeln gelten als Projekt — T-20260920-535056160 (2026-09-20)
+
+- [ ] Nach dem Worktree-Fix bleiben auf ASUS-GEI **29 Zeitueberschreitungen**.
+  Ueberwiegend sind das keine Projekte, sondern **Pipeline-Wurzeln**
+  (`.TOPICS/.AI`, `.TOPICS/.RESEARCH`, `.TOPICS/.SOFTWARE`, `.AI/.MODULES`,
+  `.AI/.OS`, `.AI/.SKILLS`, ...). Sie zaehlen nur deshalb als Projekt, weil sie
+  selbst eine `CLAUDE.md`/`TODO.md` tragen — die in `traversal.py` ausdruecklich
+  dokumentierte Grenze des Auto-Modus. Gemessen: Ihr Digest umfasst den
+  gesamten Unterbaum, deshalb reissen sie jedes Zeitlimit.
+  **Kosten heute:** 29 x 30 s = ~15 min reine Wartezeit pro `init`-Lauf
+  (zweiter Lauf 1046 s, davon ~870 s Timeouts). Der Host nimmt deshalb den
+  dokumentierten Ausgang `[readiness] skip_timeouts = true`.
+  **Naechster Schritt:** Container-Ebene strukturell erkennen (analog zum
+  Worktree-Veto), statt sie je Host von Hand auszuschliessen. Ein Verzeichnis,
+  dessen Kinder ueberwiegend selbst Projekte sind, ist eine Zwischenebene.
+
 ## CI-Abnahme — T-20260906-833934205 (2026-09-09)
 
 - [x] Die drei Subprozess-Discovery-Tests konfigurieren eigene temporäre,

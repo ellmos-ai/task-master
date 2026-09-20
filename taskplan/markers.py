@@ -117,6 +117,32 @@ class SubdirRule:
         return all(hits) if self.require_all else any(hits)
 
 
+def is_git_worktree(directory: Path) -> bool:
+    """Ist das ein git-WORKTREE (kein eigenstaendiges Projekt)?
+
+    Ein Worktree ist ein zweiter Arbeitsbaum DESSELBEN Repositories. Er traegt
+    dieselben Markerdateien wie der Hauptklon und wurde deshalb bisher als
+    eigenes Projekt gezaehlt -- auf diesem System 151 Stueck, jeder so gross wie
+    das Original (T-20260920-535056160).
+
+    Erkennung ohne `git`-Aufruf: `.git` ist dort eine DATEI `gitdir: <pfad>`,
+    und der Pfad eines Worktrees laeuft ueber `.git/worktrees/<name>`. Ein
+    Submodul zeigt dagegen auf `.git/modules/<name>` und bleibt ein Projekt.
+    """
+    git = Path(directory) / ".git"
+    try:
+        if not git.is_file():
+            return False
+        head = git.read_text(encoding="utf-8", errors="replace")[:4096]
+    except OSError:
+        return False
+    match = re.match(r"\s*gitdir:\s*(.+)", head)
+    if not match:
+        return False
+    target = match.group(1).strip().replace("\\", "/").casefold()
+    return "/worktrees/" in target or target.endswith("/worktrees")
+
+
 @dataclass
 class GitRule:
     """Ein Git-Repository — eigene Kategorie, weil es ein STARKES Signal ist.
@@ -132,6 +158,9 @@ class GitRule:
     """
     enabled: bool = True
     require_worktree_root: bool = False   # nur echte Repos, keine Worktrees/Submodule
+    # Ein Worktree ist NIE ein eigenes Projekt -- unabhaengig davon, welche
+    # Kategorie angeschlagen hat. Deshalb ein Veto, keine weitere Kategorie.
+    exclude_worktrees: bool = True
 
     def matches(self, directory: Path) -> bool:
         if not self.enabled:
@@ -292,6 +321,10 @@ class MarkerRules:
             "flag_file": self.flag_file.matches(directory),
         }
 
+    def vetoed(self, directory: Path) -> bool:
+        """Harte Ausschluesse -- greifen NACH der Flagdatei, VOR jeder Heuristik."""
+        return self.git.exclude_worktrees and is_git_worktree(directory)
+
     def matches(self, directory: Path) -> bool:
         if self.expression:
             values = self._values(directory)
@@ -299,11 +332,15 @@ class MarkerRules:
             # in die Hand nimmt.
             if "flag_file" not in self.expression and values["flag_file"]:
                 return True
+            if self.vetoed(directory):
+                return False
             return evaluate_expression(self.expression, values)
 
         # Kurzform: Die ausdrueckliche Ansage schlaegt jede Heuristik.
         if self.flag_file.matches(directory):
             return True
+        if self.vetoed(directory):
+            return False
 
         rules = self.active_rules()
         if not rules:
@@ -326,6 +363,8 @@ class MarkerRules:
             parts.append("subdirs = " + joiner.join(self.subdirs.names))
         if self.git.enabled:
             parts.append("git = .git (Verzeichnis oder Datei/Worktree)")
+        if self.git.exclude_worktrees:
+            parts.append("ausgeschlossen: git-Worktrees (.git zeigt auf .git/worktrees/)")
         if self.flag_file.enabled:
             parts.append(f"flag_file = '{self.flag_file.name}'")
         if not parts:

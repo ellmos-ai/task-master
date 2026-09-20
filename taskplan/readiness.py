@@ -41,6 +41,7 @@ Aufrufe:
     python -m taskplan init --json
     python -m taskplan init --rebuild              # Index verwerfen, neu messen
     python -m taskplan init --skip-unreadable      # unlesbare Projekte zulassen
+    python -m taskplan init --skip-timeouts        # Zeitueberschreitungen benannt auslassen
 """
 from __future__ import annotations
 
@@ -510,6 +511,7 @@ def initialize(
     exclude: Iterable[str] = (),
     rebuild: bool = False,
     skip_unreadable: bool = False,
+    skip_timeouts: bool = False,
     project_timeout_seconds: float = DEFAULT_PROJECT_TIMEOUT_SECONDS,
     progress: Optional[Callable[[dict[str, Any]], None]] = None,
 ) -> dict[str, Any]:
@@ -658,20 +660,31 @@ def initialize(
         "policy_signature": policy_signature(exclude),
     }
 
-    if failures and (not skip_unreadable or timeouts):
+    # Fail-closed bleibt der Default. Aber ein Gate, das den richtigen Weg nur
+    # BENENNT, wird nicht gegangen -- deshalb hat jede Sperre hier einen
+    # dokumentierten Ausgang, der auch ohne CLI erreichbar ist
+    # (`[readiness] skip_timeouts` / `skip_unreadable`, T-20260920-535056160).
+    blocking = [f for f in failures
+                if not (skip_timeouts if f in timeouts else skip_unreadable)]
+    if timeouts and skip_timeouts:
+        report["skipped_timeouts"] = [f["project_path"] for f in timeouts]
+    if blocking:
         report["ready"] = False
-        if timeouts:
+        if timeouts and not skip_timeouts:
             report["reason"] = (
                 f"{len(timeouts)} Projekt(e) überschritten das Zeitlimit von "
-                f"{timeout:g} Sekunden. Die Messung wurde abgebrochen; "
-                "--skip-unreadable überspringt keine Zeitüberschreitungen. "
-                f"Ursache beheben und erneut ausführen: {REPAIR_COMMAND}"
+                f"{timeout:g} Sekunden. Die Messung wurde abgebrochen. "
+                "Ausweg: Zeitlimit anheben (`[readiness] project_timeout_seconds`), "
+                "die Projekte bewusst auslassen (`--skip-timeouts` bzw. "
+                "`[readiness] skip_timeouts = true` -- sie werden dann namentlich "
+                f"gemeldet) oder die Ursache beheben: {REPAIR_COMMAND}"
             )
         else:
             report["reason"] = (
-                f"{len(failures)} Projekt(e) konnten nicht gelesen werden. "
+                f"{len(blocking)} Projekt(e) konnten nicht gelesen werden. "
                 "Ursache beheben und erneut ausführen, oder die Projekte mit "
-                "--skip-unreadable bewusst auslassen."
+                "--skip-unreadable (bzw. `[readiness] skip_unreadable = true`) "
+                "bewusst auslassen."
             )
         return report
 

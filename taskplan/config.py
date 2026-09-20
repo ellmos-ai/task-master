@@ -266,6 +266,7 @@ def marker_rules():
         git=GitRule(
             enabled=bool(git.get("enabled", True)),
             require_worktree_root=bool(git.get("require_worktree_root", False)),
+            exclude_worktrees=bool(git.get("exclude_worktrees", True)),
         ),
         flag_file=FlagFileRule(
             enabled=bool(flag.get("enabled", True)),
@@ -502,6 +503,22 @@ def readiness_project_timeout_seconds() -> float:
     except (TypeError, ValueError):
         return 30.0
     return value if math.isfinite(value) and value > 0 else 30.0
+
+
+def readiness_skip_flags() -> Dict[str, bool]:
+    """Ausgang aus dem Readiness-Gate, auch ohne CLI.
+
+    Der Launcher ruft `init` ohne Argumente auf (``ensure_initialised``). Ein
+    Ausweg, den es nur als CLI-Flag gibt, ist dort nicht erreichbar -- deshalb
+    liegt er zusaetzlich in der Konfiguration. Default bleibt fail-closed.
+    """
+    section = load_config().get("readiness", {}) or {}
+    if not isinstance(section, dict):
+        section = {}
+    return {
+        "skip_unreadable": bool(section.get("skip_unreadable", False)),
+        "skip_timeouts": bool(section.get("skip_timeouts", False)),
+    }
 
 
 def discovery_cache_config() -> Dict[str, Any]:
