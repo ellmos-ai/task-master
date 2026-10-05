@@ -140,7 +140,8 @@ def is_git_worktree(directory: Path) -> bool:
     if not match:
         return False
     target = match.group(1).strip().replace("\\", "/").casefold()
-    return "/worktrees/" in target or target.endswith("/worktrees")
+    target = "/" + target.lstrip("/")
+    return "/.git/worktrees/" in target or target.endswith("/.git/worktrees")
 
 
 @dataclass

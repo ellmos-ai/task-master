@@ -2,10 +2,10 @@
 
 ## Offen: Pipeline-Wurzeln gelten als Projekt — T-20260920-535056160 (2026-09-20)
 
-- [ ] Nach dem Worktree-Fix bleiben auf ASUS-GEI **29 Zeitueberschreitungen**.
-  Ueberwiegend sind das keine Projekte, sondern **Pipeline-Wurzeln**
+- [ ] Nach dem Worktree-Fix bleiben auf dem Entwicklungsrechner **29 Zeitüberschreitungen**.
+  Überwiegend sind das keine Projekte, sondern **Pipeline-Wurzeln**
   (`.TOPICS/.AI`, `.TOPICS/.RESEARCH`, `.TOPICS/.SOFTWARE`, `.AI/.MODULES`,
-  `.AI/.OS`, `.AI/.SKILLS`, ...). Sie zaehlen nur deshalb als Projekt, weil sie
+  `.AI/.OS`, `.AI/.SKILLS`, ...). Sie zählen nur deshalb als Projekt, weil sie
   selbst eine `CLAUDE.md`/`TODO.md` tragen — die in `traversal.py` ausdruecklich
   dokumentierte Grenze des Auto-Modus. Gemessen: Ihr Digest umfasst den
   gesamten Unterbaum, deshalb reissen sie jedes Zeitlimit.
@@ -14,7 +14,7 @@
   dokumentierten Ausgang `[readiness] skip_timeouts = true`.
   **Naechster Schritt:** Container-Ebene strukturell erkennen (analog zum
   Worktree-Veto), statt sie je Host von Hand auszuschliessen. Ein Verzeichnis,
-  dessen Kinder ueberwiegend selbst Projekte sind, ist eine Zwischenebene.
+  dessen Kinder überwiegend selbst Projekte sind, ist eine Zwischenebene.
 
 ## CI-Abnahme — T-20260906-833934205 (2026-09-09)
 

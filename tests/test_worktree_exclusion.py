@@ -29,6 +29,12 @@ def test_worktree_wird_nicht_als_projekt_gezaehlt(tmp_path):
     assert rules.matches(klon) is True       # Hauptklon: bleibt
 
 
+def test_submodul_in_ordner_namens_worktrees_bleibt_projekt(tmp_path):
+    sub = _make(tmp_path, "vendor", "/repo/.git/modules/worktrees/vendor")
+    assert is_git_worktree(sub) is False
+    assert MarkerRules().matches(sub) is True
+
+
 def test_flagdatei_schlaegt_das_worktree_veto(tmp_path):
     wt = _make(tmp_path, "wt", "/repo/.git/worktrees/wt")
     (wt / ".taskplan-project").write_text("", encoding="utf-8")

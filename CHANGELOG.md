@@ -3,16 +3,16 @@
 ## Unreleased
 
 ### Fixed
-- **`taskplan init` lief 82 Minuten und endete mit 104 Zeitueberschreitungen**
-  (T-20260920-535056160). Ursache: 151 git-Worktrees wurden als eigenstaendige
+- **`taskplan init` lief 82 Minuten und endete mit 104 Zeitüberschreitungen**
+  (T-20260920-535056160). Ursache: 151 git-Worktrees wurden als eigenständige
   Projekte gescannt -- jeder so gross wie sein Hauptklon. Worktrees werden jetzt
   strukturell erkannt (`.git` ist eine DATEI, die nach `.git/worktrees/` zeigt)
-  und samt Unterbaum uebersprungen, statt auf eine gepflegte Ausschlussliste
-  angewiesen zu sein. `skip_dirs` gilt ausserdem jetzt auch fuer eine ROOT --
+  und samt Unterbaum übersprungen, statt auf eine gepflegte Ausschlussliste
+  angewiesen zu sein. `skip_dirs` gilt außerdem jetzt auch für eine ROOT --
   Roots kommen aus einer fremden Quelle und waren sonst nicht ausschliessbar.
   Abschaltbar mit `[traversal.markers.git] exclude_worktrees = false`.
 - **Das Zeitlimit hatte keinen Ausgang.** Die Meldung sagte selbst
-  "--skip-unreadable ueberspringt keine Zeitueberschreitungen", nannte aber
+  "--skip-unreadable überspringt keine Zeitüberschreitungen", nannte aber
   keinen benutzbaren Weg. Neu: `--skip-timeouts` bzw. `[readiness] skip_timeouts`
   (ausgelassene Projekte werden namentlich gemeldet) und `[readiness]
   skip_unreadable`. Beide auch als Konfiguration, weil `ensure_initialised()`

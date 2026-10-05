@@ -313,7 +313,7 @@ require_worktree_root = false
 # dieselben Markerdateien wie sein Hauptklon und ist trotzdem kein eigenes
 # Projekt — 151 davon machten hier aus einem 5-Minuten-Lauf 82 Minuten
 # (T-20260920-535056160). Erkannt an `.git` = DATEI, die nach `.git/worktrees/`
-# zeigt; der ganze Unterbaum wird uebersprungen. Ein Submodul (`.git/modules/`)
+# zeigt; der ganze Unterbaum wird übersprungen. Ein Submodul (`.git/modules/`)
 # bleibt ein Projekt, und eine Flagdatei schlaegt auch dieses Veto.
 exclude_worktrees = true
 
