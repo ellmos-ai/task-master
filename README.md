@@ -213,7 +213,23 @@ retry cheap. Repeat runs are idempotent and re-measure only what changed.
 python -m taskplan init --json              # machine-readable report
 python -m taskplan init --rebuild           # discard the index and measure again
 python -m taskplan init --skip-unreadable   # accept projects that cannot be read
+python -m taskplan init --skip-timeouts     # accept projects that exceed the time limit
 ```
+
+Both exits also exist as configuration, because the starters call `init` without
+arguments -- a way out that only exists as a CLI flag cannot be reached there:
+
+```toml
+[readiness]
+project_timeout_seconds = 30     # per-project limit
+skip_unreadable = false          # fail-closed by default
+skip_timeouts = false            # skipped projects are always reported by name
+```
+
+Git **worktrees** are never counted as projects: they carry the same marker files
+as their main clone, so 151 of them turned a 5-minute run into 82 minutes here
+(T-20260920-535056160). Detection is by `.git` being a *file* pointing into
+`.git/worktrees/`; switch it off with `[traversal.markers.git] exclude_worktrees = false`.
 
 `pip install` deliberately has **no** post-install hook: a wheel install must not
 block for minutes on cloud I/O and must not fail halfway. The bundled starters

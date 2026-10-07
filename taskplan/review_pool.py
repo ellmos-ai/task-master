@@ -27,7 +27,7 @@ REVIEW_EFFORTS = ("easy", "medium")
 DEFAULT_EXCLUDED_DIRS = frozenset({
     ".git", ".hg", ".svn", "__pycache__", ".pytest_cache",
     ".mypy_cache", ".ruff_cache", ".tox", ".nox", ".venv", "venv",
-    "node_modules", "dist", "build", "htmlcov", ".taskplan",
+    "node_modules", "dist", "build", "out", "htmlcov", ".taskplan",
 })
 DEFAULT_EXCLUDED_FILES = (
     "LOCK.execution-contract.txt", ".taskplan-lock*", "*.pyc", "*.pyo",

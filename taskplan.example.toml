@@ -309,6 +309,22 @@ enabled = true
 # In Worktrees und Submodulen ist `.git` eine DATEI, kein Verzeichnis — beides
 # zaehlt. true = nur echte Repos, keine Worktrees/Submodule.
 require_worktree_root = false
+# Ein git-WORKTREE ist ein zweiter Arbeitsbaum DESSELBEN Repositories. Er traegt
+# dieselben Markerdateien wie sein Hauptklon und ist trotzdem kein eigenes
+# Projekt — 151 davon machten hier aus einem 5-Minuten-Lauf 82 Minuten
+# (T-20260920-535056160). Erkannt an `.git` = DATEI, die nach `.git/worktrees/`
+# zeigt; der ganze Unterbaum wird übersprungen. Ein Submodul (`.git/modules/`)
+# bleibt ein Projekt, und eine Flagdatei schlaegt auch dieses Veto.
+exclude_worktrees = true
+
+# --- Readiness: `taskplan init` --------------------------------------------
+# Das Gate ist fail-closed — aber ein Gate, das den richtigen Weg nur BENENNT,
+# wird nicht gegangen. Deshalb hat jede Sperre hier einen Ausgang, der auch ohne
+# CLI-Flag erreichbar ist: Die Starter rufen `init` ohne Argumente auf.
+# [readiness]
+# project_timeout_seconds = 30   # Zeitlimit je Projektmessung
+# skip_unreadable = false        # unlesbare Projekte bewusst auslassen
+# skip_timeouts   = false        # zu langsame auslassen; sie werden namentlich gemeldet
 
 # --- 5. FLAGDATEI (der letzte Automatik-Fallback) ---------------------------
 # Wo keine Heuristik greift: eine Datei ablegen, und die Sache ist entschieden.

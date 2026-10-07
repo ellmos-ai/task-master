@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### Fixed
+- **`taskplan init` lief 82 Minuten und endete mit 104 Zeitüberschreitungen**
+  (T-20260920-535056160). Ursache: 151 git-Worktrees wurden als eigenständige
+  Projekte gescannt -- jeder so gross wie sein Hauptklon. Worktrees werden jetzt
+  strukturell erkannt (`.git` ist eine DATEI, die nach `.git/worktrees/` zeigt)
+  und samt Unterbaum übersprungen, statt auf eine gepflegte Ausschlussliste
+  angewiesen zu sein. `skip_dirs` gilt außerdem jetzt auch für eine ROOT --
+  Roots kommen aus einer fremden Quelle und waren sonst nicht ausschliessbar.
+  Abschaltbar mit `[traversal.markers.git] exclude_worktrees = false`.
+- **Das Zeitlimit hatte keinen Ausgang.** Die Meldung sagte selbst
+  "--skip-unreadable überspringt keine Zeitüberschreitungen", nannte aber
+  keinen benutzbaren Weg. Neu: `--skip-timeouts` bzw. `[readiness] skip_timeouts`
+  (ausgelassene Projekte werden namentlich gemeldet) und `[readiness]
+  skip_unreadable`. Beide auch als Konfiguration, weil `ensure_initialised()`
+  `init` ohne Argumente aufruft. Fail-closed bleibt der Default.
+- `out/` gilt wie `dist/`/`build/` als Wegwerf und wandert nicht mehr in den
+  Projektindex (Testartefakte ohne Leserecht brachen dort die Messung ab).
+
 ### Added (0.8.0)
 - **Readiness-Gate: `python -m taskplan init`** (T-20260831-555678565,
   Nutzerentscheid E05=A vom 2026-09-11). Ein eigener, idempotenter

@@ -220,7 +220,24 @@ und messen nur nach, was sich geändert hat.
 python -m taskplan init --json              # maschinenlesbarer Bericht
 python -m taskplan init --rebuild           # Index verwerfen und neu messen
 python -m taskplan init --skip-unreadable   # unlesbare Projekte bewusst auslassen
+python -m taskplan init --skip-timeouts     # zu langsame Projekte bewusst auslassen
 ```
+
+Beide Ausgänge gibt es auch als Konfiguration -- die Starter rufen `init` ohne
+Argumente auf, ein Ausweg nur als CLI-Flag wäre dort nicht erreichbar:
+
+```toml
+[readiness]
+project_timeout_seconds = 30     # Zeitlimit je Projekt
+skip_unreadable = false          # Default bleibt fail-closed
+skip_timeouts = false            # ausgelassene Projekte werden immer namentlich gemeldet
+```
+
+Git-**Worktrees** zählen nie als Projekt: Sie tragen dieselben Markerdateien wie
+ihr Hauptklon -- 151 davon machten hier aus einem 5-Minuten-Lauf 82 Minuten
+(T-20260920-535056160). Erkannt werden sie daran, dass `.git` eine DATEI ist, die
+nach `.git/worktrees/` zeigt; abschaltbar mit
+`[traversal.markers.git] exclude_worktrees = false`.
 
 `pip install` bekommt bewusst **keinen** Post-Install-Hook: Eine Wheel-Installation
 darf nicht minutenlang auf Cloud-I/O warten und nicht auf halbem Weg abbrechen. Die

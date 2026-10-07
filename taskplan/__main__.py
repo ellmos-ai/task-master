@@ -342,6 +342,7 @@ def _init_command(args: list[str]) -> int:
     from .config import (
         discovery_timeout_seconds,
         readiness_project_timeout_seconds,
+        readiness_skip_flags,
         review_pool_config,
     )
     from .readiness import initialize, readiness_status
@@ -349,7 +350,9 @@ def _init_command(args: list[str]) -> int:
 
     as_json = "--json" in args
     rebuild = "--rebuild" in args
-    skip_unreadable = "--skip-unreadable" in args
+    skips = readiness_skip_flags()
+    skip_unreadable = "--skip-unreadable" in args or skips["skip_unreadable"]
+    skip_timeouts = "--skip-timeouts" in args or skips["skip_timeouts"]
     quiet = "--quiet" in args or as_json
 
     store = TaskClient()
@@ -397,6 +400,7 @@ def _init_command(args: list[str]) -> int:
     report = initialize(
         store, projects, exclude=exclude, rebuild=rebuild,
         skip_unreadable=skip_unreadable,
+        skip_timeouts=skip_timeouts,
         project_timeout_seconds=project_timeout,
         progress=show,
     )
@@ -412,6 +416,8 @@ def _init_command(args: list[str]) -> int:
         print(f"[INIT] Übersprungen: {report['projects_skipped']}")
         print(f"[INIT] Zeitlimit   : {report['project_timeout_seconds']:g}s je Projekt")
         print(f"[INIT] Dauer       : {report['duration_seconds']}s")
+        for path in report.get("skipped_timeouts", ()):
+            print(f"  AUSGELASSEN (Zeitlimit, bewusst): {path}", file=sys.stderr)
         for failure in report["failures"]:
             print(
                 f"  FEHLER: {failure['project_path']} — "
@@ -696,12 +702,14 @@ def main(argv: list[str] | None = None) -> int:
         print("taskplan — Aufgabenverwaltung")
         print()
         print("Befehle:")
-        print("  init [--json] [--rebuild] [--skip-unreadable]")
+        print("  init [--json] [--rebuild] [--skip-unreadable] [--skip-timeouts]")
         print("            EINMAL PFLICHT je System: misst alle Projekte, zeigt")
         print("            Fortschritt und markiert erst bei vollem Erfolg als")
         print("            bereit. Vorher ist JEDER Rollenstart gesperrt.")
         print("            --rebuild verwirft den Index, --skip-unreadable laesst")
-        print("            unlesbare Projekte bewusst aus.")
+        print("            unlesbare und --skip-timeouts zu langsame Projekte")
+        print("            bewusst aus (beide werden namentlich gemeldet; auch")
+        print("            als [readiness] skip_unreadable/skip_timeouts setzbar).")
         print()
         print("  next [--role R] [--json]")
         print("            Fragt den SELEKTOR: was ist als naechstes dran?")
