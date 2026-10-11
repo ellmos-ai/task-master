@@ -19,6 +19,9 @@ task-master (ehemals `taskplan`, Repo: `ellmos-ai/task-master`) ist eine Python-
 - `taskplan.selector`: Deterministischer Zustandsautomat (`next_bundle()`) zur rollenspezifischen Aufgabenauswahl nach Aufwand und Projekt-Rotation.
 - `taskplan.locks`: Dreidimensionale Lock-Verwaltung (`LazyLockView`, `scan_lockmaster`) zur Verhinderung von Agenten-Kollisionen.
 - `taskplan.client`: Python-Client für SQLite- und Dateien-Backends.
+- `taskplan.launcher`: Nutzt optional die [COMA-E01-Sitzungs-API](https://github.com/ellmos-ai/coma)
+  für die Planung von Anbieterbefehlen und Sonden. Fehlt COMA oder ist die Version
+  inkompatibel, greift der eingebaute Fallback.
 - `taskplan.review_pool`: hostlokaler, rollenspezifischer Siegel- und
   Wiedervorlagepool mit versioniertem Projekt-Hash, Präsentationsleases und
   explizit bestätigten Erfolgen; `next` sortiert bekannte Zustände hash-lazy und

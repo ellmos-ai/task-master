@@ -481,12 +481,12 @@ the launcher.
 
 ### Model probe and provider fallback
 
-When COMA exposes its E01 session API, TASKPLAN delegates provider argv,
-capability filtering, probe construction and process cleanup to that shared
-contract. TASKPLAN still owns roles, prompts and host configuration. If COMA is
-missing or too old, `launch` prints `[FALLBACK]` and uses the frozen built-in
-implementation; this keeps existing installations startable while the shared
-contract tests protect both argv paths from drift.
+When [COMA](https://github.com/ellmos-ai/coma) exposes its E01 session API,
+TASKPLAN delegates provider argv, capability filtering, probe construction and
+process cleanup to that shared contract. TASKPLAN still owns roles, prompts and
+host configuration. If COMA is missing or too old, `launch` prints `[FALLBACK]`
+and uses the frozen built-in implementation; this keeps existing installations
+startable while the shared contract tests protect both argv paths from drift.
 
 A model name that no longer exists used to end the start: the CLI aborted and
 the user had no worker, although three other providers were installed. `launch`
