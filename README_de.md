@@ -500,8 +500,9 @@ Starter fest verdrahtet.
 
 ### Modellsonde und Provider-Fallback
 
-Wenn COMA seine E01-Sitzungs-API bereitstellt, bezieht TASKPLAN Anbieter-argv,
-Fähigkeitsfilter, Sondenbau und Prozess-Cleanup aus diesem gemeinsamen Vertrag.
+Wenn [COMA](https://github.com/ellmos-ai/coma) seine E01-Sitzungs-API bereitstellt,
+bezieht TASKPLAN Anbieter-argv, Fähigkeitsfilter, Sondenbau und Prozess-Cleanup
+aus diesem gemeinsamen Vertrag.
 TASKPLAN bleibt für Rollen, Prompts und Host-Konfiguration zuständig. Fehlt COMA
 oder ist die installierte Fassung zu alt, meldet `launch` sichtbar `[FALLBACK]`
 und nutzt den eingefrorenen Built-in. Gemeinsame argv-Vertragstests schützen
