@@ -436,6 +436,10 @@ def main(argv: list[str] | None = None) -> int:
     command = args[0] if args else "help"
     rest = args[1:]
 
+    if command == "startcenter":
+        from .startcenter import main as startcenter
+        return startcenter(rest)
+
     if command == "doctor":
         from .doctor import run
         return run()
@@ -773,6 +777,8 @@ def main(argv: list[str] | None = None) -> int:
         print("            Rolle mit fremdem Prompt statt einer TASKPLAN-Rolle.")
         print()
         print("  starters list [--platform windows|posix]")
+        print("  startcenter [--role R] [--provider P] [--dry-run]")
+        print("  starters path --role startcenter|pingpong [--platform windows|posix]")
         print("  starters path --role R [--provider P] [--platform windows|posix]")
         print("            Listet bzw. lokalisiert die gebündelten Starter:")
         print("            anbieterneutral (fragt beim Start) und je Provider.")

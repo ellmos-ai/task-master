@@ -645,3 +645,15 @@ python -m pytest tests/ -q
 ## License
 
 MIT — Lukas Geiger
+
+## Portable agent starters
+
+The repository and wheels ship `START.bat` and `PINGPONG.bat`, plus POSIX equivalents. `python -m taskplan startcenter` offers the four TASKPLAN roles and optional SYSTEM-AUDITOR, TICKET-MASTER, PingPong and public githubbot-core MULTI-BOT roles. Locate a packaged file with `python -m taskplan starters path --role startcenter` or `--role pingpong` (`--platform posix` on macOS/Linux).
+
+Install the current source with `python -m pip install .`. Install the optional role modules from their reviewed sources; their new wheels include `share/<module>/prompts`. For source checkouts, set `SYSTEM_AUDITOR_ROOT` or `TICKET_MASTER_ROOT` explicitly. Provider/model settings use the existing TASKPLAN config. These starters never enable trusted automation or select a personal account.
+
+PingPong bundles its 1.1.0 skill documents and references, with a locally hardened packaged runtime. Codex ListenSync uses the persisted-goal prompt contract. Claude WriteSync remains available; **Claude ListenSync is on HOLD (exit 2)** because this launcher has no verified `/loop` startup adapter. The standalone packaged prompt helper enforces the same HOLD and never claims that a loop already exists. Additional provider adapters require their own verified contract.
+
+Supply `--sync-root` and `--slot` (or `PINGPONG_SYNC_ROOT` and `PINGPONG_SLOT`); default listener duration is 24h. Slot identities are single portable filename components: path separators, traversal, `-to-`, trailing dots and Windows device names are refused by the runtime itself, including direct STATE/CALL helpers. Existing state/CALL file symlinks are refused, including links to peer files in the same channel; the resolved identity must match the own filename. Atomic state and CALL writes use exclusively created temporary files and replace a destination link swapped after validation. Invalid or out-of-range listener durations return exit 2 without a traceback.
+
+Example preview: `python -m taskplan startcenter --role pingpong --provider codex --sync-root /path/to/sync --slot own-host --duration 15m --dry-run`. Preview starts no model. These safety changes affect only this packaged runtime; they do not change the canonical skill library or claim byte identity with its original runtime.

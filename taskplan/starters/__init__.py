@@ -72,6 +72,17 @@ def _package(platform: str, provider: str) -> str:
 def get_starter_path(role: str, provider: str = "",
                      platform: str = "windows") -> Path:
     chosen = normalize_platform(platform)
+    if role.lower() in {"startcenter", "pingpong"}:
+        if provider:
+            raise ValueError("Startcenter und PingPong wählen den Anbieter zur Laufzeit")
+        names = {
+            ("windows", "startcenter"): "START.bat",
+            ("windows", "pingpong"): "PINGPONG.bat",
+            ("posix", "startcenter"): "start.sh",
+            ("posix", "pingpong"): "pingpong.sh",
+        }
+        resource = resources.files(_package(chosen, "")).joinpath(names[(chosen, role.lower())])
+        return Path(os.fspath(resource)).resolve()
     resource = resources.files(_package(chosen, provider)).joinpath(
         starter_name(role, provider, chosen)
     )
