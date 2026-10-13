@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import argparse
 import os
-import re
 import socket
 import subprocess
 import sys
@@ -113,7 +112,10 @@ def main(argv: list[str] | None = None) -> int:
                 raise ValueError("Diese Modulrolle hat keinen --mode-Schalter.")
             kwargs.update(label=role, prompt_file=str(module_prompt(role, args.lang)), request=REQUESTS[role])
         elif role == "pingpong":
-            from .resources.pingpong.scripts.pingpong_runtime import build_prompt
+            from .resources.pingpong.scripts.pingpong_runtime import (
+                build_prompt,
+                resolve_slot,
+            )
 
             args.provider = args.provider or provider_name("")
             if not args.provider and not args.dry_run:
@@ -122,8 +124,7 @@ def main(argv: list[str] | None = None) -> int:
                 raise ValueError("Der mitgelieferte PingPong-Vertrag unterstützt codex und claude; wähle --provider ausdrücklich.")
             args.slot = args.slot or env.get("PINGPONG_SLOT", "")
             args.sync_root = args.sync_root or env.get("PINGPONG_SYNC_ROOT", "")
-            if not args.slot or not re.fullmatch(r"[A-Za-z0-9_.-]+", args.slot) or args.slot in {".", ".."} or "-to-" in args.slot:
-                raise ValueError("Ein gültiger eigener Slot fehlt: --slot oder PINGPONG_SLOT.")
+            args.slot = resolve_slot(args)
             if not args.sync_root:
                 raise ValueError("Sync-Root fehlt: --sync-root oder PINGPONG_SYNC_ROOT.")
             mode = args.mode or "ListenSync"
@@ -139,7 +140,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.mode:
             raise ValueError("--mode gilt für PingPong oder MULTI-BOT; Operator-Modus über TASKPLAN_OPERATOR_MODE konfigurieren.")
         return launch(role, args.provider, **kwargs)
-    except (ValueError, OSError) as exc:
+    except (ValueError, OSError, argparse.ArgumentTypeError) as exc:
         print(f"[FEHLER] {exc}", file=sys.stderr)
         return 2
 

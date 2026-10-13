@@ -88,3 +88,25 @@ def test_bad_menu_choice_starts_nothing():
     with mock.patch("builtins.input", return_value="99"), mock.patch.object(startcenter, "launch") as launch:
         assert startcenter.main([]) == 2
     launch.assert_not_called()
+
+
+def test_claude_listensync_holds_before_launcher_or_provider_probe(tmp_path, capsys):
+    with mock.patch.object(startcenter, "launch") as launch:
+        assert startcenter.main([
+            "--role", "pingpong", "--provider", "claude", "--slot", "own",
+            "--sync-root", str(tmp_path), "--mode", "ListenSync", "--dry-run",
+        ]) == 2
+    launch.assert_not_called()
+    error = capsys.readouterr().err
+    assert "HOLD" in error and "Claude" in error and "/loop" in error
+
+
+def test_invalid_listener_duration_is_exit_two_without_traceback(tmp_path, capsys):
+    with mock.patch.object(startcenter, "launch") as launch:
+        assert startcenter.main([
+            "--role", "pingpong", "--provider", "codex", "--slot", "own",
+            "--sync-root", str(tmp_path), "--duration", "invalid", "--dry-run",
+        ]) == 2
+    launch.assert_not_called()
+    error = capsys.readouterr().err
+    assert "duration" in error and "Traceback" not in error

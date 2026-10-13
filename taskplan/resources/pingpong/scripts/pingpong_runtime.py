@@ -10,6 +10,7 @@ import os
 import re
 import socket
 import sys
+import tempfile
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -18,6 +19,10 @@ DURATION_RE = re.compile(r"^(?P<value>[1-9][0-9]*)(?P<unit>[smhd])$", re.IGNOREC
 PROVIDER_ACTORS = {
     "codex": "codex-cli",
     "claude": "claude-code",
+}
+SLOT_RE = re.compile(r"[A-Za-z0-9_.-]+")
+WINDOWS_DEVICE_NAMES = {"CON", "PRN", "AUX", "NUL"} | {
+    f"{prefix}{number}" for prefix in ("COM", "LPT") for number in range(1, 10)
 }
 
 # --- STATE and CALL -------------------------------------------------------
@@ -31,8 +36,7 @@ CALL_SUFFIX = ".txt"
 BROADCAST = "all"
 DEFAULT_CALL_TTL = "6h"
 CALL_NAME_RE = re.compile(
-    r"^(?:%s|%s)(?P<sender>.+?)-to-(?P<target>.+)%s$"
-    % (CALL_PREFIX, LEGACY_CALL_PREFIX, re.escape(CALL_SUFFIX))
+    rf"^(?:{CALL_PREFIX}|{LEGACY_CALL_PREFIX})(?P<sender>.+?)-to-(?P<target>.+){re.escape(CALL_SUFFIX)}$"
 )
 # Three distinct outcomes: a failed check must never look like an empty one.
 VERDICT_EXITS = {"call-for-me": 0, "idle": 1, "check-failed": 3}
@@ -42,10 +46,13 @@ def parse_expiry(value: str, now: datetime) -> datetime:
     """Parse a duration such as 24h or an ISO-8601 local timestamp."""
     match = DURATION_RE.fullmatch(value.strip())
     if match:
-        amount = int(match.group("value"))
-        unit = match.group("unit").lower()
-        seconds = amount * {"s": 1, "m": 60, "h": 3600, "d": 86400}[unit]
-        return now + timedelta(seconds=seconds)
+        try:
+            amount = int(match.group("value"))
+            unit = match.group("unit").lower()
+            seconds = amount * {"s": 1, "m": 60, "h": 3600, "d": 86400}[unit]
+            return now + timedelta(seconds=seconds)
+        except (ValueError, OverflowError) as exc:
+            raise argparse.ArgumentTypeError("duration is outside the supported range") from exc
 
     normalized = value.strip().replace("Z", "+00:00")
     try:
@@ -67,11 +74,7 @@ def build_prompt(args: argparse.Namespace) -> str:
     if expires_at <= now:
         raise ValueError("expiry must be in the future")
 
-    slot = args.slot or os.environ.get("PINGPONG_SLOT")
-    if not slot:
-        raise ValueError(
-            "own slot is required; pass --slot or set PINGPONG_SLOT"
-        )
+    slot = resolve_slot(args)
 
     sync_root_value = args.sync_root or os.environ.get("PINGPONG_SYNC_ROOT")
     if not sync_root_value:
@@ -80,6 +83,12 @@ def build_prompt(args: argparse.Namespace) -> str:
         )
 
     sync_root = Path(sync_root_value).expanduser()
+    if args.provider == "claude":
+        raise ValueError(
+            "HOLD: Claude ListenSync requires verified /loop startup; "
+            "the packaged launcher has no verified loop adapter. "
+            "Use WriteSync for an authorized single delta."
+        )
     actor = f"{PROVIDER_ACTORS[args.provider]}@{args.host}"
     common = (
         f"Use $pingpong as {actor}. Sync root: {sync_root}. "
@@ -92,19 +101,11 @@ def build_prompt(args: argparse.Namespace) -> str:
         "at expiry and finish only when no accepted work remains open."
     )
 
-    if args.provider == "codex":
-        return (
-            common
-            + " Create a persisted goal whose objective contains the expiry, "
-            "completion criteria, actor, sync root, and own slot. Keep the goal "
-            "active so session wake-ups continue until the criteria are met."
-        )
-
     return (
         common
-        + " This prompt is intended for a Claude /loop launch. Do not create a "
-        "second loop. Replace the loop interval when cadence changes and stop "
-        "the loop after the expiry criteria are satisfied."
+        + " Create a persisted goal whose objective contains the expiry, "
+        "completion criteria, actor, sync root, and own slot. Keep the goal "
+        "active so session wake-ups continue until the criteria are met."
     )
 
 
@@ -152,7 +153,26 @@ def resolve_sync_root(args: argparse.Namespace) -> Path:
 
 
 def resolve_slot(args: argparse.Namespace) -> str:
-    return _required(args.slot, "slot", "PINGPONG_SLOT")
+    return validate_slot(_required(args.slot, "slot", "PINGPONG_SLOT"))
+
+
+def validate_slot(slot: str) -> str:
+    """Slot identities are single portable filename components, never paths."""
+    if (not isinstance(slot, str) or not SLOT_RE.fullmatch(slot)
+            or slot in {".", ".."} or "-to-" in slot
+            or slot.endswith(".") or slot.split(".", 1)[0].upper() in WINDOWS_DEVICE_NAMES):
+        raise ValueError("slot must be a safe single filename component")
+    return slot
+
+
+def _channel_path(sync_root: Path, directory: Path, filename: str) -> Path:
+    """Refuse existing symlinks that redirect an own-slot path outside its channel."""
+    root = sync_root.resolve()
+    channel = directory.resolve()
+    path = directory / filename
+    if not channel.is_relative_to(root) or path.resolve().parent != channel:
+        raise ValueError("slot path escapes its sync channel")
+    return path
 
 
 def registry_dir(sync_root: Path) -> Path:
@@ -164,7 +184,7 @@ def calls_dir(sync_root: Path) -> Path:
 
 
 def state_path(sync_root: Path, slot: str) -> Path:
-    return registry_dir(sync_root) / f"{slot}{STATE_SUFFIX}"
+    return _channel_path(sync_root, registry_dir(sync_root), f"{validate_slot(slot)}{STATE_SUFFIX}")
 
 
 def read_json(path: Path) -> dict:
@@ -175,11 +195,23 @@ def read_json(path: Path) -> dict:
 def write_json(path: Path, data: dict) -> None:
     """Replace atomically so a concurrent reader never sees a half file."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.parent / (path.name + ".tmp")
-    with tmp.open("w", encoding="utf-8") as handle:
-        json.dump(data, handle, indent=2, ensure_ascii=False)
-        handle.write("\n")
-    tmp.replace(path)
+    # Exclusive random creation cannot follow a planted, predictable .tmp link.
+    with tempfile.NamedTemporaryFile(
+        mode="w", encoding="utf-8", dir=path.parent,
+        prefix=path.name + ".", suffix=".tmp", delete=False,
+    ) as handle:
+        tmp = Path(handle.name)
+        try:
+            json.dump(data, handle, indent=2, ensure_ascii=False)
+            handle.write("\n")
+        except BaseException:
+            handle.close()
+            tmp.unlink(missing_ok=True)
+            raise
+    try:
+        tmp.replace(path)
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 def set_state(sync_root: Path, slot: str, active: bool, actor: str | None) -> Path:
@@ -222,7 +254,8 @@ def active_slots(sync_root: Path, exclude: str | None = None) -> dict[str, dict]
 
 
 def call_path(sync_root: Path, sender: str, target: str) -> Path:
-    return calls_dir(sync_root) / f"{CALL_PREFIX}{sender}-to-{target}{CALL_SUFFIX}"
+    filename = f"{CALL_PREFIX}{validate_slot(sender)}-to-{validate_slot(target)}{CALL_SUFFIX}"
+    return _channel_path(sync_root, calls_dir(sync_root), filename)
 
 
 def parse_call(path: Path, now: datetime) -> dict:
