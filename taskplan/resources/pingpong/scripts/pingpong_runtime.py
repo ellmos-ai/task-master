@@ -166,12 +166,12 @@ def validate_slot(slot: str) -> str:
 
 
 def _channel_path(sync_root: Path, directory: Path, filename: str) -> Path:
-    """Refuse existing symlinks that redirect an own-slot path outside its channel."""
+    """Bind the own-slot name to its exact file, including inside one channel."""
     root = sync_root.resolve()
     channel = directory.resolve()
     path = directory / filename
-    if not channel.is_relative_to(root) or path.resolve().parent != channel:
-        raise ValueError("slot path escapes its sync channel")
+    if not channel.is_relative_to(root) or path.is_symlink() or path.resolve() != channel / filename:
+        raise ValueError("slot path does not identify its own sync channel file")
     return path
 
 
@@ -194,6 +194,11 @@ def read_json(path: Path) -> dict:
 
 def write_json(path: Path, data: dict) -> None:
     """Replace atomically so a concurrent reader never sees a half file."""
+    _write_text_atomic(path, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+
+
+def _write_text_atomic(path: Path, content: str) -> None:
+    """Replace the named file instead of following a swapped destination link."""
     path.parent.mkdir(parents=True, exist_ok=True)
     # Exclusive random creation cannot follow a planted, predictable .tmp link.
     with tempfile.NamedTemporaryFile(
@@ -202,8 +207,7 @@ def write_json(path: Path, data: dict) -> None:
     ) as handle:
         tmp = Path(handle.name)
         try:
-            json.dump(data, handle, indent=2, ensure_ascii=False)
-            handle.write("\n")
+            handle.write(content)
         except BaseException:
             handle.close()
             tmp.unlink(missing_ok=True)
@@ -367,15 +371,13 @@ def command_call(args: argparse.Namespace) -> int:
         if not reason and path.exists():
             reason = parse_call(path, now)["reason"]  # refresh keeps the reason
         expires = parse_expiry(args.ttl, now)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
+        _write_text_atomic(path,
             "CALL\n"
             f"FROM:     {slot}\n"
             f"TO:       {args.to}\n"
             f"OPENED:   {now.isoformat(timespec='seconds')}\n"
             f"EXPIRES:  {expires.isoformat(timespec='seconds')}\n"
             f"REASON:   {reason or ''}\n",
-            encoding="utf-8",
         )
         print(f"call open until {expires.isoformat(timespec='seconds')}: {path}")
     except (OSError, ValueError, argparse.ArgumentTypeError) as exc:

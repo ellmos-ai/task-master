@@ -1,5 +1,6 @@
 """Safety regressions at the packaged runtime's public CLI and path boundary."""
 import argparse
+import hashlib
 from datetime import datetime, timezone
 
 import pytest
@@ -125,3 +126,54 @@ def test_atomic_write_does_not_follow_predictable_temporary_symlink(tmp_path):
     runtime.set_state(root, "own", True, None)
     assert foreign.read_text(encoding="utf-8") == "unchanged"
     assert runtime.read_json(registry / "own.state.json")["pingpong"]["active"] is True
+
+
+def test_call_refuses_same_channel_peer_symlink_without_changing_peer(tmp_path):
+    root = tmp_path / "sync"
+    channel = root / "agents"
+    channel.mkdir(parents=True)
+    peer = channel / "call-peer-to-all.txt"
+    peer.write_text("FOREIGN-SENTINEL", encoding="utf-8")
+    before = hashlib.sha256(peer.read_bytes()).hexdigest()
+    own = channel / "call-own-to-all.txt"
+    try:
+        own.symlink_to(peer)
+    except OSError as exc:
+        pytest.skip(f"symlink creation unavailable: {exc}")
+    args = runtime.create_parser().parse_args([
+        "call", "--sync-root", str(root), "--slot", "own", "--to", "all",
+        "--reason", "own delta",
+    ])
+    assert args.handler(args) == 3
+    assert hashlib.sha256(peer.read_bytes()).hexdigest() == before
+    assert own.is_symlink()
+    own.unlink()
+    assert args.handler(args) == 0
+    assert "own delta" in own.read_text(encoding="utf-8")
+    assert hashlib.sha256(peer.read_bytes()).hexdigest() == before
+
+
+def test_atomic_call_write_does_not_follow_a_link_swapped_after_validation(tmp_path, monkeypatch):
+    root = tmp_path / "sync"
+    channel = root / "agents"
+    channel.mkdir(parents=True)
+    peer = channel / "call-peer-to-all.txt"
+    peer.write_text("FOREIGN-SENTINEL", encoding="utf-8")
+    own = channel / "call-own-to-all.txt"
+    original = runtime._write_text_atomic
+
+    def swap_then_write(path, content):
+        try:
+            own.symlink_to(peer)
+        except OSError as exc:
+            pytest.skip(f"symlink creation unavailable: {exc}")
+        original(path, content)
+
+    monkeypatch.setattr(runtime, "_write_text_atomic", swap_then_write)
+    args = runtime.create_parser().parse_args([
+        "call", "--sync-root", str(root), "--slot", "own", "--to", "all",
+        "--reason", "own delta",
+    ])
+    assert args.handler(args) == 0
+    assert not own.is_symlink()
+    assert peer.read_text(encoding="utf-8") == "FOREIGN-SENTINEL"
