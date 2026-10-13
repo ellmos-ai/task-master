@@ -99,6 +99,15 @@
         "kimi"
       ],
       "starter": "taskplan/starters/posix/start-operator.sh"
+    },
+    {
+      "id": "pingpong",
+      "label": "PINGPONG",
+      "prompt": "taskplan/resources/pingpong/SKILL.en.md",
+      "request": "Read the complete bundled PingPong contract and protocol. Require an explicitly configured sync root and own slot before any scan or write. Follow the requested mode and duration; do not guess paths or permissions.",
+      "modes": ["ListenSync", "WriteSync"],
+      "providers": ["codex", "claude"],
+      "starter": "taskplan/starters/posix/pingpong.sh"
     }
   ]
 }

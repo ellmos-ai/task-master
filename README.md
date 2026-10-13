@@ -645,3 +645,11 @@ python -m pytest tests/ -q
 ## License
 
 MIT — Lukas Geiger
+
+## Portable agent starters
+
+The repository and wheels ship `START.bat` and `PINGPONG.bat`, plus POSIX equivalents. `python -m taskplan startcenter` offers the four TASKPLAN roles and optional SYSTEM-AUDITOR, TICKET-MASTER, PingPong and public githubbot-core MULTI-BOT roles. Locate a packaged file with `python -m taskplan starters path --role startcenter` or `--role pingpong` (`--platform posix` on macOS/Linux).
+
+Install the current source with `python -m pip install .`. Install the optional role modules from their reviewed sources; their new wheels include `share/<module>/prompts`. For source checkouts, set `SYSTEM_AUDITOR_ROOT` or `TICKET_MASTER_ROOT` explicitly. Provider/model settings use the existing TASKPLAN config. These starters never enable trusted automation or select a personal account.
+
+PingPong bundles its complete 1.1.0 contract, references and runtime helpers. Its verified adapters are Codex and Claude. Supply `--sync-root` and `--slot` (or `PINGPONG_SYNC_ROOT` and `PINGPONG_SLOT`); default duration is 24h. Example preview: `python -m taskplan startcenter --role pingpong --provider codex --sync-root /path/to/sync --slot own-host --duration 15m --dry-run`. Preview starts no model. Additional provider adapters require their own verified contract.
