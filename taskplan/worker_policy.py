@@ -371,26 +371,75 @@ def evaluate_worker_policy(
     ):
         if not valid:
             return decision(DecisionState.INTEGRITY_BLOCKED, field_name)
-    if not context.task_contract_met:
-        return decision(DecisionState.RESULT_INCOMPLETE, "task_contract_not_met")
     if not context.result_evidence_valid:
         return decision(DecisionState.RESULT_INCOMPLETE, "result_evidence_invalid")
 
     user_review_required = context.user_review_required or override.require_user_review
+    user = context.user_review
+    user_bound = _is_bound(context.task_id, context.result_revision, user.task_id,
+                           user.result_revision)
+    external = context.external_review
+    external_bound = _is_bound(context.task_id, context.result_revision, external.task_id,
+                               external.result_revision)
+    review = context.review
+    reviewer = all_reviewers.get(review.reviewer_id or "")
+    review_is_current = (
+        reviewer is not None
+        and review.reviewer_id != context.author_id
+        and review.independent
+        and _is_bound(context.task_id, context.result_revision, review.task_id,
+                      review.result_revision)
+        and (mode is not CompletionMode.HIGH_SECURITY or reviewer.tier is ReviewerTier.TOP)
+    )
+    external_replaces_internal_review = (
+        context.github_pr_review_required
+        and github_external
+        and external.status is ExternalReviewStatus.VERIFIED
+        and external_bound
+    )
+
+    # A valid adverse finding is actionable even when the submitted work does
+    # not yet satisfy its task contract. Neither the finding nor its correction
+    # grants completion; all positive paths below still require that contract.
+    if user_review_required and user.status is UserReviewStatus.REJECTED and user_bound:
+        return decision(
+            DecisionState.CORRECTION_REQUIRED,
+            "user_review_rejected",
+            worker_may_claim_next=mode is not CompletionMode.HIGH_SECURITY,
+            review_task_eligible=(
+                review_task_eligible and mode is not CompletionMode.HIGH_SECURITY
+            ),
+        )
+    if (context.github_pr_review_required
+            and external.status is ExternalReviewStatus.REJECTED and external_bound):
+        return decision(
+            DecisionState.CORRECTION_REQUIRED,
+            "external_review_rejected",
+            worker_may_claim_next=mode is not CompletionMode.HIGH_SECURITY,
+            review_task_eligible=(
+                review_task_eligible and mode is not CompletionMode.HIGH_SECURITY
+            ),
+        )
+    if (not external_replaces_internal_review and review_is_current
+            and review.status is ReviewStatus.REJECTED):
+        return decision(
+            DecisionState.CORRECTION_REQUIRED,
+            "review_rejected",
+            worker_may_claim_next=mode is not CompletionMode.HIGH_SECURITY,
+            review_task_eligible=(
+                review_task_eligible and mode is not CompletionMode.HIGH_SECURITY
+            ),
+        )
+    if (not external_replaces_internal_review and review_is_current
+            and review.status is ReviewStatus.FINDINGS
+            and mode is CompletionMode.HIGH_SECURITY):
+        return decision(DecisionState.CORRECTION_REQUIRED, "high_security_findings")
+
+    if not context.task_contract_met:
+        return decision(DecisionState.RESULT_INCOMPLETE, "task_contract_not_met")
+
     if user_review_required:
-        user = context.user_review
-        bound = _is_bound(context.task_id, context.result_revision, user.task_id,
-                          user.result_revision)
-        if user.status is UserReviewStatus.REJECTED and bound:
-            return decision(
-                DecisionState.CORRECTION_REQUIRED,
-                "user_review_rejected",
-                worker_may_claim_next=mode is not CompletionMode.HIGH_SECURITY,
-                review_task_eligible=(
-                    review_task_eligible and mode is not CompletionMode.HIGH_SECURITY
-                ),
-            )
-        if user.status is not UserReviewStatus.APPROVED or not bound:
+        if user.status is not UserReviewStatus.APPROVED or not user_bound:
             return decision(
                 DecisionState.AWAITING_USER_REVIEW,
                 "user_review_required",
@@ -401,19 +450,7 @@ def evaluate_worker_policy(
             )
 
     if context.github_pr_review_required:
-        external = context.external_review
-        bound = _is_bound(context.task_id, context.result_revision, external.task_id,
-                          external.result_revision)
-        if external.status is ExternalReviewStatus.REJECTED and bound:
-            return decision(
-                DecisionState.CORRECTION_REQUIRED,
-                "external_review_rejected",
-                worker_may_claim_next=mode is not CompletionMode.HIGH_SECURITY,
-                review_task_eligible=(
-                    review_task_eligible and mode is not CompletionMode.HIGH_SECURITY
-                ),
-            )
-        if external.status is ExternalReviewStatus.VERIFIED and bound:
+        if external.status is ExternalReviewStatus.VERIFIED and external_bound:
             if github_external:
                 return decision(
                     DecisionState.COMPLETED,
@@ -436,27 +473,8 @@ def evaluate_worker_policy(
                 ),
             )
 
-    review = context.review
-    reviewer = all_reviewers.get(review.reviewer_id or "")
-    review_is_current = (
-        reviewer is not None
-        and review.reviewer_id != context.author_id
-        and review.independent
-        and _is_bound(context.task_id, context.result_revision, review.task_id,
-                      review.result_revision)
-        and (mode is not CompletionMode.HIGH_SECURITY or reviewer.tier is ReviewerTier.TOP)
-    )
     review_valid = review.status is ReviewStatus.NOT_REQUESTED or review_is_current
 
-    if review_is_current and review.status is ReviewStatus.REJECTED:
-        return decision(
-            DecisionState.CORRECTION_REQUIRED,
-            "review_rejected",
-            worker_may_claim_next=mode is not CompletionMode.HIGH_SECURITY,
-            review_task_eligible=(
-                review_task_eligible and mode is not CompletionMode.HIGH_SECURITY
-            ),
-        )
     if review_is_current and review.status is ReviewStatus.APPROVED:
         return decision(
             DecisionState.COMPLETED,
@@ -467,8 +485,6 @@ def evaluate_worker_policy(
             review_task_eligible=review_task_eligible,
         )
     if review_is_current and review.status is ReviewStatus.FINDINGS:
-        if mode is CompletionMode.HIGH_SECURITY:
-            return decision(DecisionState.CORRECTION_REQUIRED, "high_security_findings")
         return decision(
             DecisionState.COMPLETED,
             "non_blocking_review_findings",

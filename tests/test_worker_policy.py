@@ -92,6 +92,107 @@ def test_current_rejection_always_requires_correction(context, mode):
     assert not result.completion_allowed
 
 
+@pytest.mark.parametrize("mode", list(CompletionMode))
+@pytest.mark.parametrize("source", ["model", "user", "github"])
+def test_current_rejection_opens_rework_even_when_contract_unmet(context, mode, source):
+    adverse = {
+        "model": dict(review=review("independent-top", status=ReviewStatus.REJECTED)),
+        "user": dict(user_review_required=True, user_review=UserReviewRecord(
+            UserReviewStatus.REJECTED, "41", "result-1")),
+        "github": dict(github_pr_review_required=True, external_review=ExternalReviewRecord(
+            ExternalReviewStatus.REJECTED, "41", "result-1")),
+    }
+    current = replace(context, task_contract_met=False, **adverse[source])
+    result = evaluate_worker_policy(policy(mode), current)
+    assert result.state is DecisionState.CORRECTION_REQUIRED
+    assert not result.completion_allowed and not result.dependents_may_start
+    assert result.worker_may_claim_next is (mode is not CompletionMode.HIGH_SECURITY)
+
+
+def test_top_findings_open_high_security_rework_without_contract(context):
+    current = replace(context, task_contract_met=False,
+                      review=review("independent-top", status=ReviewStatus.FINDINGS))
+    result = evaluate_worker_policy(policy(CompletionMode.HIGH_SECURITY), current)
+    assert result.state is DecisionState.CORRECTION_REQUIRED
+    assert result.reason == "high_security_findings"
+    assert not result.completion_allowed and not result.worker_may_claim_next
+
+
+@pytest.mark.parametrize("record", [
+    review("writer", status=ReviewStatus.REJECTED),
+    review("unknown", status=ReviewStatus.REJECTED),
+    review("independent-top", revision="old", status=ReviewStatus.REJECTED),
+    replace(review("independent-top", status=ReviewStatus.REJECTED), independent=False),
+])
+def test_untrusted_rejection_cannot_open_rework_for_unmet_contract(context, record):
+    result = evaluate_worker_policy(policy(CompletionMode.HIGH_SECURITY), replace(
+        context, task_contract_met=False, review=record))
+    assert result.state is DecisionState.RESULT_INCOMPLETE
+    assert not result.completion_allowed
+
+
+def test_high_security_standard_tier_findings_cannot_open_rework(context):
+    current = replace(context, task_contract_met=False,
+                      review=review("local", status=ReviewStatus.FINDINGS))
+    result = evaluate_worker_policy(policy(CompletionMode.HIGH_SECURITY), current)
+    assert result.state is DecisionState.RESULT_INCOMPLETE
+
+
+@pytest.mark.parametrize("gate", ["lease_valid", "fence_valid", "locks_clear",
+                                  "result_evidence_valid"])
+def test_adverse_review_cannot_bypass_missing_integrity_or_evidence(context, gate):
+    current = replace(context, task_contract_met=False,
+                      review=review("independent-top", status=ReviewStatus.REJECTED),
+                      **{gate: False})
+    result = evaluate_worker_policy(policy(CompletionMode.HIGH_SECURITY), current)
+    assert result.state is (DecisionState.RESULT_INCOMPLETE if gate == "result_evidence_valid"
+                            else DecisionState.INTEGRITY_BLOCKED)
+    assert not result.completion_allowed
+
+
+@pytest.mark.parametrize("mode", list(CompletionMode))
+def test_approval_and_expiry_never_complete_unmet_contract(context, mode):
+    current = replace(context, task_contract_met=False, result_age_seconds=100,
+                      review=review("independent-top"))
+    configured = replace(policy(mode), review_expiry_seconds=1)
+    result = evaluate_worker_policy(configured, current)
+    assert result.state is DecisionState.RESULT_INCOMPLETE
+    assert not result.completion_allowed and not result.dependents_may_start
+
+
+def test_required_user_and_github_completion_gates_remain_after_rework(context):
+    adverse = replace(context, task_contract_met=False, user_review_required=True,
+                      github_pr_review_required=True,
+                      review=review("independent-top", status=ReviewStatus.REJECTED))
+    configured = policy(CompletionMode.BALANCED)
+    assert evaluate_worker_policy(configured, adverse).state is DecisionState.CORRECTION_REQUIRED
+    corrected = replace(adverse, task_contract_met=True, result_revision="result-2",
+                        review=review("independent-top", revision="result-1"))
+    pending = evaluate_worker_policy(configured, corrected)
+    assert pending.state is DecisionState.AWAITING_USER_REVIEW
+    assert not pending.completion_allowed
+    user_approved = replace(corrected, user_review=UserReviewRecord(
+        UserReviewStatus.APPROVED, "41", "result-2"))
+    github_pending = evaluate_worker_policy(configured, user_approved)
+    assert github_pending.state is DecisionState.AWAITING_EXTERNAL_REVIEW
+    assert not github_pending.completion_allowed
+
+
+def test_verified_external_route_still_replaces_internal_adverse_review(context):
+    current = replace(context, task_contract_met=False,
+                      github_pr_review_required=True,
+                      external_review=ExternalReviewRecord(
+                          ExternalReviewStatus.VERIFIED, "41", "result-1"),
+                      review=review("independent-top", status=ReviewStatus.REJECTED))
+    routed = evaluate_worker_policy(policy(CompletionMode.HIGH_SECURITY), current)
+    assert routed.state is DecisionState.RESULT_INCOMPLETE
+    assert not routed.completion_allowed
+    internal = evaluate_worker_policy(
+        replace(policy(CompletionMode.HIGH_SECURITY), github_external_review=False), current)
+    assert internal.state is DecisionState.CORRECTION_REQUIRED
+    assert not internal.completion_allowed
+
+
 def test_balanced_expiry_does_not_erase_adverse_review(context):
     balanced = replace(policy(CompletionMode.BALANCED), review_expiry_seconds=1)
     expired = replace(context, result_age_seconds=100)
