@@ -400,7 +400,7 @@ def evaluate_worker_policy(
                 ),
             )
 
-    if context.github_pr_review_required and github_external:
+    if context.github_pr_review_required:
         external = context.external_review
         bound = _is_bound(context.task_id, context.result_revision, external.task_id,
                           external.result_revision)
@@ -414,22 +414,27 @@ def evaluate_worker_policy(
                 ),
             )
         if external.status is ExternalReviewStatus.VERIFIED and bound:
+            if github_external:
+                return decision(
+                    DecisionState.COMPLETED,
+                    "external_review_verified",
+                    completion_allowed=True,
+                    worker_may_claim_next=True,
+                    dependents_may_start=True,
+                    review_task_eligible=review_task_eligible,
+                )
+            # The route preference controls whether verified GitHub review
+            # replaces internal model review. It cannot waive the canonical
+            # external gate; after that gate passes, apply the normal mode.
+        else:
             return decision(
-                DecisionState.COMPLETED,
-                "external_review_verified",
-                completion_allowed=True,
-                worker_may_claim_next=True,
-                dependents_may_start=True,
-                review_task_eligible=review_task_eligible,
+                DecisionState.AWAITING_EXTERNAL_REVIEW,
+                "external_review_not_verified",
+                worker_may_claim_next=mode is not CompletionMode.HIGH_SECURITY,
+                review_task_eligible=(
+                    review_task_eligible and mode is not CompletionMode.HIGH_SECURITY
+                ),
             )
-        return decision(
-            DecisionState.AWAITING_EXTERNAL_REVIEW,
-            "external_review_not_verified",
-            worker_may_claim_next=mode is not CompletionMode.HIGH_SECURITY,
-            review_task_eligible=(
-                review_task_eligible and mode is not CompletionMode.HIGH_SECURITY
-            ),
-        )
 
     review = context.review
     reviewer = all_reviewers.get(review.reviewer_id or "")

@@ -109,6 +109,73 @@ def test_verified_external_review_avoids_second_internal_review(context):
     assert evaluate_worker_policy(policy(CompletionMode.SIMPLE_TASK), stale).state is DecisionState.AWAITING_EXTERNAL_REVIEW
 
 
+@pytest.mark.parametrize("mode", list(CompletionMode))
+@pytest.mark.parametrize("routing_source", ["global_false", "task_override_false"])
+@pytest.mark.parametrize(("external", "expected_state"), [
+    (ExternalReviewRecord(ExternalReviewStatus.PENDING, "41", "result-1"),
+     DecisionState.AWAITING_EXTERNAL_REVIEW),
+    (ExternalReviewRecord(ExternalReviewStatus.REJECTED, "41", "result-1"),
+     DecisionState.CORRECTION_REQUIRED),
+    (ExternalReviewRecord(ExternalReviewStatus.REJECTED, "41", "old-result"),
+     DecisionState.AWAITING_EXTERNAL_REVIEW),
+    (ExternalReviewRecord(ExternalReviewStatus.VERIFIED, "41", "old-result"),
+     DecisionState.AWAITING_EXTERNAL_REVIEW),
+])
+def test_required_github_gate_survives_disabled_routing_preference(
+    context, mode, routing_source, external, expected_state
+):
+    current = replace(
+        context,
+        github_pr_review_required=True,
+        external_review=external,
+        # A valid internal approval cannot replace the hard GitHub gate.
+        review=review("independent-top"),
+    )
+    if routing_source == "global_false":
+        configured_policy = replace(policy(mode), github_external_review=False)
+        override = None
+    else:
+        configured_policy = policy(mode)
+        override = TaskPolicyOverride(github_external_review=False)
+
+    result = evaluate_worker_policy(configured_policy, current, override)
+
+    assert result.state is expected_state
+    assert not result.completion_allowed
+    assert not result.dependents_may_start
+
+
+@pytest.mark.parametrize(("mode", "expected_state"), [
+    (CompletionMode.SIMPLE_TASK, DecisionState.COMPLETED),
+    (CompletionMode.BALANCED, DecisionState.AWAITING_REVIEW),
+    (CompletionMode.HIGH_SECURITY, DecisionState.AWAITING_REVIEW),
+])
+@pytest.mark.parametrize("routing_source", ["global_false", "task_override_false"])
+def test_verified_required_external_gate_with_routing_disabled_uses_normal_mode(
+    context, mode, expected_state, routing_source
+):
+    current = replace(
+        context,
+        github_pr_review_required=True,
+        external_review=ExternalReviewRecord(
+            ExternalReviewStatus.VERIFIED, "41", "result-1"
+        ),
+    )
+
+    if routing_source == "global_false":
+        configured_policy = replace(policy(mode), github_external_review=False)
+        override = None
+    else:
+        configured_policy = policy(mode)
+        override = TaskPolicyOverride(github_external_review=False)
+
+    result = evaluate_worker_policy(configured_policy, current, override)
+
+    assert result.state is expected_state
+    assert result.completion_allowed is (mode is CompletionMode.SIMPLE_TASK)
+    assert result.dependents_may_start is (mode is CompletionMode.SIMPLE_TASK)
+
+
 def test_override_preserves_null_false_and_cannot_remove_inherited_user_gate(context):
     override = TaskPolicyOverride(mode=None, require_user_review=False,
                                   github_external_review=False, allow_review_task_pickup=False)
