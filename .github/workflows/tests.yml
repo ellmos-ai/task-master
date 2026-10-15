@@ -36,6 +36,11 @@ jobs:
           PYTHONIOENCODING: utf-8
         run: python -m unittest discover -s tests -v
 
+      - name: Run pytest scenarios
+        env:
+          PYTHONIOENCODING: utf-8
+        run: python -m pytest -q
+
       - name: Compile sources
         env:
           PYTHONIOENCODING: utf-8
