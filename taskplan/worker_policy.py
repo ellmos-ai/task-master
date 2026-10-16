@@ -420,8 +420,9 @@ def evaluate_worker_policy(
                 review_task_eligible and mode is not CompletionMode.HIGH_SECURITY
             ),
         )
-    if (not external_replaces_internal_review and review_is_current
-            and review.status is ReviewStatus.REJECTED):
+    if (review_is_current and review.status is ReviewStatus.REJECTED
+            and (not external_replaces_internal_review
+                 or not context.task_contract_met)):
         return decision(
             DecisionState.CORRECTION_REQUIRED,
             "review_rejected",
@@ -430,10 +431,21 @@ def evaluate_worker_policy(
                 review_task_eligible and mode is not CompletionMode.HIGH_SECURITY
             ),
         )
-    if (not external_replaces_internal_review and review_is_current
-            and review.status is ReviewStatus.FINDINGS
-            and mode is CompletionMode.HIGH_SECURITY):
-        return decision(DecisionState.CORRECTION_REQUIRED, "high_security_findings")
+    if review_is_current and review.status is ReviewStatus.FINDINGS:
+        if not context.task_contract_met:
+            return decision(
+                DecisionState.CORRECTION_REQUIRED,
+                "review_findings_contract_not_met",
+                worker_may_claim_next=mode is not CompletionMode.HIGH_SECURITY,
+                review_task_eligible=(
+                    review_task_eligible and mode is not CompletionMode.HIGH_SECURITY
+                ),
+            )
+        if (not external_replaces_internal_review
+                and mode is CompletionMode.HIGH_SECURITY):
+            return decision(
+                DecisionState.CORRECTION_REQUIRED, "high_security_findings"
+            )
 
     if not context.task_contract_met:
         return decision(DecisionState.RESULT_INCOMPLETE, "task_contract_not_met")
