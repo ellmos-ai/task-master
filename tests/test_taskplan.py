@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Tests fuer taskplan (uebernommen aus rinnsal/tests/test_tasks.py + Ergaenzungen)."""
 import os
+import sqlite3
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -61,6 +63,173 @@ class TestTaskClient(unittest.TestCase):
             self.client.add(f"Task {i}")
 
         self.assertEqual(len(self.client.list(limit=None)), 55)
+
+    def test_list_page_uses_bounded_id_order_and_reports_filtered_total(self):
+        for title, priority in (
+            ("low first", "low"),
+            ("critical", "critical"),
+            ("medium", "medium"),
+            ("high", "high"),
+            ("low last", "low"),
+        ):
+            self.client.add(title, priority=priority)
+
+        first = self.client.list_page(limit=2)
+        second = self.client.list_page(limit=2, cursor=first["next_cursor"])
+        last = self.client.list_page(limit=2, cursor=second["next_cursor"])
+
+        self.assertEqual(first["total"], 5)
+        self.assertEqual(first["count"], 2)
+        self.assertTrue(first["truncated"])
+        self.assertEqual([task["id"] for task in first["tasks"]], [1, 2])
+        self.assertEqual([task["id"] for task in second["tasks"]], [3, 4])
+        self.assertEqual([task["id"] for task in last["tasks"]], [5])
+        self.assertEqual(second["total"], 5)
+        self.assertTrue(second["truncated"])
+        self.assertFalse(last["truncated"])
+        self.assertIsNone(last["next_cursor"])
+
+        # The old API retains its semantic-priority order and default behavior.
+        self.assertEqual(
+            [task["title"] for task in self.client.list(limit=5)],
+            ["critical", "high", "medium", "low first", "low last"],
+        )
+
+    def test_list_and_page_apply_the_same_filters_including_agent_id(self):
+        matching = self.client.add(
+            "matching", priority="high", effort="easy", scope="central",
+            project_path="/repos/one", root_id="ONE",
+        )
+        self.client.assign(matching["id"], to="worker")
+        self.client.add(
+            "wrong effort", priority="high", effort="medium", scope="central",
+            project_path="/repos/one", root_id="ONE",
+        )
+        done = self.client.add(
+            "done", priority="high", effort="easy", scope="central",
+            project_path="/repos/one", root_id="ONE",
+        )
+        self.client.done(done["id"])
+
+        filters = {
+            "status": "open",
+            "priority": "high",
+            "effort": "easy",
+            "scope": "central",
+            "project_path": "/repos/one",
+            "root_id": "ONE",
+            "assigned_to": "worker",
+            "agent_id": "test",
+        }
+        expected = self.client.list(limit=None, **filters)
+        page = self.client.list_page(limit=10, **filters)
+
+        self.assertEqual(page["total"], len(expected))
+        self.assertEqual(page["count"], 1)
+        self.assertEqual(page["tasks"], expected)
+        self.assertFalse(page["truncated"])
+
+        self.assertEqual(self.client.list_page()["total"], 2)
+        done_page = self.client.list_page(status="done", agent_id="test")
+        self.assertEqual(done_page["total"], 1)
+        self.assertEqual(done_page["tasks"][0]["id"], done["id"])
+        self.assertEqual(self.client.list_page(include_done=True)["total"], 3)
+
+    def test_agent_page_reaches_matches_after_the_first_200_tasks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = str(Path(directory) / "taskplan.db")
+            other = TaskClient(db_path=db_path, agent_id="other")
+            target = TaskClient(db_path=db_path, agent_id="target")
+
+            for i in range(200):
+                other.add(f"other {i}")
+            for i in range(217):
+                target.add(f"target {i}")
+
+            filtered_list = target.list(agent_id="target", limit=200)
+            first = target.list_page(agent_id="target")
+            second = target.list_page(
+                agent_id="target", cursor=first["next_cursor"]
+            )
+            empty = target.list_page(agent_id="target", cursor=10**9)
+
+            self.assertEqual(first["limit"], 200)
+            self.assertEqual(first["total"], 217)
+            self.assertEqual(first["count"], 200)
+            self.assertEqual(len(filtered_list), 200)
+            self.assertTrue(all(task["agent_id"] == "target" for task in filtered_list))
+            self.assertTrue(first["truncated"])
+            self.assertEqual(first["next_cursor"], first["tasks"][-1]["id"])
+            self.assertTrue(all(task["agent_id"] == "target" for task in first["tasks"]))
+            self.assertEqual(second["total"], 217)
+            self.assertEqual(second["count"], 17)
+            self.assertFalse(second["truncated"])
+            self.assertIsNone(second["next_cursor"])
+            self.assertEqual(empty["total"], 217)
+            self.assertEqual(empty["count"], 0)
+            self.assertEqual(empty["tasks"], [])
+            self.assertFalse(empty["truncated"])
+
+    def test_agent_filter_is_not_an_alias_for_creator_or_assignee(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = str(Path(directory) / "taskplan.db")
+            client = TaskClient(db_path=db_path, agent_id="source-agent")
+            task = client.add("origin field")
+            client.assign(task["id"], to="worker-agent")
+
+            # The test database deliberately separates these three concepts.
+            with sqlite3.connect(db_path) as connection:
+                connection.execute(
+                    "UPDATE rinnsal_tasks SET created_by = ? WHERE id = ?",
+                    ("different-creator", task["id"]),
+                )
+            connection.close()
+
+            exact = client.list_page(
+                agent_id="source-agent", assigned_to="worker-agent"
+            )
+            self.assertEqual(exact["count"], 1)
+            self.assertEqual(exact["tasks"][0]["agent_id"], "source-agent")
+            self.assertEqual(exact["tasks"][0]["created_by"], "different-creator")
+            self.assertEqual(exact["tasks"][0]["assigned_to"], "worker-agent")
+            self.assertEqual(client.list_page(agent_id="different-creator")["count"], 0)
+            self.assertEqual(client.list_page(agent_id="worker-agent")["count"], 0)
+
+    def test_page_total_is_a_fresh_read_when_filter_membership_changes(self):
+        tasks = [self.client.add(f"task {i}") for i in range(3)]
+        first = self.client.list_page(status="open", limit=2)
+        self.assertEqual(first["total"], 3)
+        self.assertTrue(first["truncated"])
+
+        self.client.done(tasks[2]["id"])
+        second = self.client.list_page(
+            status="open", limit=2, cursor=first["next_cursor"]
+        )
+
+        self.assertEqual(second["total"], 2)
+        self.assertEqual(second["count"], 0)
+        self.assertEqual(second["tasks"], [])
+        self.assertFalse(second["truncated"])
+
+    def test_list_page_rejects_invalid_limits_and_cursors(self):
+        for limit in (None, 0, -1, 501, True, 1.5, "2"):
+            with self.subTest(limit=limit):
+                with self.assertRaises(ValueError):
+                    self.client.list_page(limit=limit)
+
+        for cursor in (True, 1.5, "1"):
+            with self.subTest(cursor=cursor):
+                with self.assertRaises(ValueError):
+                    self.client.list_page(cursor=cursor)
+
+        self.assertEqual(self.client.list_page(limit=1)["limit"], 1)
+        self.assertEqual(self.client.list_page(limit=500)["limit"], 500)
+        empty = self.client.list_page(agent_id="no-such-agent")
+        self.assertEqual(empty["total"], 0)
+        self.assertEqual(empty["count"], 0)
+        self.assertEqual(empty["tasks"], [])
+        self.assertFalse(empty["truncated"])
+        self.assertIsNone(empty["next_cursor"])
 
     def test_status_transitions(self):
         task = self.client.add("Task")
@@ -316,6 +485,25 @@ class TestTasksApi(unittest.TestCase):
 
         easy_local = self.api.list(effort="easy", scope="local")
         self.assertEqual([t['title'] for t in easy_local], ["leicht/lokal"])
+
+    def test_list_page_facade_forwards_agent_filter_and_cursor(self):
+        self.api.add("Seite eins")
+        self.api.add("Seite zwei")
+
+        first = self.api.list_page(agent_id="api-test", limit=1)
+        second = self.api.list_page(
+            agent_id="api-test", limit=1, cursor=first["next_cursor"]
+        )
+
+        self.assertEqual(first["total"], 2)
+        self.assertEqual(first["count"], 1)
+        self.assertTrue(first["truncated"])
+        self.assertEqual(second["total"], 2)
+        self.assertEqual(second["count"], 1)
+        self.assertFalse(second["truncated"])
+        self.assertEqual(
+            len(self.api.list(agent_id="api-test", limit=10)), 2
+        )
 
     def test_add_backward_compatible_with_positional_calls(self):
         """Bestehende Aufrufe mit 1-4 Positionsargumenten duerfen sich durch
