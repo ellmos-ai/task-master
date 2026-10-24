@@ -20,6 +20,15 @@
 - `out/` gilt wie `dist/`/`build/` als Wegwerf und wandert nicht mehr in den
   Projektindex (Testartefakte ohne Leserecht brachen dort die Messung ab).
 
+### Added
+- **Begrenzte, gefilterte Task-Seiten (`TaskClient.list_page`, T-20261024-560489052).**
+  Die neue API liefert `total`, Seitenanzahl, `truncated` und einen Cursor auf
+  stabiler Task-ID-Sortierung; Defaultlimit 200, Maximum 500. Count und Seite
+  stammen aus derselben Datenbanksicht. `agent_id` wird vor dem Limit gefiltert.
+  Die bestehende Sortierung von `list()` und das ungefilterte `count()` bleiben
+  unverändert. Zwischen getrennten Seitenaufrufen wird kein Snapshot gehalten;
+  Änderungen an Tasks können spätere Treffer und Gesamtzahlen beeinflussen.
+
 ### Added (0.8.0)
 - **Readiness-Gate: `python -m taskplan init`** (T-20260831-555678565,
   Nutzerentscheid E05=A vom 2026-09-11). Ein eigener, idempotenter

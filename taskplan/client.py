@@ -102,6 +102,47 @@ _SELECT_COLUMNS = (
     "created_by, assigned_to, delegation_status, origin_host"
 )
 
+DEFAULT_TASK_PAGE_SIZE = 200
+MAX_TASK_PAGE_SIZE = 500
+
+
+def _task_filters_where(
+    status: Optional[str] = None,
+    priority: Optional[str] = None,
+    include_done: bool = False,
+    effort: Optional[str] = None,
+    scope: Optional[str] = None,
+    project_path: Optional[str] = None,
+    root_id: Optional[str] = None,
+    assigned_to: Optional[str] = None,
+    agent_id: Optional[str] = None,
+) -> tuple[str, list]:
+    """Build the shared task-list predicate without changing legacy defaults."""
+    conditions = []
+    params: list = []
+
+    if status:
+        conditions.append("status = ?")
+        params.append(status)
+    elif not include_done:
+        conditions.append("status NOT IN ('done', 'cancelled')")
+
+    for column, value in (
+        ("priority", priority),
+        ("effort", effort),
+        ("scope", scope),
+        ("project_path", project_path),
+        ("root_id", root_id),
+        ("assigned_to", assigned_to),
+        ("agent_id", agent_id),
+    ):
+        if value is not None:
+            conditions.append(f"{column} = ?")
+            params.append(value)
+
+    where = "WHERE " + " AND ".join(conditions) if conditions else ""
+    return where, params
+
 
 def _parse_tag_string(tags: str) -> Dict[str, str]:
     """Zerlegt die alte Freitext-Konvention `pipeline=.AI;project=C:/x;source=TODO.md`.
@@ -404,33 +445,31 @@ class TaskClient:
         scope: Optional[str] = None,
         project_path: Optional[str] = None,
         root_id: Optional[str] = None,
-        assigned_to: Optional[str] = None
+        assigned_to: Optional[str] = None,
+        agent_id: Optional[str] = None,
     ) -> List[Dict]:
         """Listet Tasks auf.
 
         Die Filter auf effort/scope/project/root sind das, was der Selektor
         braucht, um "erst alle leichten, dann die mittleren" durchzusetzen —
         ohne sie bliebe die Regel Prompt-Prosa.
+
+        Die optionale agent_id filtert nach Urheberfeld; sie wird vor `limit`
+        angewandt. Aufrufe ohne dieses neue letzte Argument bleiben unverändert.
         """
         conn = self._get_conn()
         try:
-            conditions = []
-            params: list = []
-
-            if status:
-                conditions.append("status = ?")
-                params.append(status)
-            elif not include_done:
-                conditions.append("status NOT IN ('done', 'cancelled')")
-
-            for column, value in (("priority", priority), ("effort", effort),
-                                  ("scope", scope), ("project_path", project_path),
-                                  ("root_id", root_id), ("assigned_to", assigned_to)):
-                if value is not None:
-                    conditions.append(f"{column} = ?")
-                    params.append(value)
-
-            where = "WHERE " + " AND ".join(conditions) if conditions else ""
+            where, params = _task_filters_where(
+                status=status,
+                priority=priority,
+                include_done=include_done,
+                effort=effort,
+                scope=scope,
+                project_path=project_path,
+                root_id=root_id,
+                assigned_to=assigned_to,
+                agent_id=agent_id,
+            )
             limit_clause = ""
             if limit is not None:
                 params.append(limit)
@@ -451,6 +490,96 @@ class TaskClient:
             """, params).fetchall()
 
             return [self._row_to_dict(r) for r in rows]
+        finally:
+            self._close_conn(conn)
+
+    def list_page(
+        self,
+        status: Optional[str] = None,
+        priority: Optional[str] = None,
+        include_done: bool = False,
+        effort: Optional[str] = None,
+        scope: Optional[str] = None,
+        project_path: Optional[str] = None,
+        root_id: Optional[str] = None,
+        assigned_to: Optional[str] = None,
+        agent_id: Optional[str] = None,
+        limit: int = DEFAULT_TASK_PAGE_SIZE,
+        cursor: Optional[int] = None,
+    ) -> Dict:
+        """Return one bounded page, its filtered total, and a stable ID cursor.
+
+        Pages use immutable task IDs in ascending order. `cursor` is the last
+        ID returned by the previous page and is exclusive. The total counts
+        every row matching the filters, regardless of cursor. Count and page
+        rows come from one SQLite statement snapshot; separate page calls are
+        live reads, not a retained snapshot. A task whose filter fields change
+        or that is deleted between calls can therefore change later totals or
+        membership. New rows with IDs after the cursor may appear on later pages.
+        """
+        if type(limit) is not int or not 1 <= limit <= MAX_TASK_PAGE_SIZE:
+            raise ValueError(
+                f"limit must be an integer between 1 and {MAX_TASK_PAGE_SIZE}"
+            )
+        if cursor is not None and type(cursor) is not int:
+            raise ValueError("cursor must be an integer task ID or None")
+
+        base_where, base_params = _task_filters_where(
+            status=status,
+            priority=priority,
+            include_done=include_done,
+            effort=effort,
+            scope=scope,
+            project_path=project_path,
+            root_id=root_id,
+            assigned_to=assigned_to,
+            agent_id=agent_id,
+        )
+        page_where = base_where
+        page_params = list(base_params)
+        if cursor is not None:
+            page_where = f"{page_where} AND id > ?" if page_where else "WHERE id > ?"
+            page_params.append(cursor)
+
+        # Count and page share one SQL statement, hence one SQLite read snapshot.
+        # The left join preserves the exact total even for an empty/out-of-range
+        # page, without loading every matching task into Python.
+        conn = self._get_conn()
+        try:
+            rows = conn.execute(
+                f"""
+                SELECT total.filtered_count, page.*
+                FROM (
+                    SELECT COUNT(*) AS filtered_count
+                    FROM rinnsal_tasks
+                    {base_where}
+                ) AS total
+                LEFT JOIN (
+                    SELECT {_SELECT_COLUMNS}
+                    FROM rinnsal_tasks
+                    {page_where}
+                    ORDER BY id ASC
+                    LIMIT ?
+                ) AS page ON 1 = 1
+                ORDER BY page.id ASC
+                """,
+                [*base_params, *page_params, limit + 1],
+            ).fetchall()
+            total = int(rows[0][0])
+            page_rows = [row[1:] for row in rows if row[1] is not None]
+            truncated = len(page_rows) > limit
+            page_rows = page_rows[:limit]
+            tasks = [self._row_to_dict(row) for row in page_rows]
+            next_cursor = tasks[-1]["id"] if truncated and tasks else None
+            return {
+                "count": len(tasks),
+                "total": total,
+                "limit": limit,
+                "cursor": cursor,
+                "next_cursor": next_cursor,
+                "truncated": truncated,
+                "tasks": tasks,
+            }
         finally:
             self._close_conn(conn)
 

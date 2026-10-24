@@ -191,6 +191,36 @@ for t in tasks.list(effort="easy", scope="local"):
 tasks.done(1)
 ```
 
+### Begrenzte Aufgabenseiten
+
+`list()` behält seine bisherige Sortierung und das optionale unbegrenzte
+`limit=None`. Für begrenzte, nach Task-ID stabil sortierte Seiten gibt es
+`list_page()`:
+
+```python
+filter = {"status": "open", "agent_id": "codex"}
+seite = tasks.list_page(**filter, limit=200)
+while True:
+    for task in seite["tasks"]:
+        print(f"[{task['id']}] {task['title']}")
+    if not seite["truncated"]:
+        break
+    seite = tasks.list_page(**filter, limit=200, cursor=seite["next_cursor"])
+```
+
+Der Default liegt bei 200 Einträgen, das Maximum bei 500. `total` zählt alle
+Tasks, die bei diesem Aufruf auf die Filter passen; `count` zählt die aktuelle
+Seite. `truncated` zeigt an, dass eine Folgeseite existiert. `next_cursor` ist die
+letzte zurückgegebene Task-ID und wird beim nächsten Aufruf als `cursor`
+übergeben. `agent_id` filtert das gespeicherte Feld `agent_id` und ist getrennt
+von `assigned_to`.
+
+Jeder Aufruf liest eine konsistente Datenbanksicht; zwischen mehreren Aufrufen
+bleibt jedoch kein gemeinsamer Snapshot offen. Werden Tasks erstellt, gelöscht
+oder so geändert, dass sie nicht mehr auf die Filter passen, können sich spätere
+Seiten und ihre Gesamtzahlen ändern. `list_page()` sortiert nach der
+unveränderlichen Task-ID; die Sortierung von `list()` bleibt gleich.
+
 Den Selektor fragen:
 
 ```bash
