@@ -186,6 +186,33 @@ for t in tasks.list(effort="easy", scope="local"):
 tasks.done(1)
 ```
 
+### Bounded task pages
+
+`list()` keeps its current ordering and its optional unbounded `limit=None`.
+Use `list_page()` to fetch a bounded result in stable, ID-ordered pages:
+
+```python
+filters = {"status": "open", "agent_id": "codex"}
+page = tasks.list_page(**filters, limit=200)
+while True:
+    for task in page["tasks"]:
+        print(f"[{task['id']}] {task['title']}")
+    if not page["truncated"]:
+        break
+    page = tasks.list_page(**filters, limit=200, cursor=page["next_cursor"])
+```
+
+The default page limit is 200 and the maximum is 500. `total` counts all rows
+matching the filters for that call, `count` is the number in the current page,
+and `truncated` says a next page exists. `next_cursor` is the last returned task
+ID; pass it back as `cursor`. `agent_id` filters the stored `agent_id` field,
+separately from `assigned_to`.
+
+Each call is one consistent database read, but pages do not hold a snapshot
+across calls. If tasks are created, deleted, or changed so they no longer match
+the filters between calls, later pages and their totals may differ. The new
+method orders by immutable task ID; legacy `list()` ordering is unchanged.
+
 Ask the selector what to do next:
 
 ```bash
