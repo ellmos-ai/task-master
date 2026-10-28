@@ -1,7 +1,7 @@
 # BACH/Ocean Worker-Abschluss- und Reviewvertrag
 
-Status: versionierter, persistenzfreier Vertragsbaustein  
-Code: `taskplan.worker_policy`  
+Status: versionierter, persistenzfreier Vertragsbaustein
+Code: `taskplan.worker_policy`
 Vertragsversion: `worker-review-policy.v1alpha1`
 
 ## Zweck und Grenze
