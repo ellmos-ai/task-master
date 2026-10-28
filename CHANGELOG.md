@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Added (0.7.3 worker contract integration)
+- Reiner Worker-Abschluss-/Reviewvertrag aus der bestehenden Vertragslinie
+  4a455752 und offene Worker-Auswahl mit expliziten ONLY-Einstellungen.
+  Keine neue Persistenz oder Taskqueue; aktuelle TaskClient-/API-Pagination bleibt erhalten.
+
 ### Fixed
 - **`taskplan init` lief 82 Minuten und endete mit 104 Zeitüberschreitungen**
   (T-20260920-535056160). Ursache: 151 git-Worktrees wurden als eigenständige
