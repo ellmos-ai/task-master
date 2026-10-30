@@ -4,10 +4,21 @@ from dataclasses import replace
 import pytest
 
 from taskplan.worker_policy import (
-    CompletionMode, DecisionState, ExternalReviewRecord, ExternalReviewStatus,
-    PolicyInputError, Reviewer, ReviewerTier, ReviewRecord, ReviewStatus,
-    TaskPolicyOverride, UserReviewRecord, UserReviewStatus, WorkerReviewContext,
-    WorkerReviewPolicy, evaluate_worker_policy,
+    CompletionMode,
+    DecisionState,
+    ExternalReviewRecord,
+    ExternalReviewStatus,
+    PolicyInputError,
+    Reviewer,
+    ReviewerTier,
+    ReviewRecord,
+    ReviewStatus,
+    TaskPolicyOverride,
+    UserReviewRecord,
+    UserReviewStatus,
+    WorkerReviewContext,
+    WorkerReviewPolicy,
+    evaluate_worker_policy,
 )
 
 
@@ -96,11 +107,11 @@ def test_current_rejection_always_requires_correction(context, mode):
 @pytest.mark.parametrize("source", ["model", "user", "github"])
 def test_current_rejection_opens_rework_even_when_contract_unmet(context, mode, source):
     adverse = {
-        "model": dict(review=review("independent-top", status=ReviewStatus.REJECTED)),
-        "user": dict(user_review_required=True, user_review=UserReviewRecord(
-            UserReviewStatus.REJECTED, "41", "result-1")),
-        "github": dict(github_pr_review_required=True, external_review=ExternalReviewRecord(
-            ExternalReviewStatus.REJECTED, "41", "result-1")),
+        "model": {"review": review("independent-top", status=ReviewStatus.REJECTED)},
+        "user": {"user_review_required": True, "user_review": UserReviewRecord(
+            UserReviewStatus.REJECTED, "41", "result-1")},
+        "github": {"github_pr_review_required": True, "external_review": ExternalReviewRecord(
+            ExternalReviewStatus.REJECTED, "41", "result-1")},
     }
     current = replace(context, task_contract_met=False, **adverse[source])
     result = evaluate_worker_policy(policy(mode), current)

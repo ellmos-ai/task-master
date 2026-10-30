@@ -11,7 +11,6 @@ from dataclasses import asdict, dataclass
 from enum import Enum
 from typing import Any
 
-
 CONTRACT_VERSION = "worker-review-policy.v1alpha1"
 
 
@@ -159,12 +158,11 @@ class WorkerReviewPolicy:
         if len(reviewer_ids) != len(set(reviewer_ids)):
             raise PolicyInputError("reviewer ids must be unique")
         object.__setattr__(self, "reviewers", reviewers)
-        if self.review_expiry_seconds is not None:
-            if (
-                type(self.review_expiry_seconds) is not int
-                or self.review_expiry_seconds <= 0
-            ):
-                raise PolicyInputError("review_expiry_seconds must be positive or None")
+        if self.review_expiry_seconds is not None and (
+            type(self.review_expiry_seconds) is not int
+            or self.review_expiry_seconds <= 0
+        ):
+            raise PolicyInputError("review_expiry_seconds must be positive or None")
 
 
 @dataclass(frozen=True)
@@ -229,12 +227,11 @@ class WorkerReviewContext:
                 or value.strip() != value
             ):
                 raise PolicyInputError(f"{name} must be a non-empty, trimmed value")
-        if self.result_age_seconds is not None:
-            if (
-                type(self.result_age_seconds) is not int
-                or self.result_age_seconds < 0
-            ):
-                raise PolicyInputError("result_age_seconds must be non-negative or None")
+        if self.result_age_seconds is not None and (
+            type(self.result_age_seconds) is not int
+            or self.result_age_seconds < 0
+        ):
+            raise PolicyInputError("result_age_seconds must be non-negative or None")
         for name in (
             "lease_valid",
             "fence_valid",
