@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Added (0.7.3 worker contract integration)
+- Reiner Worker-Abschluss-/Reviewvertrag aus der bestehenden Vertragslinie
+  4a455752 und offene Worker-Auswahl mit expliziten ONLY-Einstellungen.
+  Keine neue Persistenz oder Taskqueue; aktuelle TaskClient-/API-Pagination bleibt erhalten.
+
 ### Fixed
 - **`taskplan init` lief 82 Minuten und endete mit 104 Zeitüberschreitungen**
   (T-20260920-535056160). Ursache: 151 git-Worktrees wurden als eigenständige
@@ -19,6 +24,15 @@
   `init` ohne Argumente aufruft. Fail-closed bleibt der Default.
 - `out/` gilt wie `dist/`/`build/` als Wegwerf und wandert nicht mehr in den
   Projektindex (Testartefakte ohne Leserecht brachen dort die Messung ab).
+
+### Added
+- **Begrenzte, gefilterte Task-Seiten (`TaskClient.list_page`, T-20261024-560489052).**
+  Die neue API liefert `total`, Seitenanzahl, `truncated` und einen Cursor auf
+  stabiler Task-ID-Sortierung; Defaultlimit 200, Maximum 500. Count und Seite
+  stammen aus derselben Datenbanksicht. `agent_id` wird vor dem Limit gefiltert.
+  Die bestehende Sortierung von `list()` und das ungefilterte `count()` bleiben
+  unverändert. Zwischen getrennten Seitenaufrufen wird kein Snapshot gehalten;
+  Änderungen an Tasks können spätere Treffer und Gesamtzahlen beeinflussen.
 
 ### Added (0.8.0)
 - **Readiness-Gate: `python -m taskplan init`** (T-20260831-555678565,

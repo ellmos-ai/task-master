@@ -24,7 +24,7 @@ License: MIT
 """
 from typing import Optional, List, Dict
 
-from .client import TaskClient
+from .client import DEFAULT_TASK_PAGE_SIZE, TaskClient
 
 _client: Optional[TaskClient] = None
 
@@ -123,19 +123,40 @@ def list(status: Optional[str] = None, priority: Optional[str] = None,
          include_done: bool = False, limit: Optional[int] = 50,
          effort: Optional[str] = None, scope: Optional[str] = None,
          project_path: Optional[str] = None, root_id: Optional[str] = None,
-         assigned_to: Optional[str] = None) -> List[Dict]:
+         assigned_to: Optional[str] = None,
+         agent_id: Optional[str] = None) -> List[Dict]:
     """Listet Tasks auf (default: nur offene/aktive).
 
     Dieselbe Luecke wie bei `add()`: `TaskClient.list` unterstuetzt diese
     Filter laengst (der Selektor braucht sie fuer "erst leichte, dann
     mittlere"), die Fassade reichte sie nur nicht durch. Das README-
     Quickstart-Beispiel ruft `tasks.list(effort="easy", scope="local")` auf.
+    `agent_id` wird als Urheberfilter vor `limit` angewandt.
     """
     return get_client().list(status=status, priority=priority,
                              include_done=include_done, limit=limit,
                              effort=effort, scope=scope,
                              project_path=project_path, root_id=root_id,
-                             assigned_to=assigned_to)
+                             assigned_to=assigned_to, agent_id=agent_id)
+
+
+def list_page(status: Optional[str] = None, priority: Optional[str] = None,
+              include_done: bool = False, effort: Optional[str] = None,
+              scope: Optional[str] = None, project_path: Optional[str] = None,
+              root_id: Optional[str] = None, assigned_to: Optional[str] = None,
+              agent_id: Optional[str] = None, limit: int = DEFAULT_TASK_PAGE_SIZE,
+              cursor: Optional[int] = None) -> Dict:
+    """Returns one bounded page with an exact filtered total and next cursor.
+
+    The cursor is the previous page's last task ID. See `TaskClient.list_page`
+    for ordering and the live-read consistency contract.
+    """
+    return get_client().list_page(
+        status=status, priority=priority, include_done=include_done,
+        effort=effort, scope=scope, project_path=project_path,
+        root_id=root_id, assigned_to=assigned_to, agent_id=agent_id,
+        limit=limit, cursor=cursor,
+    )
 
 
 def get(task_id: int) -> Optional[Dict]:

@@ -1,6 +1,6 @@
 # task-master
 
-> Last-checked: 2026-09-01
+> Last-checked: 2026-10-24
 
 task-master (ehemals `taskplan`, Repo: `ellmos-ai/task-master`) ist eine Python-Bibliothek (≥ 3.10, zero dependencies, stdlib only) für deterministische Aufgaben- und Rollenauswahl für LLM-Agenten-Frameworks im `ellmos-ai`-Ökosystem.
 
@@ -15,6 +15,7 @@ task-master (ehemals `taskplan`, Repo: `ellmos-ai/task-master`) ist eine Python-
 ## API & Komponenten
 
 - `taskplan.api`: Facette für Initialisierung, Task-Erstellung (`add`), Zuweisung (`assign`), Aufwands-Klassifizierung (`classify`) und Abschluss (`done`).
+- `taskplan.api.list_page` / `TaskClient.list_page`: begrenzte Seiten mit exakter gefilterter Gesamtzahl, stabiler Task-ID-Sortierung, `agent_id`-Filter und Folgeseiten-Cursor. Defaultlimit 200, Maximum 500. Jeder Aufruf ist ein eigener Datenbank-Snapshot; Änderungen zwischen Aufrufen können spätere Treffer und Gesamtzahlen beeinflussen. Die Sortierung und das Verhalten von `list()` bleiben bestehen.
 - `taskplan.readiness`: Readiness-Gate und persistenter Projekt-Index. `python -m taskplan init` misst einmalig alle Projekte und markiert erst bei vollstaendigem Erfolg als bereit; ohne diese Marke sind alle Rollenstarts fail-closed gesperrt (Exitcode 4 `NOT_INITIALISED`).
 - `taskplan.selector`: Deterministischer Zustandsautomat (`next_bundle()`) zur rollenspezifischen Aufgabenauswahl nach Aufwand und Projekt-Rotation.
 - `taskplan.locks`: Dreidimensionale Lock-Verwaltung (`LazyLockView`, `scan_lockmaster`) zur Verhinderung von Agenten-Kollisionen.
