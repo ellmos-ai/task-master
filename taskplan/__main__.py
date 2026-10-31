@@ -431,10 +431,141 @@ def _init_command(args: list[str]) -> int:
     return 0 if report["ready"] else 1
 
 
+def _task_command(args: list[str]) -> int:
+    """Einheitliches Task-Lifecycle-Werkzeug (`take|renew|submit|return|block|list|reclaim`)."""
+    import json
+
+    from .lease import TaskLeaseConflictError, TaskLeaseError, TaskLeaseManager
+
+    action = args[0] if args else "list"
+    rest = args[1:]
+    as_json = "--json" in rest
+    db_opt = _option(rest, "--db", "")
+    manager = TaskLeaseManager(db_opt or None)
+
+    def _emit(payload: object) -> int:
+        if as_json:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        elif isinstance(payload, dict):
+            for k, v in payload.items():
+                print(f"{k}: {v}")
+        elif isinstance(payload, list):
+            for row in payload:
+                print(
+                    f"#{row['id']} [{row['status']}|{row['priority']}|{row.get('task_kind', 'commissioned')}] "
+                    f"{row['title']} (holder={row.get('holder') or '-'})"
+                )
+        return 0
+
+    try:
+        if action == "list":
+            status = _option(rest, "--status", "") or None
+            kind = _option(rest, "--kind", "") or None
+            host = _option(rest, "--host", "") or None
+            rows = manager.list_tasks(
+                status=status,
+                task_kind=kind,
+                origin_host=host,
+                include_done="--include-done" in rest,
+            )
+            return _emit(rows)
+
+        if action == "reclaim":
+            reclaimed = manager.reclaim_expired()
+            return _emit({"reclaimed": reclaimed, "count": len(reclaimed)})
+
+        if action == "take":
+            create_new = "--new" in rest
+            holder = _option(rest, "--by", "")
+            ttl = _option(rest, "--ttl", "M")
+            kind = _option(rest, "--kind", "commissioned")
+            target_output = _option(rest, "--target-output", "")
+            bauort = _option(rest, "--bauort", "")
+            host = _option(rest, "--host", "") or None
+            task_id = None
+            if not create_new:
+                for token in rest:
+                    if token.isdigit():
+                        task_id = int(token)
+                        break
+            rec = manager.take(
+                task_id,
+                holder=holder,
+                origin_host=host,
+                ttl_profile=ttl,
+                create_new=create_new,
+                title=_option(rest, "--title", ""),
+                description=_option(rest, "--description", ""),
+                priority=_option(rest, "--priority", "medium"),
+                task_kind=kind,
+                target_output=target_output,
+                project_path=_option(rest, "--project", ""),
+                bauort=bauort,
+            )
+            return _emit(rec.as_dict())
+
+        if action in ("renew", "submit", "return", "block"):
+            task_id = None
+            for token in rest:
+                if token.isdigit():
+                    task_id = int(token)
+                    break
+            if task_id is None:
+                print(f"Nutzung: python -m taskplan task {action} <id> ...", file=sys.stderr)
+                return 2
+            lease_id = _option(rest, "--lease-id", "")
+            fence_raw = _option(rest, "--fence", "")
+            fence = int(fence_raw) if fence_raw.isdigit() else 0
+
+            if action == "renew":
+                rec = manager.renew(task_id, lease_id=lease_id, fence=fence)
+                return _emit(rec.as_dict())
+            if action == "submit":
+                rec = manager.submit(
+                    task_id,
+                    lease_id=lease_id,
+                    fence=fence,
+                    result=_option(rest, "--result", ""),
+                )
+                return _emit(rec.as_dict())
+            if action == "return":
+                rec = manager.return_lease(
+                    task_id,
+                    lease_id=lease_id,
+                    fence=fence,
+                    reason=_option(rest, "--reason", ""),
+                )
+                return _emit(rec.as_dict())
+            if action == "block":
+                res = manager.block(
+                    task_id,
+                    reason=_option(rest, "--reason", ""),
+                    lease_id=lease_id or None,
+                    fence=fence if fence_raw.isdigit() else None,
+                )
+                return _emit(res)
+
+        print(
+            f"Unbekannte task-Aktion: {action!r}. Erlaubt: list | take | renew | submit | return | block | reclaim",
+            file=sys.stderr,
+        )
+        return 2
+    except TaskLeaseConflictError as exc:
+        print(f"Task-Lease-Konflikt: {exc}", file=sys.stderr)
+        return 1
+    except TaskLeaseError as exc:
+        print(f"Task-Lease-Fehler: {exc}", file=sys.stderr)
+        return 2
+
+
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
     command = args[0] if args else "help"
     rest = args[1:]
+
+    if command == "task":
+        return _task_command(rest)
+
 
     if command == "startcenter":
         from .startcenter import main as startcenter

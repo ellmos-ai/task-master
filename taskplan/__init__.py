@@ -98,3 +98,12 @@ from .maintenance import (  # noqa: F401
     finding_fingerprint,
     plan_finding,
 )
+
+from .lease import (  # noqa: F401
+    TASK_KINDS,
+    TaskLeaseConflictError,
+    TaskLeaseError,
+    TaskLeaseManager,
+    TaskLeaseRecord,
+)
+

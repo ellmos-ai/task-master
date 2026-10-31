@@ -1,5 +1,13 @@
 # Die Starter sind ausfuehrbare Dateien: ihre Zeilenenden sind Vertrag, nicht
 # Geschmack. Ohne diese Regeln flippt core.autocrlf sie je nach Host — ein .sh
 # mit CRLF scheitert mit "bad interpreter", ein .bat mit LF je nach Shell.
-*.bat text eol=crlf
-*.sh  text eol=lf
+* text=auto eol=lf
+*.py   text eol=lf
+*.md   text eol=lf
+*.json text eol=lf
+*.toml text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.txt  text eol=lf
+*.sh   text eol=lf
+*.bat  text eol=crlf
