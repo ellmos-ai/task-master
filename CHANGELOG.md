@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Added (PB-1, BACH #3985)
+- `taskplan.return_policy` (`task-returns.v1`): reine Rückgabe-Buchhaltung für
+  geleaste Tasks. `summarize_returns` liefert `return_count`, `last_return_reason`,
+  `last_return_at`, `consecutive_identical`, `flapping`, `host_scoped`;
+  `block_reason` nennt nach n gleichen taskeigenen Rückgaben den festen Grund
+  `repeated_return:<grund>`. Gründe mit Präfix `host_precondition:` (Host kaputt,
+  nicht die Task) markieren nur `flapping` und blockieren nie. Anlass: am 06.11.2026
+  gaben zwei BACH-Worker 159 Tasks rund 557-mal pro Stunde zurück, ungezählt.
+
 ### Added (0.7.3 worker contract integration)
 - Reiner Worker-Abschluss-/Reviewvertrag aus der bestehenden Vertragslinie
   4a455752 und offene Worker-Auswahl mit expliziten ONLY-Einstellungen.
