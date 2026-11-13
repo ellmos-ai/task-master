@@ -442,3 +442,66 @@ class TestAskOneTolerant(unittest.TestCase):
         self.assertEqual(_ask_one(self._ask("7", "x", "y"), "Anbieter", "codex", opts, strict=True), "")
         self.assertEqual(_ask_one(self._ask("mein-modell"), "Modell", "opus", ("opus",)), "mein-modell")
         self.assertEqual(_ask_one(self._ask(""), "Modell", "opus", ("opus",)), "")
+
+
+class TestProviderScopedFallback(_LauncherFixture):
+    def auditor(self, provider="agy", **kwargs):
+        return self._run("tasksolver", provider, label="system-auditor",
+                         prompt_file=str(self.prompt), request="synthetic audit",
+                         fallback_scope="provider", use_probe=True, **kwargs)
+
+    def test_agy_success_preserves_interactive_choice(self):
+        answers = iter(["agy", "", ""])
+        with mock.patch("taskplan.launcher.probe", return_value=(True, "synthetic OK")):
+            code, _, runner = self.auditor("", interactive=True, ask=lambda _: next(answers))
+        self.assertEqual(code, 0)
+        self.assertTrue(runner.call_args.args[0][0].endswith("agy.exe"))
+
+    def test_agy_failure_never_starts_claude(self):
+        with mock.patch("taskplan.launcher.probe", return_value=(False, "synthetic unavailable")) as probe:
+            code, text, runner = self.auditor()
+        self.assertEqual(code, 1)
+        runner.assert_not_called()
+        self.assertEqual(probe.call_count, 1)
+        self.assertIn("synthetic unavailable", text)
+        self.assertIn("--allow-provider-fallback", text)
+
+    def test_same_provider_model_default_still_works(self):
+        with mock.patch("taskplan.launcher.probe", side_effect=[(False, "bad model"), (True, "OK")]):
+            code, _, runner = self.auditor(model="synthetic-invalid-model")
+        self.assertEqual(code, 0)
+        self.assertTrue(runner.call_args.args[0][0].endswith("agy.exe"))
+        self.assertNotIn("synthetic-invalid-model", runner.call_args.args[0])
+
+    def test_explicit_claude_still_starts_claude(self):
+        with mock.patch("taskplan.launcher.probe", return_value=(True, "OK")):
+            code, _, runner = self.auditor("claude")
+        self.assertEqual(code, 0)
+        self.assertTrue(runner.call_args.args[0][0].endswith("claude.exe"))
+
+    def test_default_all_provider_fallback_is_unchanged(self):
+        with mock.patch("taskplan.launcher.probe", side_effect=[(False, "bad"), (True, "OK")]):
+            code, _, runner = self._run("tasksolver", "agy", use_probe=True)
+        self.assertEqual(code, 0)
+        self.assertTrue(runner.call_args.args[0][0].endswith("claude.exe"))
+
+    def test_invalid_scope_fails_before_probe_or_start(self):
+        with mock.patch("taskplan.launcher.probe") as probe:
+            code, _, runner = self._run("tasksolver", "agy", fallback_scope="typo")
+        self.assertEqual(code, 1)
+        probe.assert_not_called()
+        runner.assert_not_called()
+
+    def test_cli_scoped_and_explicit_opt_in_forwarding(self):
+        from taskplan.__main__ import main
+        base = ["launch", "--label", "system-auditor", "--provider", "agy",
+                "--prompt-file", str(self.prompt), "--request", "synthetic",
+                "--fallback-scope", "provider", "--model", "custom", "--effort", "high"]
+        for extra, expected in [([], "provider"), (["--allow-provider-fallback"], "all")]:
+            with mock.patch("taskplan.launcher.launch", return_value=0) as launch_mock:
+                self.assertEqual(main(base + extra), 0)
+            args = launch_mock.call_args.kwargs
+            self.assertEqual(args["fallback_scope"], expected)
+            self.assertEqual(args["model"], "custom")
+            self.assertEqual(args["effort"], "high")
+            self.assertEqual(launch_mock.call_args.args[1], "agy")
