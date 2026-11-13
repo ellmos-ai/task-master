@@ -695,7 +695,7 @@ def main(argv: list[str] | None = None) -> int:
         if not provider and not interactive and not clutch_on and not has_cfg_provider:
             print("Nutzung: python -m taskplan launch --role R [--provider P] "
                   "[--model M] [--effort E] [--name N]\n"
-                  "         [--interactive] [--no-probe] [--no-fallback] [--no-clutch] [--clutch]\n"
+                  "         [--interactive] [--no-probe] [--no-fallback] [--fallback-scope all|provider] [--allow-provider-fallback] [--no-clutch] [--clutch]\n"
                   "         python -m taskplan launch --label NAME "
                   "--prompt-file PFAD --request TEXT [--provider P]",
                   file=sys.stderr)
@@ -710,6 +710,9 @@ def main(argv: list[str] | None = None) -> int:
             label=label,
             interactive=interactive,
             fallback="--no-fallback" not in rest,
+            fallback_scope=("all" if "--allow-provider-fallback" in rest else
+                            _option(rest, "--fallback-scope", "")
+                            if "--fallback-scope" in rest else "all"),
             use_probe=False if "--no-probe" in rest else None,
             session_name=_option(rest, "--name", ""),
             no_clutch=no_clutch,
