@@ -841,6 +841,7 @@ def launch(
     label: str = "",
     interactive: bool = False,
     fallback: bool = True,
+    fallback_scope: str = "all",
     use_probe: bool | None = None,
     session_name: str = "",
     ask=input,
@@ -895,6 +896,8 @@ def launch(
               "verwende den eingefrorenen task-master-Built-in.")
 
     try:
+        if fallback_scope not in ("all", "provider"):
+            raise ValueError("fallback_scope muss all oder provider sein.")
         operator_mode = ""
         if key == OPERATOR:
             if interactive and not actual_env.get(OPERATOR_MODE_ENV, "").strip():
@@ -919,6 +922,10 @@ def launch(
                     "Kein Provider gewaehlt: --provider P oder --interactive."
                 )
         normalized_provider = normalize_provider(provider) if provider else ""
+        if fallback_scope == "provider" and not normalized_provider:
+            configured_provider = provider_name("")
+            if configured_provider:
+                normalized_provider = normalize_provider(configured_provider)
         workdir = _workdir(actual_env)
         chain, skipped = _candidates(
             key, normalized_provider, model=model, effort=effort,
@@ -926,6 +933,15 @@ def launch(
             force_clutch=clutch, explicit_provider=explicit_provider,
             prompt=request,
         )
+        if fallback_scope == "provider":
+            if not normalized_provider:
+                raise ValueError("Anbietergebundener Fallback braucht eine Providerwahl.")
+            chain = [item for item in chain
+                     if item.provider == normalized_provider]
+            if fallback:
+                print("[FALLBACK] Anbieterwechsel gesperrt; Modellalternativen beim "
+                      "gewählten Anbieter bleiben erlaubt. Ein Wechsel braucht "
+                      "--allow-provider-fallback.")
     except ValueError as exc:
         print(f"[FEHLER] {exc}", file=sys.stderr)
         return 1

@@ -689,13 +689,19 @@ def main(argv: list[str] | None = None) -> int:
         force_clutch = "--clutch" in rest
         role = _option(rest, "--role", "tasksolver")
         label = _option(rest, "--label", "")
+        fallback_scope = (_option(rest, "--fallback-scope", "")
+                          if "--fallback-scope" in rest else
+                          next((arg.split("=", 1)[1] for arg in rest
+                                if arg.startswith("--fallback-scope=")), "all"))
+        if "--allow-provider-fallback" in rest:
+            fallback_scope = "all"
         key = label or role
         clutch_on = is_clutch_enabled(key, cli_no_clutch=no_clutch, cli_clutch=force_clutch)
         has_cfg_provider = bool(provider_name(""))
         if not provider and not interactive and not clutch_on and not has_cfg_provider:
             print("Nutzung: python -m taskplan launch --role R [--provider P] "
                   "[--model M] [--effort E] [--name N]\n"
-                  "         [--interactive] [--no-probe] [--no-fallback] [--no-clutch] [--clutch]\n"
+                  "         [--interactive] [--no-probe] [--no-fallback] [--fallback-scope all|provider] [--allow-provider-fallback] [--no-clutch] [--clutch]\n"
                   "         python -m taskplan launch --label NAME "
                   "--prompt-file PFAD --request TEXT [--provider P]",
                   file=sys.stderr)
@@ -710,6 +716,7 @@ def main(argv: list[str] | None = None) -> int:
             label=label,
             interactive=interactive,
             fallback="--no-fallback" not in rest,
+            fallback_scope=fallback_scope,
             use_probe=False if "--no-probe" in rest else None,
             session_name=_option(rest, "--name", ""),
             no_clutch=no_clutch,
