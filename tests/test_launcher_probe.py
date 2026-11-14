@@ -492,6 +492,25 @@ class TestProviderScopedFallback(_LauncherFixture):
         probe.assert_not_called()
         runner.assert_not_called()
 
+    def test_taskplan_provider_scopes_fallback_when_clutch_is_enabled(self):
+        env = dict(self.env, TASKPLAN_PROVIDER="agy")
+        chain = [launcher.Candidate("agy", "gemini-flash", "high", source="config")]
+        with (
+            mock.patch("taskplan.launcher.is_clutch_enabled", return_value=True),
+            mock.patch("taskplan.launcher.provider_name", return_value="agy"),
+            mock.patch("taskplan.launcher._candidates", return_value=(chain, [])),
+            mock.patch("taskplan.launcher.probe", return_value=(True, "OK")),
+        ):
+            code, _, runner = self.auditor("", env=env)
+        self.assertEqual(code, 0)
+        self.assertTrue(runner.call_args.args[0][0].endswith("agy.exe"))
+
+    def test_no_fallback_omits_model_alternatives_message(self):
+        with mock.patch("taskplan.launcher.probe", return_value=(True, "OK")):
+            code, text, _ = self.auditor(fallback=False)
+        self.assertEqual(code, 0)
+        self.assertNotIn("Modellalternativen", text)
+
     def test_cli_scoped_and_explicit_opt_in_forwarding(self):
         from taskplan.__main__ import main
         base = ["launch", "--label", "system-auditor", "--provider", "agy",
@@ -505,3 +524,12 @@ class TestProviderScopedFallback(_LauncherFixture):
             self.assertEqual(args["model"], "custom")
             self.assertEqual(args["effort"], "high")
             self.assertEqual(launch_mock.call_args.args[1], "agy")
+
+    def test_cli_scoped_equals_form_is_forwarded(self):
+        from taskplan.__main__ import main
+        args = ["launch", "--label", "system-auditor", "--provider", "agy",
+                "--prompt-file", str(self.prompt), "--request", "synthetic",
+                "--fallback-scope=provider"]
+        with mock.patch("taskplan.launcher.launch", return_value=0) as launch_mock:
+            self.assertEqual(main(args), 0)
+        self.assertEqual(launch_mock.call_args.kwargs["fallback_scope"], "provider")

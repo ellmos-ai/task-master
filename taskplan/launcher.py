@@ -922,6 +922,10 @@ def launch(
                     "Kein Provider gewaehlt: --provider P oder --interactive."
                 )
         normalized_provider = normalize_provider(provider) if provider else ""
+        if fallback_scope == "provider" and not normalized_provider:
+            configured_provider = provider_name("")
+            if configured_provider:
+                normalized_provider = normalize_provider(configured_provider)
         workdir = _workdir(actual_env)
         chain, skipped = _candidates(
             key, normalized_provider, model=model, effort=effort,
@@ -934,9 +938,10 @@ def launch(
                 raise ValueError("Anbietergebundener Fallback braucht eine Providerwahl.")
             chain = [item for item in chain
                      if item.provider == normalized_provider]
-            print("[FALLBACK] Anbieterwechsel gesperrt; Modellalternativen beim "
-                  "gewählten Anbieter bleiben erlaubt. Ein Wechsel braucht "
-                  "--allow-provider-fallback.")
+            if fallback:
+                print("[FALLBACK] Anbieterwechsel gesperrt; Modellalternativen beim "
+                      "gewählten Anbieter bleiben erlaubt. Ein Wechsel braucht "
+                      "--allow-provider-fallback.")
     except ValueError as exc:
         print(f"[FEHLER] {exc}", file=sys.stderr)
         return 1
