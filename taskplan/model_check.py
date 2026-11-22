@@ -115,12 +115,31 @@ def scan_starter_file(path: Path) -> list[dict[str, Any]]:
     return findings
 
 
+def _parse_models_toml_fallback(text: str) -> dict[str, dict[str, str]]:
+    """Minimaler stdlib-Parser fuer [providers.<p>.models] / [models] auf Python 3.10."""
+    sections: dict[str, dict[str, str]] = {}
+    current = ""
+    section_re = re.compile(r"^\s*\[([^\]]+)\]\s*(?:#.*)?$")
+    kv_re = re.compile(r'^\s*([A-Za-z0-9_.-]+)\s*=\s*(?:"([^"]*)"|\'([^\']*)\')\s*(?:#.*)?$')
+    for line in text.splitlines():
+        sec_m = section_re.match(line)
+        if sec_m:
+            current = sec_m.group(1).strip()
+            continue
+        if not current or (current != "models" and not (current.startswith("providers.") and current.endswith(".models"))):
+            continue
+        kv_m = kv_re.match(line)
+        if kv_m:
+            key = kv_m.group(1)
+            val = kv_m.group(2) if kv_m.group(2) is not None else (kv_m.group(3) or "")
+            sections.setdefault(current, {})[key] = val
+    return sections
+
+
 def scan_config_file(path: Path) -> list[dict[str, Any]]:
     """Prueft [providers.*.models] und [models] einer TOML-Konfiguration auf Altmodelle."""
-    if tomllib is None or not path.is_file():
+    if not path.is_file():
         return []
-    with open(path, "rb") as handle:
-        data = tomllib.load(handle)
 
     findings: list[dict[str, Any]] = []
 
@@ -144,12 +163,20 @@ def scan_config_file(path: Path) -> list[dict[str, Any]]:
                     }
                 )
 
-    providers = data.get("providers", {})
-    if isinstance(providers, dict):
-        for pname, psection in providers.items():
-            if isinstance(psection, dict):
-                _check_table(psection.get("models"), f"providers.{pname}.models")
-    _check_table(data.get("models"), "models")
+    if tomllib is not None:
+        with open(path, "rb") as handle:
+            data = tomllib.load(handle)
+        providers = data.get("providers", {})
+        if isinstance(providers, dict):
+            for pname, psection in providers.items():
+                if isinstance(psection, dict):
+                    _check_table(psection.get("models"), f"providers.{pname}.models")
+        _check_table(data.get("models"), "models")
+        return findings
+
+    parsed = _parse_models_toml_fallback(path.read_text(encoding="utf-8", errors="replace"))
+    for section_name, table in parsed.items():
+        _check_table(table, section_name)
     return findings
 
 

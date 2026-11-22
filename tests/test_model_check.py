@@ -131,3 +131,21 @@ class TestCheckModelsMode(unittest.TestCase):
             report = check_models([root], include_config=False)
         self.assertTrue(report["ok"])
         self.assertEqual(report["checked_files"], [])
+
+    def test_check_models_detects_toml_findings_without_tomllib_py310(self):
+        from taskplan import model_check
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            toml_path = root / "taskplan.toml"
+            toml_path.write_text(
+                '[providers.agy.models]\ndefault = "gemini-3.7-flash-high"\n'
+                '[models]\ntasksolver = "claude-opus-4-8"\n',
+                encoding="utf-8",
+            )
+            with mock.patch.object(model_check, "tomllib", None):
+                report = check_models([root], config_path=toml_path)
+        self.assertFalse(report["ok"])
+        rules = {item["rule"] for item in report["findings"]}
+        self.assertIn("deprecated_gemini_3x", rules)
+        self.assertIn("deprecated_claude_4x", rules)
