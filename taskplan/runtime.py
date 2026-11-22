@@ -6,7 +6,7 @@ import json
 import time
 from typing import Any, Dict
 
-from .config import provider_runtime
+from .config import _provider_section, label_runtime, provider_name, provider_runtime
 from .workflows import get_workflow_prompt_path, resolve_lang
 
 ROLES = ("tasksolver", "taskwriter", "maintainer")
@@ -43,6 +43,41 @@ def runtime_profile(role: str, provider: str = "") -> Dict[str, Any]:
     """Vollstaendiges, maschinenlesbares Laufzeitprofil einer Rolle."""
     normalized = normalize_role(role)
     return provider_runtime(normalized, provider)
+
+
+def label_runtime_profile(label: str, provider: str = "") -> Dict[str, Any]:
+    """Laufzeitprofil fuer ein beliebiges konfiguriertes Rollen-Label.
+
+    Loest sowohl TASKPLAN-Kernrollen als auch beliebige Label-Schluessel in
+    ``[providers.<p>.models]`` (z. B. ``pingpong``, ``ticket-master``) auf
+    und faellt andernfalls auf ``default`` desselben Providers zurueck.
+    """
+    cleaned = label.strip()
+    if not cleaned:
+        raise ValueError("Label darf nicht leer sein.")
+    normalized = cleaned.lower()
+    if normalized in LAUNCH_ROLES:
+        profile = dict(provider_runtime(normalized, provider))
+        profile["label"] = normalized
+        return profile
+    resolved = provider_name(provider)
+    section = _provider_section(resolved) if resolved else {}
+    default_continuation = "goal" if resolved == "codex" else "one_shot"
+    continuation = str(section.get("continuation", default_continuation)).lower()
+    empty_policy = str(section.get(
+        "empty_policy", "keep_goal" if continuation == "goal" else "stop"
+    )).lower()
+    values = label_runtime(cleaned, resolved)
+    return {
+        "provider": resolved,
+        "label": normalized,
+        "role": normalized,
+        "model": values["model"],
+        "reasoning_effort": values["reasoning_effort"],
+        "continuation": continuation,
+        "empty_policy": empty_policy,
+        "idle_backoff_seconds": max(0, int(section.get("idle_backoff_seconds", 60))),
+    }
 
 
 def apply_backoff(role: str, provider: str = "", sleeper=time.sleep) -> int:

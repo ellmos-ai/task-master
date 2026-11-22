@@ -48,6 +48,7 @@ from .workflows import (  # noqa: F401
 
 from .runtime import (  # noqa: F401
     goal_objective,
+    label_runtime_profile,
     runtime_profile,
     startup_prompt,
 )
