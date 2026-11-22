@@ -113,7 +113,7 @@
 
 ## Befund 6 — Aufgaben zeigen auf nicht registrierte Arbeitsklone
 
-**Beobachtet 2026-08-24, zwei belegte Faelle, unbehoben.**
+**Beobachtet 2026-08-24, sechs belegte Fälle, unbehoben.**
 
 > **Nachtrag 2026-08-24, 04:45 — der urspruengliche Befund war zu breit.**
 > Er nannte #2097 und #2098 als "zwei Faelle in Folge". Die Pruefung von #2098
@@ -180,6 +180,75 @@ epos\` liegen **zehn** Klone
   **Wer einen unklaren Repository-Zustand vorfindet, legt einen neuen Klon an
   statt den Zustand zu klaeren.** Das verschiebt das Problem und vervielfacht
   es — beim naechsten Lauf ist die Lage unklarer als zuvor, nicht klarer.
+- **Dritter Fall — cockroachdb-aws-hackathon / roshambo (2026-08-24, #1965/#1966):**
+  Der Selektor lieferte den `project_path`
+  `C:\Users\lukas\OneDrive\.TOPICS\.SOFTWARE\LLM\cockroachdb-aws-hackathon` —
+  ein Verzeichnis, das **nicht existiert** (`No such file or directory`). Die
+  Registry führt stattdessen `C:\_Local_DEV\repos\roshambo`,
+  `roshambo-starmap`, `cockroachdb-skills` plus mehrere unregistrierte
+  `roshambo-*`-Klone. Diesmal ist der Pfad also nicht nur ein unregistrierter
+  Klon (wie #2097), sondern ein **totes** Verzeichnis: Der Task zeigt ins Leere,
+  das echte Material liegt in `.HACKATHONS/2026-roshambo` (unter Judging-Hold).
+  Verschärfend: Der lokale `roshambo`-Klon steht nicht auf dem eingereichten
+  Tag-Stand (`f56efcb` existiert im Klon gar nicht; HEAD `b2b2bc7`), und der von
+  der Freeze-Order verlangte `judging-hold/post-submission`-Branch fehlt. Der Fall
+  vereint beide Muster: toter Pfad (Erfassung nicht gegen Registry aufgelöst)
+  **und** unklarer Klonzustand. Nicht bearbeitet — beide Aufgaben in den Revolver,
+  Klärung als D-20260824-003 abgelegt. Damit steht der Befund auf drei Fällen.
+- **Vierter Fall — VermieterZentrale (2026-08-24, #760/#764/#766), neue Facette:**
+  Der `project_path` `.SOFTWARE\CASH\DEV_VermieterZentrale_CASHCOW` existiert
+  nicht (auch der Parent `.SOFTWARE\CASH` fehlt); die Registry führt nur einen
+  **leeren** Evidence-Klon. Das echte Projekt liegt im **anderen** Themenordner:
+  `.SOFTWARE\FINANCE\DEV_VermieterZentrale_CASHCOW`. Belegt ist die Zugehörigkeit
+  hart — die FINANCE-`TODO.md` nennt TASKPLAN #762/#757/#756 aus demselben
+  Nummernkreis, und #760 (Kautionsmodul) ist dort seit 2026-08-01 (TW-VZ-14)
+  bereits ERLEDIGT. Die neue Facette gegenüber den ersten drei Fällen: Es ist
+  kein verwaister Klon, sondern ein gleichnamiges Projekt im falschen
+  Themenordner — der TASKWRITER müsste beim Auflösen also nicht nur die Registry,
+  sondern auch themenordner-übergreifend prüfen. Das Zielprojekt ist zudem nicht
+  Plan-D-fähig (kein Git, roh in OneDrive mit .bak-Dateien, Cloud-Lock). Codex hat
+  das seit 2026-08-11 viermal geskippt; der Selektor liefert es trotzdem in jeder
+  Runde. Nicht bearbeitet, Klärung als D-20260824-004. Der Befund steht damit auf
+  vier Fällen.
+- **Fünfter Fall — UpToday (2026-08-24, #792/#803/#798), Plan-D-Limbo:** Hier ist
+  der Task-Pfad `.SOFTWARE\ASSISTENT\RDY_FAST_UpToday_SOCIAL` **korrekt und lebt** —
+  er zeigt auf das echte, vollständige Projekt. Der Bruch liegt woanders: Das
+  Projekt ist nur halb nach Plan D umgestellt. Das `.git` wurde aus OneDrive
+  entfernt, aber es existiert weder ein Pointer noch ein Arbeitsklon mit Inhalt
+  noch ein Remote; die Registry führt einzig einen **docs-only Evidence-Klon**
+  (`UpToday-tasksolver-792-803-798`: 5 readback-Dateien, kein Remote, kein
+  Projektinhalt). Damit gibt es keinen gültigen Ort für git-getrackte Arbeit:
+  OneDrive-Schreibzugriffe tragen Cloud-Lock-/A7-Risiko (`cldflt.sys` aktiv), und
+  der Evidence-Klon ist leer. Die Facette gegenüber den Vorfällen: nicht toter
+  Pfad (wie roshambo/VermieterZentrale) und nicht Klon-Vermehrung mit
+  git-in-OneDrive (wie StreamingGuide), sondern ein an sich richtig adressiertes
+  Projekt, das nie sauber migriert wurde und darum ein ganzes
+  store-readiness-Bündel blockiert. Alle drei DoDs sind real offen (Flutter-
+  Ampeln auf `_AmpelStatus.empty`, Store-Icons 44/150/300 fehlen, Lizenz-Generator
+  braucht `pip-licenses` + Klon); #792 zusätzlich Flutter-blockiert
+  (D-002-Klasse). Codex hat das Bündel vom 2026-08-11 bis 2026-08-13 viermal als
+  `blocked_foreign_state` zurückgestellt; der Selektor liefert es weiter. Nicht
+  bearbeitet, Klärung als D-20260824-006. Der Befund steht damit auf fünf
+  Fällen.
+- **Sechster Fall — FinancialProof (2026-08-24, #612/#613/#614), zweiter
+  FINANCE-Mismatch:** Dasselbe Muster wie der vierte Fall (VermieterZentrale),
+  sogar mit demselben Zielordner. Der Selektorpfad
+  `.SOFTWARE\ASSISTENT\REL-PUB_FinancialProof` **existiert nicht** (Parent
+  ASSISTENT enthält kein FinancialProof); die Registry führt nur einen leeren
+  docs-only Evidence-Klon (`FinancialProof-tasksolver-612-613-609`: 4 readback-
+  Dateien, kein Remote). Das echte Projekt liegt im **anderen** Themenordner
+  `.SOFTWARE\FINANCE\REL-PUB_FinancialProof`. Damit ist FINANCE zum **zweiten
+  Mal** der wahre Ort eines ASSISTENT/CASH-adressierten Tasks — das Muster ist
+  nicht mehr Einzelfall, sondern themenordner-systematisch. Verschärfend
+  gegenüber VermieterZentrale: Die FINANCE-Kopie hat einen **eigenen
+  `.git`-Bestand IN OneDrive** (Plan-D-Verstoß, Korruptionsquelle) plus
+  `data/financial.db` und `data/.key` — eine Finanz-DB und ein Geheimnis unter
+  synchronisiertem git; das ist zusätzlich Security-/MAINTAINER-relevant (nicht
+  inspiziert, um das Geheimnis nicht anzufassen). Codex hat den Pfad viermal als
+  stale-Discovery zurückgestellt. Fällt unter dieselbe Owner-Entscheidung wie
+  D-004 (Pfad-Korrektur ASSISTENT->FINANCE + Plan-D-Migration); keine separate
+  Entscheidung, um D-004 nicht zu duplizieren. Der Befund steht damit auf sechs
+  Fällen.
 - **Naechster Schritt:** Owner-Entscheidung, ob (a) der TASKWRITER Pfade beim
   Erfassen gegen `repos.json` aufloest, (b) der Selektor eine Abweichung
   meldet statt sie durchzureichen, oder (c) die verwaisten Suffix-Klone
