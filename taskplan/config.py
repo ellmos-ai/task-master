@@ -337,7 +337,7 @@ def _role_value(section: Dict[str, Any], key: str, role: str,
     values = section.get(key, {}) or {}
     if not isinstance(values, dict):
         return default
-    return str(values.get(role) or values.get("default", default))
+    return str(values.get(role) or values.get(role.lower()) or values.get("default", default))
 
 
 def model_for(role: str, provider: str = "") -> str:
@@ -386,10 +386,19 @@ def label_runtime(label: str, provider: str = "") -> Dict[str, str]:
     duerfen aber dieselben Provider-Tabellen benutzen: ``[providers.<p>.models]``
     kennt Schluessel mit Bindestrich, und ``default`` bleibt der Rueckfall.
     """
-    section = _provider_section(provider_name(provider))
+    resolved = provider_name(provider)
+    if resolved:
+        section = _provider_section(resolved)
+        return {
+            "model": _role_value(section, "models", label),
+            "reasoning_effort": _role_value(section, "reasoning_effort", label),
+        }
+    legacy = load_config().get("models", {}) or {}
+    if not isinstance(legacy, dict):
+        return {"model": "", "reasoning_effort": ""}
     return {
-        "model": _role_value(section, "models", label),
-        "reasoning_effort": _role_value(section, "reasoning_effort", label),
+        "model": str(legacy.get(label) or legacy.get(label.lower()) or legacy.get("default", "")),
+        "reasoning_effort": "",
     }
 
 

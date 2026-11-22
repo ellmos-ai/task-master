@@ -638,12 +638,18 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if command == "runtime":
-        from .runtime import runtime_profile
+        from .runtime import label_runtime_profile, runtime_profile
+        has_label = "--label" in rest
+        label = _option(rest, "--label", "")
         role = _option(rest, "--role", "tasksolver")
         provider = _option(rest, "--provider", "")
         field = _option(rest, "--field", "")
         try:
-            profile = runtime_profile(role, provider)
+            profile = (
+                label_runtime_profile(label, provider)
+                if has_label
+                else runtime_profile(role, provider)
+            )
         except ValueError as exc:
             print(exc, file=sys.stderr)
             return 2
@@ -656,6 +662,45 @@ def main(argv: list[str] | None = None) -> int:
         import json
         print(json.dumps(profile, ensure_ascii=False, indent=2))
         return 0
+
+    if command == "check-models":
+        import json
+        from pathlib import Path
+        from .model_check import check_models
+
+        paths: list[Path] = []
+        index = 0
+        while index < len(rest):
+            if rest[index] == "--path" and index + 1 < len(rest):
+                paths.append(Path(rest[index + 1]))
+                index += 2
+            else:
+                index += 1
+        cfg_opt = _option(rest, "--config", "")
+        as_json = "--json" in rest
+        no_config = "--no-config" in rest
+        report = check_models(
+            paths or None,
+            config_path=Path(cfg_opt) if cfg_opt else None,
+            include_config=not no_config,
+        )
+        if as_json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            if report["ok"]:
+                print(
+                    f"OK: {len(report['checked_files'])} Datei(en) geprueft, "
+                    "keine veralteten oder hartkodierten Modelle gefunden."
+                )
+            else:
+                print(
+                    f"FEHLER: {len(report['findings'])} Modell-Befund(e) in "
+                    f"{len(report['checked_files'])} Datei(en):"
+                )
+                for item in report["findings"]:
+                    loc = f"{item['file']}:{item['line']}" if item["line"] else item["file"]
+                    print(f"  [{item['rule']}] {loc} -> {item['detail']}")
+        return 0 if report["ok"] else 1
 
     if command == "startup-prompt":
         from .runtime import startup_prompt
@@ -891,8 +936,11 @@ def main(argv: list[str] | None = None) -> int:
         print("            Routing-Gates und liefert einen JSON-Plan; führt selbst")
         print("            weder Dateimoves noch Audits noch Tickets aus.")
         print()
-        print("  runtime --role R [--provider P] [--field FELD]")
+        print("  runtime [--role R | --label L] [--provider P] [--field FELD]")
         print("            Liefert Provider, Rollenmodell, Reasoning und Fortsetzung.")
+        print()
+        print("  check-models [--path PFAD ...] [--config PFAD] [--no-config] [--json]")
+        print("            Prueft Starter und Konfiguration auf veraltete oder hartkodierte Modellnamen.")
         print()
         print("  startup-prompt --role R [--provider P]")
         print("            Erzeugt fuer Codex den autorisierten Goal-Auftrag.")
