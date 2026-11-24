@@ -18,7 +18,8 @@ import threading
 from typing import Mapping, NamedTuple, Sequence
 
 from .config import (
-    active_roles, execution_authority, execution_config, is_clutch_enabled,
+    active_roles, execution_authority, execution_config,
+    has_explicit_model_choices, is_clutch_enabled,
     label_runtime, model_choices, provider_name, role_zweck,
 )
 from .doctor import run as doctor
@@ -30,6 +31,7 @@ from .runtime import (
 from .workflows import get_workflow_prompt_path
 
 PROVIDERS = ("claude", "codex", "agy", "kimi")
+_REAL_WHICH = shutil.which
 TRUST_ENV = "TASKPLAN_TRUSTED_AUTOMATION"
 OPERATOR_MODE_ENV = "TASKPLAN_OPERATOR_MODE"
 WORKDIR_ENV = "TASKPLAN_WORKDIR"
@@ -47,11 +49,32 @@ DEFAULT_PROBE_TIMEOUT = 120.0
 # dieses Moduls den Start blockiert.
 EFFORT_CHOICES = {
     "claude": ("low", "medium", "high", "xhigh", "max"),
-    "codex": ("low", "medium", "high", "xhigh"),
-    "agy": ("low", "medium", "high"),
+    "codex": ("low", "medium", "high", "xhigh", "max"),
+    "agy": ("low", "medium", "high", "xhigh"),
     "kimi": ("low", "high", "max"),
 }
 CODEX_DEFAULT_LABEL = "Codex-Default (kein TASKPLAN-Override)"
+_AGY_EFFORT_SUFFIXES = ("-xhigh", "-medium", "-thinking", "-high", "-low", "-max")
+_HEAVY_ROLES = frozenset({"operator", "system-auditor", "ticket-master", "multi-bot"})
+
+
+def _split_agy_model_effort(model: str, effort: str) -> tuple[str, str]:
+    """Vermeidet den agy-Konflikt '--model <m>-<effort> conflicts with --effort=...'."""
+    clean_model = str(model or "").strip()
+    clean_effort = str(effort or "").strip()
+    lowered = clean_model.lower()
+    if clean_model and any(lowered.endswith(sfx) for sfx in _AGY_EFFORT_SUFFIXES):
+        return clean_model, ""
+    return clean_model, clean_effort
+
+
+def _strip_agy_suffix(model: str) -> str:
+    clean = str(model or "").strip()
+    lowered = clean.lower()
+    for sfx in _AGY_EFFORT_SUFFIXES:
+        if lowered.endswith(sfx):
+            return clean[: -len(sfx)]
+    return clean
 
 
 class Candidate(NamedTuple):
@@ -244,12 +267,15 @@ def _builtin_provider_commands(
         # Konversation interaktiv weiter.
         return [boot, base + ["--continue"]], prompt_path
 
+    agy_model, agy_effort = _split_agy_model_effort(model, effort)
     command = [executable]
     if trusted:
         command.extend(["--dangerously-skip-permissions", "--mode", "accept-edits"])
+    if agy_model:
+        command.extend(["--model", agy_model])
+    if agy_effort:
+        command.extend(["--effort", agy_effort])
     command.extend([
-        "--model", model,
-        "--effort", effort,
         "--add-dir", str(prompt_path.parent),
         "--prompt-interactive", request_with_path,
     ])
@@ -430,8 +456,15 @@ def _builtin_probe_command(provider: str, executable: str, model: str,
         command.append(PROBE_REQUEST)
         return command
     if provider == "agy":
-        return [executable, "--model", model, "--effort", effort,
-                "-p", PROBE_REQUEST]
+        agy_model, agy_effort = _split_agy_model_effort(model, effort)
+        command = [executable]
+        if agy_model:
+            command.extend(["--model", agy_model])
+        if agy_effort:
+            command.extend(["--effort", agy_effort])
+        command.extend(["--disable-slash-commands", "--output-format", "text",
+                        "-p", PROBE_REQUEST])
+        return command
     return [executable, "--model", model, "--output-format", "text",
             "-p", PROBE_REQUEST]
 
@@ -590,6 +623,58 @@ def _builtin_candidates(key: str, provider: str, *, model: str, effort: str,
     return chain, skipped
 
 
+def _discover_live_provider_models(provider: str) -> tuple[str, ...]:
+    """Fragt live verfuegbare Modelle ueber COMA/Clutch/CLI-Discovery ab.
+
+    Wird nur ausgefuehrt, wenn `shutil.which` echt ist (nicht in isolierten
+    Unit-Tests gemockt), damit Tests deterministisch und schnell bleiben.
+    """
+    if shutil.which is not _REAL_WHICH:
+        return ()
+    api = _coma_api()
+    if api is None or not hasattr(api, "provider_model_choices"):
+        return ()
+    try:
+        return tuple(api.provider_model_choices(provider))
+    except Exception:
+        return ()
+
+
+def _interactive_model_choices(provider: str) -> tuple[str, ...]:
+    """Vorschlagsliste fuer die interaktive Modellwahl (live/clutch bevorzugt)."""
+    from . import config as _cfg
+
+    configured = tuple(model_choices(provider))
+    if model_choices is not _cfg.model_choices or has_explicit_model_choices(provider):
+        return configured
+    live = _discover_live_provider_models(provider)
+    if live:
+        return live
+    return configured
+
+
+def _preferred_live_model(
+    key: str,
+    provider: str,
+    live_models: Sequence[str],
+    configured_model: str,
+) -> str:
+    """Heilt veraltete Konfigurationsmodelle auf das beste Live-Modell."""
+    if not live_models:
+        return configured_model
+    if configured_model:
+        base = _strip_agy_suffix(configured_model) if provider == "agy" else configured_model
+        if base in live_models or configured_model in live_models:
+            return configured_model
+    if provider == "agy":
+        if key in _HEAVY_ROLES and "gemini-4-carbon" in live_models:
+            return "gemini-4-carbon"
+        if "gemini-4-hydrogen" in live_models:
+            return "gemini-4-hydrogen"
+        return live_models[0]
+    return configured_model or live_models[0]
+
+
 def _config_candidates(key: str, provider: str, *, model: str, effort: str,
                        fallback: bool) -> tuple[list[Candidate], list[str]]:
     """Bezieht die konfigurierte Kette und Verfuegbarkeitsfilter (COMA oder Built-in)."""
@@ -600,6 +685,16 @@ def _config_candidates(key: str, provider: str, *, model: str, effort: str,
         )
 
     cfg_model, cfg_effort = _configured_runtime(key, provider)
+    live_primary = _discover_live_provider_models(provider)
+    if provider == "agy" and live_primary and cfg_model:
+        healed = _preferred_live_model(key, "agy", live_primary, cfg_model)
+        if healed != cfg_model:
+            print(
+                f"[CONFIG] agy-Modell {cfg_model!r} nicht mehr in lokaler CLI — "
+                f"verwende {healed!r}."
+            )
+            cfg_model = healed
+
     primary = api.Candidate(
         provider, model.strip() or cfg_model, effort.strip() or cfg_effort,
         source="config",
@@ -607,10 +702,26 @@ def _config_candidates(key: str, provider: str, *, model: str, effort: str,
     provider_default = None
     if fallback and (model.strip() or effort.strip()):
         provider_default = api.Candidate(provider, cfg_model, cfg_effort, source="config")
+
     fallback_candidates = []
     if fallback:
+        # Erst Modellalternativen desselben Providers (aus Live-/Clutch-Discovery),
+        # danach Ersatz-Provider. So ueberlebt --fallback-scope provider Modell-Umbenennungen.
+        if live_primary:
+            for alt_model in live_primary[:4]:
+                if alt_model and alt_model != primary.model:
+                    fallback_candidates.append(
+                        api.Candidate(
+                            provider, alt_model, effort.strip() or cfg_effort,
+                            source="live",
+                        )
+                    )
         for name in _fallback_order(provider):
             fallback_model, fallback_effort = _configured_runtime(key, name)
+            if name == "agy":
+                live_alt = _discover_live_provider_models("agy")
+                if live_alt:
+                    fallback_model = _preferred_live_model(key, "agy", live_alt, fallback_model)
             fallback_candidates.append(
                 api.Candidate(name, fallback_model, fallback_effort, source="config")
             )
@@ -752,23 +863,44 @@ def _first_available_provider() -> str:
 
 
 def _ask_runtime(key: str, provider: str, model: str, effort: str,
-                 *, ask) -> tuple[str, str, str]:
-    """Fragt nur, was nicht schon als Flag feststeht."""
+                 *, ask, clutch_default: bool = False) -> tuple[str, str, str]:
+    """Fragt nur, was nicht schon als Flag feststeht.
+
+    Bietet `clutch` als automatische, anbieter- und modellresistente Auswahl an.
+    Bei manuellem Anbieter werden live-/clutch-ermittelte Modelle angezeigt.
+    """
     if not provider:
-        default = provider_name("") or _first_available_provider()
-        provider = normalize_provider(
-            _ask_one(ask, "Anbieter", default, PROVIDERS, strict=True) or default
+        provider_choices = PROVIDERS + ("clutch",)
+        default = (
+            "clutch"
+            if clutch_default
+            else (provider_name("") or _first_available_provider())
         )
+        chosen = _ask_one(
+            ask, "Anbieter", default, provider_choices, strict=True
+        ) or default
+        if chosen == "clutch":
+            return "clutch", "", effort
+        provider = normalize_provider(chosen)
     else:
         provider = normalize_provider(provider)
     cfg_model, cfg_effort = _configured_runtime(key, provider)
+    choices = _interactive_model_choices(provider)
+    if provider == "agy" and choices:
+        cfg_model = _preferred_live_model(key, "agy", choices, cfg_model)
     if not model:
         model = _ask_one(
             ask, "Modell",
             cfg_model or (CODEX_DEFAULT_LABEL if provider == "codex" else ""),
-            model_choices(provider),
+            choices,
         )
-    if not effort:
+    effective_model = model or cfg_model
+    has_embedded_agy_effort = (
+        provider == "agy"
+        and bool(effective_model)
+        and _split_agy_model_effort(effective_model, "high")[1] == ""
+    )
+    if not effort and not has_embedded_agy_effort:
         effort = _ask_one(
             ask, "Reasoning", cfg_effort, EFFORT_CHOICES.get(provider, ()),
             strict=True,
@@ -906,10 +1038,24 @@ def launch(
                     strict=True) or DEFAULT_OPERATOR_MODE
             operator_mode = normalize_operator_mode(
                 actual_env.get(OPERATOR_MODE_ENV, ""))
+        clutch_default = is_clutch_enabled(
+            key, actual_env, cli_no_clutch=no_clutch, cli_clutch=clutch
+        )
+        selected_clutch_interactively = False
         if interactive:
             provider, model, effort = _ask_runtime(
-                key, provider, model, effort, ask=ask)
-        explicit_provider = bool(provider or actual_env.get("TASKPLAN_PROVIDER", "").strip())
+                key, provider, model, effort, ask=ask,
+                clutch_default=(clutch_default and not provider),
+            )
+            if provider == "clutch":
+                provider = ""
+                clutch = True
+                selected_clutch_interactively = True
+        explicit_provider = (
+            False
+            if selected_clutch_interactively
+            else bool(provider or actual_env.get("TASKPLAN_PROVIDER", "").strip())
+        )
         clutch_on = is_clutch_enabled(
             key, actual_env, cli_no_clutch=no_clutch, cli_clutch=clutch
         )
@@ -922,7 +1068,7 @@ def launch(
                     "Kein Provider gewaehlt: --provider P oder --interactive."
                 )
         normalized_provider = normalize_provider(provider) if provider else ""
-        if fallback_scope == "provider" and not normalized_provider:
+        if fallback_scope == "provider" and not normalized_provider and not clutch_on:
             configured_provider = provider_name("")
             if configured_provider:
                 normalized_provider = normalize_provider(configured_provider)
@@ -934,14 +1080,17 @@ def launch(
             prompt=request,
         )
         if fallback_scope == "provider":
+            if not normalized_provider and clutch_on and chain:
+                normalized_provider = chain[0].provider
             if not normalized_provider:
                 raise ValueError("Anbietergebundener Fallback braucht eine Providerwahl.")
-            chain = [item for item in chain
-                     if item.provider == normalized_provider]
-            if fallback:
-                print("[FALLBACK] Anbieterwechsel gesperrt; Modellalternativen beim "
-                      "gewählten Anbieter bleiben erlaubt. Ein Wechsel braucht "
-                      "--allow-provider-fallback.")
+            if not (clutch_on and not explicit_provider):
+                chain = [item for item in chain
+                         if item.provider == normalized_provider]
+                if fallback:
+                    print("[FALLBACK] Anbieterwechsel gesperrt; Modellalternativen beim "
+                          "gewählten Anbieter bleiben erlaubt. Ein Wechsel braucht "
+                          "--allow-provider-fallback.")
     except ValueError as exc:
         print(f"[FEHLER] {exc}", file=sys.stderr)
         return 1

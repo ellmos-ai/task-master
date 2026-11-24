@@ -393,6 +393,13 @@ def label_runtime(label: str, provider: str = "") -> Dict[str, str]:
     }
 
 
+def has_explicit_model_choices(provider: str = "") -> bool:
+    """Prueft, ob `[providers.<p>] model_choices` explizit gesetzt wurde."""
+    section = _provider_section(provider_name(provider))
+    values = section.get("model_choices", [])
+    return isinstance(values, list) and any(str(v).strip() for v in values)
+
+
 def model_choices(provider: str = "") -> tuple:
     """Optionale Vorschlagsliste ``[providers.<p>] model_choices``.
 
