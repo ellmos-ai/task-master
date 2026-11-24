@@ -213,3 +213,68 @@ class TestClutchLauncher(unittest.TestCase):
         self.assertEqual(code, 0)
         text = out.getvalue()
         self.assertIn("[KETTE] 1. claude sonnet/high (clutch)", text)
+
+    def test_interactive_clutch_choice_uses_clutch_and_skips_model_prompts(self):
+        cfg = {"authority": "clutch"}
+        mock_api = mock.Mock()
+        mock_api.resolve_clutch_candidates.return_value = (
+            (
+                Candidate(provider="agy", model="gemini-4-hydrogen", effort="high", source="clutch"),
+                Candidate(provider="codex", model="gpt-6.2-astra", effort="high", source="clutch"),
+            ),
+            (),
+        )
+        mock_api.Candidate = Candidate
+        mock_api.ordered_candidates = lambda primary, provider_default=None, fallbacks=(): (primary,) + tuple(fallbacks)
+        mock_api.available_candidates = lambda candidates, which=None, allow_unverified=False: (candidates, ())
+        mock_api.build_session_plan.return_value = mock.Mock(
+            commands=(("agy", "--model", "gemini-4-hydrogen", "--effort", "high", "--prompt-interactive", "hi"),)
+        )
+
+        asked = []
+
+        def fake_ask(prompt):
+            asked.append(prompt)
+            return ""  # Enter accepts default = clutch!
+
+        runner = mock.Mock(return_value=mock.Mock(returncode=0))
+        out = io.StringIO()
+        with mock.patch("taskplan.config.execution_config", return_value=cfg), \
+                mock.patch("taskplan.launcher.execution_config", return_value=cfg), \
+                mock.patch("taskplan.launcher._coma_api", return_value=mock_api), \
+                redirect_stdout(out), redirect_stderr(out):
+            code = launch(
+                "tasksolver", "",
+                env=dict(self.env, TASKPLAN_STARTER_DRY_RUN="1"),
+                interactive=True, ask=fake_ask, run=runner,
+            )
+        self.assertEqual(code, 0)
+        self.assertEqual(len(asked), 1)
+        self.assertIn("[Enter = clutch]", asked[0])
+        self.assertIn("[5] clutch", asked[0])
+        self.assertIn("[KETTE] 1. agy gemini-4-hydrogen/high (clutch)", out.getvalue())
+
+    def test_stale_agy_model_auto_heals_from_live_models(self):
+        mock_api = mock.Mock()
+        mock_api.Candidate = Candidate
+        mock_api.ordered_candidates = lambda primary, provider_default=None, fallbacks=(): (
+            (primary,) + ((provider_default,) if provider_default else ()) + tuple(fallbacks)
+        )
+        mock_api.available_candidates = lambda candidates, which=None, allow_unverified=False: (candidates, ())
+        live_models = ("gemini-4-carbon", "gemini-4-neon", "gemini-4-hydrogen")
+        with mock.patch("taskplan.launcher._coma_api", return_value=mock_api), \
+                mock.patch("taskplan.launcher.runtime_profile",
+                           return_value={"model": "gemini-3.7-flash", "reasoning_effort": "high"}), \
+                mock.patch("taskplan.launcher._discover_live_provider_models", return_value=live_models):
+            out = io.StringIO()
+            with redirect_stdout(out):
+                chain, _ = _candidates(
+                    "operator", "agy", model="", effort="", fallback=True,
+                    env=self.env, explicit_provider=True,
+                )
+        self.assertIn("nicht mehr in lokaler CLI", out.getvalue())
+        self.assertEqual(chain[0].provider, "agy")
+        self.assertEqual(chain[0].model, "gemini-4-carbon")
+        # Same-provider live fallback models follow before cross-provider fallbacks
+        self.assertEqual(chain[1].provider, "agy")
+        self.assertEqual(chain[1].model, "gemini-4-neon")

@@ -68,6 +68,7 @@ class _LauncherFixture(unittest.TestCase):
             mock.patch("taskplan.launcher.doctor", return_value=0),
             mock.patch("taskplan.launcher.ensure_initialised", return_value=0),
             mock.patch("taskplan.launcher.execution_config", return_value={}),
+            mock.patch("taskplan.config.execution_config", return_value={}),
         ]
         for patcher in self.stack:
             patcher.start()
