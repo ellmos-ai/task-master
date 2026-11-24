@@ -15,10 +15,10 @@ import shutil
 import subprocess
 import sys
 import threading
-from typing import Mapping, NamedTuple, Sequence
+from typing import Any, Mapping, NamedTuple, Sequence
 
 from .config import (
-    active_roles, execution_authority, execution_config,
+    active_roles, execution_config,
     has_explicit_model_choices, is_clutch_enabled,
     label_runtime, model_choices, provider_name, role_zweck,
 )
@@ -636,7 +636,7 @@ def _discover_live_provider_models(provider: str) -> tuple[str, ...]:
         return ()
     try:
         return tuple(api.provider_model_choices(provider))
-    except Exception:
+    except (OSError, RuntimeError, ValueError, TypeError):
         return ()
 
 
